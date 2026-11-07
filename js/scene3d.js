@@ -1308,7 +1308,7 @@ const Scene3D = (() => {
       tmpV.set(o.ex.x, 3.9, o.ex.z); tmpV.project(camera);
       if (tmpV.z > 1) { el.style.display = 'none'; return; }
       const edge = Math.abs(tmpV.x) > 0.86 || Math.abs(tmpV.y) > 0.8; // longe: a placa fica presa na borda da tela, apontando a saída
-      if (edge) { if (o.ex.side === 'branch') { tmpV.x = clamp(tmpV.x, -0.5, 0.5); tmpV.y = -0.42; } else { tmpV.x = tmpV.x < 0 ? -0.78 : 0.78; tmpV.y = 0.12; } }
+      if (edge) { if (o.ex.side === 'branch') { tmpV.x = clamp(tmpV.x, -0.5, 0.5); tmpV.y = -0.18; } else { tmpV.x = tmpV.x < 0 ? -0.78 : 0.78; tmpV.y = 0.12; } }
       el.classList.toggle('edge', edge);
       el.style.display = ''; el.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; el.style.top = ((1 - tmpV.y) / 2 * H) + 'px';
     });

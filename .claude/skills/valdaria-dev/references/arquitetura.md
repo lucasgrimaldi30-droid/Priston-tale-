@@ -138,3 +138,13 @@ Atalhos no `keydown` do fim de `game.js`.
   `renderAccount` (login/criar conta, enviar heróis do aparelho para a conta), `netState()` envia a presença, `Net.onChat`/`onSys` caem no chat,
   `tabRanking`. Na cena, `updateOthers` desenha os outros jogadores (`buildHeroModel(cls, look)`), com nome em `#pl-labels`.
 - O servidor ainda **confia no cliente** (nível, ouro). Próximo passo para anti-trapaça: o servidor calcular combate, XP e drops.
+
+### Grupos e guildas
+- **Servidor:** grupos em memória (`parties`, até 4; `pinvite`/`paccept`/`pleave`; a lista do grupo vai junto na mensagem `players` 5×/s
+  com vida e mapa de cada um). `pshare` repassa XP/ouro a quem do grupo está na mesma sala. Guildas salvas em `db.guilds`
+  (`gcreate` nível 20, `ginvite`/`gaccept`, `gleave`, `gkick` só do líder; até 30 membros; `pushGuild` manda a visão com quem está online).
+  Chat com canais `global`, `zone`, `party`, `guild`. Ranking mostra a guilda. Mensagens sociais têm limite por conta.
+- **Cliente:** `Net.soc(tipo, dados)`, `Net.shareKill` (junta e envia a cada 2 s), `Net.onSocial`. No jogo: janela `social` (tecla G, botão 👥),
+  `renderPartyHud` (barras dos colegas), `socialXp()` (+10% por colega no mesmo mapa × guilda +2% por membro online até 10%),
+  abates mandam 15% do XP e 10% do ouro ao grupo. Chat: `/p`, `/g`, `/convidar Nome`, `/convidarguilda Nome`, `/sairgrupo`.
+  Fundar guilda custa `GUILD_COST` (50.000) cobrado quando o servidor confirma (`gcreated`).

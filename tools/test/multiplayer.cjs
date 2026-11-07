@@ -25,6 +25,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
     await p.waitForTimeout(500); await p.evaluate(() => { S.tut = 99; renderTut(); });
     return p;
   };
+  const until = async (P, fn, arg, ms = 5000) => { for (let t = 0; t < ms; t += 250) { if (await P.evaluate(fn, arg)) return true; await P.waitForTimeout(250); } return false; };
   const A = await player('Alfa', 'gladiador', 'Brutus');
   const B = await player('Beta', 'paladino', 'Lumen');
   await A.waitForTimeout(6000);
@@ -42,6 +43,49 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   await B.waitForTimeout(800);
   const got = await B.evaluate(() => R.log.some((l) => l.msg.includes('Olá do Brutus!')));
   ok('Chat chega no outro jogador', got);
+  // grupo
+  await B.evaluate(() => { window._inv = null; const o = Net.onSocial; Net.onSocial = (m) => { if (m.t === 'pinvite' || m.t === 'ginvite') window._inv = m; else o(m); }; });
+  await A.evaluate(() => chatCommand('/convidar Lumen'));
+  await until(B, () => !!window._inv);
+  const inv = await B.evaluate(() => window._inv && window._inv.from);
+  ok('Convite de grupo chega', inv === 'Brutus', inv);
+  await B.evaluate(() => Net.soc('paccept', { fid: window._inv.fid }));
+  await until(A, () => Net.st.party && Net.st.party.members.length === 2);
+  const pa2 = await A.evaluate(() => Net.st.party && Net.st.party.members.map((m) => m.name).join(','));
+  ok('Grupo formado', !!pa2 && pa2.includes('Lumen') && pa2.includes('Brutus'), pa2);
+  ok('Bônus de XP do grupo no mesmo mapa', await A.evaluate(() => socialXp() > 1.05 && !!document.getElementById('party-hud')));
+  const xpB0 = await B.evaluate(() => S.xp + S.lvl * 1e9);
+  await A.evaluate(() => { const m = makeMonster('Lobo Filhote', '🐺', 3, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); });
+  let shared = false; for (let i = 0; i < 12 && !shared; i++) { await B.waitForTimeout(500); shared = await B.evaluate((x0) => S.xp + S.lvl * 1e9 > x0, xpB0); }
+  ok('XP dividido com o grupo', shared);
+  await A.evaluate(() => chatCommand('/p só o grupo vê'));
+  await B.waitForTimeout(700);
+  ok('Chat do grupo', await B.evaluate(() => R.log.some((l) => l.msg.includes('só o grupo vê') && l.msg.includes('[grupo]'))));
+  // guilda
+  await A.evaluate(() => { S.lvl = 25; S.gold = 60000; netState(); });
+  await A.waitForTimeout(400);
+  await A.evaluate(() => { stopLoop(); window._g0 = S.gold; R.win = null; openWin('social'); $('#guild-name').value = 'Lobos de Ferro'; socialAction('gcreate'); });
+  await A.waitForTimeout(800);
+  const g1 = await A.evaluate(() => Net.st.guild && Net.st.guild.name + ':' + (window._g0 - S.gold));
+  await A.evaluate(() => startLoop());
+  ok('Fundar guilda (cobra ouro)', g1 === 'Lobos de Ferro:50000', g1);
+  await A.evaluate(() => chatCommand('/convidarguilda Lumen'));
+  await until(B, () => !!(window._inv && window._inv.guild));
+  const ginv = await B.evaluate(() => window._inv && window._inv.guild);
+  await B.evaluate(() => Net.soc('gaccept'));
+  await until(A, () => Net.st.guild && Net.st.guild.members.length === 2 && Net.st.guild.members.every((m) => m.online));
+  const gm = await A.evaluate(() => Net.st.guild.members.map((m) => m.name + (m.online ? '+' : '')).join(','));
+  ok('Convidar e entrar na guilda', ginv === 'Lobos de Ferro' && gm.includes('Lumen+') && gm.includes('Brutus+'), gm);
+  await B.evaluate(() => chatCommand('/g olá guilda'));
+  await A.waitForTimeout(700);
+  ok('Chat da guilda', await A.evaluate(() => R.log.some((l) => l.msg.includes('olá guilda') && l.msg.includes('[guilda]'))));
+  await A.screenshot({ path: path.join(OUT, 'social.png') });
+  const rk = await A.evaluate(async () => (await Net.ranking()).find((r) => r.name === 'Lumen'));
+  ok('Guilda aparece no ranking', !!rk && rk.guild === 'Lobos de Ferro');
+  await A.evaluate(() => { const k = Net.st.guild.members.find((m) => m.name === 'Lumen').key; Net.soc('gkick', { user: k }); });
+  ok('Líder expulsa membro', await until(B, () => Net.st.guild === null));
+  await B.evaluate(() => Net.soc('pleave'));
+  ok('Sair do grupo desfaz grupo de 2', await until(A, () => Net.st.party === null));
   await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });
   await B.waitForTimeout(800);
   await B.reload(); await B.waitForSelector('.acct-on', { timeout: 10000 });

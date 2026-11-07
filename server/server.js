@@ -32,6 +32,7 @@ setInterval(() => {
   fs.renameSync(tmp, DB_FILE); // troca atômica: não corrompe se o servidor cair no meio
 }, 2000);
 
+db.guilds = db.guilds || {};
 // sessões ficam no banco (sobrevivem a reinícios) e valem 30 dias
 db.tokens = db.tokens || {};
 const sessions = { get: (t) => { const s = t && db.tokens[t]; if (!s) return null; if (s.exp < Date.now()) { delete db.tokens[t]; persist(); return null; } return s.user; } };
@@ -111,7 +112,7 @@ async function api(req, res) {
     }
     if (url === '/api/ranking') {
       const rows = [];
-      for (const u of Object.values(db.users)) for (const s of u.saves) if (s) rows.push({ user: u.user, name: s.name, cls: s.cls, lvl: s.lvl, rebirths: s.rebirths || 0, kills: (s.stats && s.stats.kills) || 0 });
+      for (const u of Object.values(db.users)) for (const s of u.saves) if (s) rows.push({ user: u.user, name: s.name, cls: s.cls, lvl: s.lvl, rebirths: s.rebirths || 0, kills: (s.stats && s.stats.kills) || 0, guild: u.guild && db.guilds[u.guild] ? db.guilds[u.guild].name : '' });
       rows.sort((a, b) => b.rebirths - a.rebirths || b.lvl - a.lvl || b.kills - a.kills);
       return send(res, 200, { list: rows.slice(0, 50) });
     }
@@ -146,14 +147,48 @@ const clients = new Map(); // ws -> estado do jogador
 let nextId = 1;
 const clean = (t, n) => String(t || '').replace(/[<>]/g, '').slice(0, n).trim();
 function roomOf(p) { return p.dun ? null : p.town ? 'town_' + FACTION[p.cls] : p.zone; }
+const sendTo = (ws, obj) => { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); };
+const byName = (name) => { const n = String(name || '').toLowerCase(); for (const [ws, o] of clients) if (o.ready && o.name && o.name.toLowerCase() === n) return [ws, o]; return [null, null]; };
+
+// ---------- grupos (em memória, até 4 jogadores) ----------
+const parties = new Map(); let nextParty = 1;
+function partyOf(p) { return p.party ? parties.get(p.party) : null; }
+function leaveParty(p) {
+  const pt = partyOf(p); p.party = null; if (!pt) return;
+  pt.members.delete(p);
+  if (pt.members.size < 2) { for (const o of pt.members) { o.party = null; sendTo(o.ws, { t: 'party', party: null }); } parties.delete(pt.id); }
+  else { if (pt.leader === p) pt.leader = [...pt.members][0]; for (const o of pt.members) sendTo(o.ws, { t: 'sys', text: `${p.name} saiu do grupo.` }); }
+  sendTo(p.ws, { t: 'party', party: null });
+}
+function partyView(pt) { return { leader: pt.leader.name, members: [...pt.members].map((o) => ({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, hp: o.hp, zone: o.zone, town: o.town, dun: o.dun })) }; }
+
+// ---------- guildas (salvas no banco) ----------
+const gkey = (n) => n.toLowerCase().replace(/\s+/g, ' ').trim();
+function guildView(k) {
+  const g = db.guilds[k]; if (!g) return null;
+  const online = new Map(); for (const o of clients.values()) if (o.ready) online.set(o.key, o);
+  return { name: g.name, owner: db.users[g.owner] ? db.users[g.owner].user : '', created: g.created,
+    members: g.members.filter((u) => db.users[u]).map((u) => { const U = db.users[u], o = online.get(u); return { user: U.user, key: u, name: o ? o.name : (U.lastName || U.user), lvl: o ? o.lvl : (U.lastLvl || 0), cls: o ? o.cls : U.lastCls, online: !!o, owner: u === g.owner }; }) };
+}
+function pushGuild(k) { const v = guildView(k); for (const [ws, o] of clients) if (o.key && db.users[o.key] && db.users[o.key].guild === k) sendTo(ws, { t: 'guild', guild: v }); }
+function leaveGuild(key) {
+  const U = db.users[key], k = U && U.guild, g = k && db.guilds[k]; if (!g) return;
+  g.members = g.members.filter((u) => u !== key); U.guild = null;
+  if (!g.members.length) delete db.guilds[k];
+  else { if (g.owner === key) g.owner = g.members[0]; pushGuild(k); }
+  persist();
+}
+
 function broadcast(obj, filter) { const msg = JSON.stringify(obj); for (const [ws, p] of clients) if (p.ready && (!filter || filter(p)) && ws.readyState === 1) ws.send(msg); }
 
 wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://x').searchParams.get('token');
   const user = sessions.get(token);
   if (!user) return ws.close(4001, 'login');
-  const p = { id: nextId++, user: db.users[user].user, ready: false, last: Date.now(), chatAt: 0 };
+  const p = { id: nextId++, user: db.users[user].user, key: user, ws, ready: false, last: Date.now(), chatAt: 0, hp: 1 };
   clients.set(ws, p);
+  const U = db.users[user];
+  if (U.guild && !db.guilds[U.guild]) U.guild = null;
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch (e) { return; }
     p.last = Date.now();
@@ -162,19 +197,81 @@ wss.on('connection', (ws, req) => {
       Object.assign(p, {
         name: clean(m.name, 16), cls: m.cls, lvl: Math.max(1, Math.min(100, m.lvl | 0)), rb: Math.max(0, m.rb | 0), title: clean(m.title, 30),
         zone: clean(m.zone, 4), town: !!m.town, dun: !!m.dun, x: +m.x || 0, z: +m.z || 0, face: +m.face || 0, moving: !!m.moving, atk: !!m.atk,
-        look: m.look && typeof m.look === 'object' ? m.look : {},
+        look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
       });
-      if (!p.ready) { p.ready = true; broadcast({ t: 'sys', text: `${p.name} entrou no mundo.` }, (o) => o !== p); }
+      if (U.lastName !== p.name || U.lastLvl !== p.lvl) { U.lastName = p.name; U.lastLvl = p.lvl; U.lastCls = p.cls; persist(); }
+      if (!p.ready) {
+        p.ready = true; broadcast({ t: 'sys', text: `${p.name} entrou no mundo.` }, (o) => o !== p);
+        if (U.guild) { pushGuild(U.guild); } else sendTo(ws, { t: 'guild', guild: null });
+      }
     } else if (m.t === 'chat' && p.ready) {
       const text = clean(m.text, 120);
       if (!text || Date.now() - p.chatAt < 1200) return;
       p.chatAt = Date.now();
-      const ch = m.ch === 'zone' ? 'zone' : 'global', room = roomOf(p);
-      broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || roomOf(o) === room);
+      const ch = ['zone', 'party', 'guild'].includes(m.ch) ? m.ch : 'global', room = roomOf(p), pt = partyOf(p);
+      if (ch === 'party' && !pt) return sendTo(ws, { t: 'sys', text: 'Você não está em um grupo.' });
+      if (ch === 'guild' && !U.guild) return sendTo(ws, { t: 'sys', text: 'Você não está em uma guilda.' });
+      broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || (ch === 'zone' && roomOf(o) === room) || (ch === 'party' && pt && pt.members.has(o)) || (ch === 'guild' && db.users[o.key] && db.users[o.key].guild === U.guild));
+    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick)$/.test(m.t)) {
+      if (!p.ready || limited((m.t === 'pshare' ? 'sh:' : 'soc:') + p.key, m.t === 'pshare' ? 30 : 20, 10e3)) return;
+      social(ws, p, U, m);
     }
   });
-  ws.on('close', () => { if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
+  ws.on('close', () => { leaveParty(p); if (U.guild) setTimeout(() => pushGuild(U.guild), 50); if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
 });
+
+// convites, grupo e guilda
+function social(ws, p, U, m) {
+  const err = (text) => sendTo(ws, { t: 'sys', text });
+  if (m.t === 'pinvite') {
+    const [tw, t] = byName(m.name); if (!t || t === p) return err('Jogador não encontrado online.');
+    const pt = partyOf(p);
+    if (pt && pt.members.size >= 4) return err('O grupo está cheio (4).');
+    if (t.party) return err(`${t.name} já está em um grupo.`);
+    t.pinv = p.id; sendTo(tw, { t: 'pinvite', from: p.name, fid: p.id }); err(`Convite enviado para ${t.name}.`);
+  } else if (m.t === 'paccept') {
+    if (!m.fid || p.pinv !== m.fid) return; p.pinv = null;
+    let inv = null; for (const o of clients.values()) if (o.id === m.fid) inv = o;
+    if (!inv || p.party) return err('O convite expirou.');
+    let pt = partyOf(inv);
+    if (!pt) { pt = { id: nextParty++, leader: inv, members: new Set([inv]) }; parties.set(pt.id, pt); inv.party = pt.id; }
+    if (pt.members.size >= 4) return err('O grupo está cheio.');
+    pt.members.add(p); p.party = pt.id;
+    for (const o of pt.members) sendTo(o.ws, { t: 'sys', text: `${p.name} entrou no grupo.` });
+  } else if (m.t === 'pleave') leaveParty(p);
+  else if (m.t === 'pshare') { // parte do XP/ouro de um abate vai para quem do grupo está no mesmo mapa
+    const pt = partyOf(p); if (!pt) return;
+    const xp = Math.max(0, Math.min(5e7, Math.round(+m.xp || 0))), gold = Math.max(0, Math.min(5e7, Math.round(+m.gold || 0))), room = roomOf(p);
+    for (const o of pt.members) if (o !== p && roomOf(o) === room) sendTo(o.ws, { t: 'pshare', xp, gold, from: p.name });
+  } else if (m.t === 'gcreate') {
+    const name = clean(m.name, 20).replace(/\s+/g, ' ');
+    if (U.guild) return err('Você já está em uma guilda.');
+    if (!/^[A-Za-zÀ-ÿ0-9 ]{3,20}$/.test(name)) return err('Nome da guilda: 3 a 20 letras, números ou espaços.');
+    if ((p.lvl || 0) < 20) return err('Precisa de nível 20 para fundar uma guilda.');
+    const k = gkey(name); if (db.guilds[k]) return err('Já existe uma guilda com esse nome.');
+    db.guilds[k] = { name, owner: p.key, members: [p.key], created: Date.now() }; U.guild = k; persist();
+    sendTo(ws, { t: 'gcreated', name }); pushGuild(k);
+  } else if (m.t === 'ginvite') {
+    const g = U.guild && db.guilds[U.guild]; if (!g) return err('Você não está em uma guilda.');
+    if (g.members.length >= 30) return err('A guilda está cheia (30).');
+    const [tw, t] = byName(m.name); if (!t || t === p) return err('Jogador não encontrado online.');
+    if (db.users[t.key].guild) return err(`${t.name} já tem guilda.`);
+    t.ginv = U.guild; sendTo(tw, { t: 'ginvite', from: p.name, guild: g.name }); err(`Convite da guilda enviado para ${t.name}.`);
+  } else if (m.t === 'gaccept') {
+    const k = p.ginv, g = k && db.guilds[k]; p.ginv = null;
+    if (!g || U.guild) return err('O convite expirou.');
+    if (g.members.length >= 30) return err('A guilda está cheia.');
+    g.members.push(p.key); U.guild = k; persist(); pushGuild(k);
+    for (const [w2, o] of clients) if (db.users[o.key] && db.users[o.key].guild === k) sendTo(w2, { t: 'sys', text: `${p.name} entrou na guilda ${g.name}!` });
+  } else if (m.t === 'gleave') { const k = U.guild; leaveGuild(p.key); sendTo(ws, { t: 'guild', guild: null }); if (k) pushGuild(k); }
+  else if (m.t === 'gkick') {
+    const g = U.guild && db.guilds[U.guild]; if (!g || g.owner !== p.key) return err('Só o líder pode expulsar.');
+    const k = String(m.user || '').toLowerCase(); if (!g.members.includes(k) || k === p.key) return;
+    const gk = U.guild; leaveGuild(k);
+    for (const [w2, o] of clients) if (o.key === k) sendTo(w2, { t: 'guild', guild: null });
+    pushGuild(gk);
+  }
+}
 
 // envia a cada jogador os outros jogadores da mesma sala (5×/s)
 setInterval(() => {
@@ -188,7 +285,9 @@ setInterval(() => {
       list.push({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb, title: o.title, x: o.x, z: o.z, face: o.face, moving: o.moving, atk: o.atk, look: o.look });
       if (list.length >= 40) break;
     }
-    ws.send(JSON.stringify({ t: 'players', list, online: clients.size }));
+    const pt = partyOf(p), gk = db.users[p.key] && db.users[p.key].guild;
+    let gOn = 0; if (gk) for (const o of clients.values()) if (o.ready && db.users[o.key] && db.users[o.key].guild === gk) gOn++;
+    ws.send(JSON.stringify({ t: 'players', list, online: clients.size, party: pt ? partyView(pt) : null, gOn }));
   }
 }, 200);
 

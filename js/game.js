@@ -889,12 +889,13 @@ function killMonster(m) {
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
   const sky = !R.dungeon ? worldSky(S.zone) : { night: 0, rain: false }, ev = eventNow();
-  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1));
+  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1) * socialXp());
   S.best = S.best || {}; const bk = S.best[m.name] || 0; S.best[m.name] = bk + 1;
   if (BEST_TIERS.includes(bk + 1)) log(`📖 Bestiário: ${m.icon} ${esc(m.name)} chegou a ${bk + 1} derrotados! (+0,25% dano e XP)`, 'lvl');
   if (S.companion) { S.petXp = S.petXp || {}; const pl = petLevel(S.companion); S.petXp[S.companion] = (S.petXp[S.companion] || 0) + 1; if (petLevel(S.companion) > pl) log(`🐾 Seu mascote evoluiu para o nível ${petLevel(S.companion)}!`, 'lvl'); }
   { const M = meter(); M.kills++; M.xp += xp; }
   const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1));
+  if (online() && Net.st.party) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
@@ -1460,7 +1461,42 @@ function netState() {
   const look = {};
   for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (it) look[sl] = { slot: sl, wtype: it.wtype, ilvl: it.ilvl, rarity: it.rarity, refine: it.refine || 0, set: it.set || null, req: 1 }; }
   Net.sendState({ name: S.name, cls: S.cls, lvl: S.lvl, rb: S.rebirths || 0, title: S.title || '', zone: S.zone, town: !!R.inTown, dun: !!R.dungeon,
-    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look });
+    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp });
+  renderPartyHud();
+}
+
+// ---------- grupo e guilda (precisam do servidor) ----------
+const GUILD_COST = 50000;
+function partyNear() { const pt = online() && Net.st.party; return pt ? pt.members.filter((m) => m.name !== S.name && m.zone === S.zone && !m.town && !m.dun).length : 0; }
+function guildBonus() { const g = online() && Net.st.guild; if (!g) return 0; const on = Math.max(Net.st.gOn || 0, g.members.filter((m) => m.online).length); return Math.min(0.1, Math.max(0, on - 1) * 0.02); }
+function socialXp() { return (1 + partyNear() * 0.1) * (1 + guildBonus()); }
+function renderPartyHud() {
+  let el = document.getElementById('party-hud');
+  const pt = online() && Net.st.party;
+  if (!pt) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'party-hud'; el.className = 'party-hud'; const st = document.getElementById('stage'); if (!st) return; st.appendChild(el); }
+  el.innerHTML = `<div class="ph-title">👥 Grupo${partyNear() ? ` · +${partyNear() * 10}% XP` : ''}</div>` + pt.members.filter((m) => m.name !== S.name).map((m) => {
+    const far = m.zone !== S.zone || m.town || m.dun;
+    return `<div class="ph-row${far ? ' far' : ''}"><b>${esc(m.name)}</b> <small>Nv.${m.lvl}${m.name === pt.leader ? ' 👑' : ''}${far ? ' · ' + (m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')) : ''}</small><i style="--w:${Math.round((m.hp || 0) * 100)}%"></i></div>`;
+  }).join('');
+}
+function tabSocial() {
+  if (!online()) return '<p class="muted">Grupos e guildas precisam do servidor. Entre com sua conta na tela de heróis (no servidor próprio do jogo).</p>';
+  const pt = Net.st.party, g = Net.st.guild, others = [...Net.st.others.values()];
+  const near = others.length ? others.map((o) => `<div class="soc-row"><b>${esc(o.name)}</b> <small>Nv.${o.lvl} ${esc(CLASSES[o.cls] ? CLASSES[o.cls].name : '')}</small><span><button class="btn small" data-pinv="${esc(o.name)}">+ Grupo</button>${g ? `<button class="btn small" data-ginv="${esc(o.name)}">+ Guilda</button>` : ''}</span></div>`).join('') : '<p class="muted">Ninguém neste mapa agora.</p>';
+  const party = pt ? `<div class="soc-list">${pt.members.map((m) => `<div class="soc-row"><b>${esc(m.name)}${m.name === pt.leader ? ' 👑' : ''}</b> <small>Nv.${m.lvl} · ${m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')}</small></div>`).join('')}</div>
+    <p class="muted">+10% de XP por colega no mesmo mapa. Quem está junto ganha 15% do XP e 10% do ouro dos seus abates.</p><button class="btn small" data-soc="pleave">Sair do grupo</button>`
+    : '<p class="muted">Você não está em grupo. Convide alguém abaixo ou pelo chat: /convidar Nome</p>';
+  const guild = g ? `<div class="guild-head"><b>🛡️ ${esc(g.name)}</b> <small>Líder: ${esc(g.owner)} · ${g.members.filter((m) => m.online).length}/${g.members.length} online · bônus +${Math.round(guildBonus() * 100)}% XP</small></div>
+    <div class="soc-list">${g.members.sort((a, b) => b.online - a.online || b.lvl - a.lvl).map((m) => `<div class="soc-row${m.online ? '' : ' off'}"><b>${m.online ? '🟢' : '⚪'} ${esc(m.name)}${m.owner ? ' 👑' : ''}</b> <small>Nv.${m.lvl || '?'} · conta ${esc(m.user)}</small>${g.owner === Net.st.user && !m.owner ? `<button class="btn small" data-gkick="${esc(m.key)}">Expulsar</button>` : ''}</div>`).join('')}</div>
+    <p class="muted">Chat da guilda: /g mensagem · cada membro online dá +2% de XP (até 10%).</p><button class="btn small" data-soc="gleave">Sair da guilda</button>`
+    : `<p class="muted">Funde uma guilda (nível 20, ${fmt(GUILD_COST)} ouro) ou aceite um convite.</p><div class="row-btns"><input id="guild-name" maxlength="20" placeholder="Nome da guilda"><button class="btn small primary" data-soc="gcreate" ${S.lvl < 20 || S.gold < GUILD_COST ? 'disabled' : ''}>Fundar</button></div>`;
+  return `<h3 class="soc-h">👥 Grupo</h3>${party}<h3 class="soc-h">🛡️ Guilda</h3>${guild}<h3 class="soc-h">🧭 Jogadores neste mapa</h3>${near}`;
+}
+function socialAction(a) {
+  if (a === 'pleave') Net.soc('pleave');
+  else if (a === 'gleave') uiConfirm('Sair da guilda', 'Tem certeza que quer sair da guilda?', 'Sair').then((y) => { if (y) Net.soc('gleave'); });
+  else if (a === 'gcreate') { const n = ($('#guild-name') || {}).value || ''; if (S.gold < GUILD_COST) return toast('Ouro insuficiente.', 'bad'); Net.soc('gcreate', { name: n.trim() }); }
 }
 
 function startLoop() {
@@ -1605,7 +1641,7 @@ function renderLive() {
   if (R.dungeon && R.dungeon.tower) $('#zone-title').innerHTML = `🗼 Torre Infinita <span class="muted">(andar ${R.dungeon.floor} · recorde ${S.towerBest || 0})</span>`;
   else if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
   else if (!R.inTown) { const w = worldSky(S.zone), ev = eventNow();
-    $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> <span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} ${ev.name} ${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
+    $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> <span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} <span class="ev-name">${ev.name} </span>${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
   $('#boss-btn').classList.toggle('hidden', !!R.inTown || !!R.dungeon);
   $('#mute-btn').textContent = S.settings.muted ? '🔇' : '🔊';
   { const bb = $('#boss-bar'), bs = !R.inTown && aliveMons().find((m) => m.boss && (m.aggro || (R.pos && dist2(m, R.pos) < 22)));
@@ -1788,11 +1824,15 @@ function renderLog() {
 function chatCommand(txt) {
   const t = txt.trim(); if (!t) return;
   if (!t.startsWith('/')) { if (!(online() && Net.chat(t, 'global'))) log(`<b style="color:#9ad0ff">[${esc(S.name)}]</b> ${esc(t)}`, 'chat'); return; }
+  if (/^\/(p|grupo)\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'party'))) log('Sem conexão com o servidor.', 'chat'); return; }
+  if (/^\/(g|guilda)\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'guild'))) log('Sem conexão com o servidor.', 'chat'); return; }
+  if (/^\/(convidar|ginvite|convidarguilda)\s/i.test(t)) { const [c0, ...nm] = t.slice(1).split(/\s+/); if (!online()) { log('Sem conexão com o servidor.', 'chat'); return; } Net.soc(/guilda|ginvite/i.test(c0) ? 'ginvite' : 'pinvite', { name: nm.join(' ') }); return; }
   if (/^\/z(ona)?\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'zone'))) log('Sem conexão com o servidor.', 'chat'); return; }
   const [cmd, ...args] = t.slice(1).toLowerCase().split(/\s+/);
   const arg = args.join(' ');
   switch (cmd) {
-    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
+    case 'sairgrupo': if (online()) Net.soc('pleave'); break;
+    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /sairgrupo, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
     case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;
     case 'auto': S.settings.auto = !S.settings.auto; log(`Modo automático ${S.settings.auto ? 'ligado' : 'desligado'}.`, 'chat'); break;
     case 'cidade': setTown(true); break;
@@ -2111,7 +2151,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -2131,7 +2171,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -2416,7 +2456,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2458,6 +2498,10 @@ document.addEventListener('click', (e) => {
   if (ds.dun) { enterDungeon(ds.dun); return; }
   if (ds.tower) { enterTower(ds.tower); return; }
   if (ds.craft) { craft(ds.craft); return; }
+  if (ds.soc) { socialAction(ds.soc); return; }
+  if (ds.pinv) { Net.soc('pinvite', { name: ds.pinv }); return; }
+  if (ds.ginv) { Net.soc('ginvite', { name: ds.ginv }); return; }
+  if (ds.gkick) { Net.soc('gkick', { user: ds.gkick }); return; }
   if (ds.goexit) { const ex = zoneExits(S.zone)[+ds.goexit]; if (ex && !R.inTown && !R.dungeon) { R.move = { x: ex.x, z: ex.z }; R.mon = null; R.gather = null; } return; }
   if (ds.ftab) { R.forgeTab = ds.ftab; return renderTab(); }
   if (ds.gcomb) { const [k, l] = ds.gcomb.split(':'); combineGem(k, +l); return; }
@@ -2579,7 +2623,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   const k = e.key.toLowerCase();
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
-  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats' };
+  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats', g: 'social' };
   if (wins[k]) { openWin(wins[k]); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');
@@ -2596,7 +2640,16 @@ document.addEventListener('pointerdown', (e) => {
 // ---------- chat e avisos vindos do servidor ----------
 if (typeof Net !== 'undefined') {
   const CLS_COLOR = { gladiador: '#ff8a5a', engenheiro: '#b8c4d8', cacadora: '#8ae07a', lanceiro: '#c090ff', paladino: '#ffe070', valquiria: '#9ad0ff', arcanista: '#d0a0ff', cleriga: '#fff0c0' };
-  Net.onChat = (m) => { if (!S || !R) return; log(`${m.ch === 'zone' ? '<small>[mapa]</small> ' : ''}<b style="color:${CLS_COLOR[m.cls] || '#9ad0ff'}">[${esc(m.from)}]</b> ${esc(m.text)}`, 'chat'); if (R.dirty) renderLog(); };
+  Net.onChat = (m) => { if (!S || !R) return; log(`${m.ch === 'zone' ? '<small>[mapa]</small> ' : m.ch === 'party' ? '<small style="color:#80d0ff">[grupo]</small> ' : m.ch === 'guild' ? '<small style="color:#90ff90">[guilda]</small> ' : ''}<b style="color:${CLS_COLOR[m.cls] || '#9ad0ff'}">[${esc(m.from)}]</b> ${esc(m.text)}`, 'chat'); if (R.dirty) renderLog(); };
   Net.onSys = (text) => { if (S && R && R.log) log(`🌐 ${esc(text)}`, 'muted'); };
+  Net.onSocial = (m) => {
+    if (!S || !R) return;
+    if (m.t === 'pinvite') uiConfirm('Convite de grupo', `${m.from} chamou você para o grupo dele.`, 'Entrar').then((y) => { if (y) Net.soc('paccept', { fid: m.fid }); });
+    else if (m.t === 'ginvite') uiConfirm('Convite de guilda', `${m.from} convidou você para a guilda ${m.guild}.`, 'Entrar').then((y) => { if (y) Net.soc('gaccept'); });
+    else if (m.t === 'pshare') { gainXp(m.xp); S.gold += m.gold; R.shareLog = (R.shareLog || 0) + 1; if (R.shareLog % 5 === 1) log(`👥 Grupo: +${fmt(m.xp)} XP e +${fmt(m.gold)} ouro dos abates de ${esc(m.from)}.`, 'muted'); }
+    else if (m.t === 'gcreated') { S.gold = Math.max(0, S.gold - GUILD_COST); log(`🛡️ Guilda <b>${esc(m.name)}</b> fundada! (-${fmt(GUILD_COST)} ouro)`, 'lvl'); toast('Guilda fundada!', 'good'); S.stats.guild = 1; }
+    if (R.win === 'social') renderTab();
+    renderPartyHud();
+  };
   Net.probe().then((ok) => { if (!ok) return; Net.resume().finally(() => { if (!S || document.getElementById('screen-select').offsetParent) renderSelect(); }); });
 }
