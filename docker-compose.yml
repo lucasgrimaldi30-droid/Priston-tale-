@@ -1,0 +1,26 @@
+# Sobe o jogo com HTTPS automático (Caddy). Troque DOMINIO pelo seu domínio.
+services:
+  jogo:
+    build: .
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+    volumes:
+      - dados:/data
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMINIO=seujogo.com.br
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - jogo
+volumes:
+  dados:
+  caddy_data:

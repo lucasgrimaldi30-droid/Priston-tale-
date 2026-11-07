@@ -8,6 +8,8 @@
   chefes com marcas no chão/fúria/reforços, masmorras de 3 andares.
 - **Fase 1:** mundo aberto isométrico, tocar para andar/atacar, monstros com IA, modo Auto.
 - **Fase 3:** interface de MMO em tela cheia, minimapa, chat com comandos, barra de habilidades manual, atalhos, 40 missões (Comandante Varek).
+- **Fase 5 (multiplayer):** servidor Node.js com contas, saves na nuvem, presença em tempo real por mapa, chat global e do mapa, ranking,
+  Docker + Caddy (HTTPS) e guia `DEPLOY.md`. Falta: anti-trapaça (servidor calcular combate), PostgreSQL, guildas, trocas, PvP.
 - **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
   renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA).
 
@@ -19,8 +21,7 @@ mascotes que evoluem · dia/noite e clima · efeito das habilidades crescendo co
 - Revisão **golpe por golpe** das 8 classes (ele vai jogar e mandar os ajustes, um por vez).
 
 ## Planejado (o dono pediu para deixar os modelos de personagens e monstros para o final)
-- **Fase 5 — multiplayer:** servidor (Node.js), contas, salvamento online, outros jogadores no mapa, chat real, anti-trapaça (servidor calcula XP/drops).
-  Docker + docker-compose para rodar num VPS. O dono contrata o servidor e o domínio.
+- **Multiplayer, próximos passos:** servidor autoritativo (anti-trapaça), PostgreSQL, guildas, trocas entre jogadores, PvP, grupo para masmorras.
 - **Fase 2 — corpos humanos:** um masculino e um feminino, mudando só cabelo e rosto, estilo semi-realista low-poly. O dono cria no
   **MakeHuman/MPFB** e baixa animações no **Mixamo** (só no PC); nós integramos e fazemos o retarget.
 - **Fase 4 — equipamentos humanos:** modelos 3D que encaixem no corpo base; visual muda **a cada 10 níveis** (10 faixas) — exige arte (comprar ou artista).

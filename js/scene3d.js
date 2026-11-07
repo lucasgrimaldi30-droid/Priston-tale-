@@ -1093,10 +1093,11 @@ const Scene3D = (() => {
   }
 
   const TWO_HAND = { foice: 1, cajado: 1, arco: 1 };
-  function buildHeroModel(cls) {
+  function buildHeroModel(cls, eqIn) {
     const cfg = HERO_MODEL[cls]; if (!cfg || !Assets.gltf[cfg.m]) return null;
     const eq = {};
-    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel']) if (S.equip[k] && (k !== 'arma' || CLASSES[cls].anyWeapon || S.equip[k].wtype === CLASSES[cls].weapon)) eq[k] = S.equip[k];
+    const src = eqIn || S.equip;
+    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel']) if (src[k] && (k !== 'arma' || CLASSES[cls].anyWeapon || src[k].wtype === CLASSES[cls].weapon)) eq[k] = src[k];
     const wt = eq.arma ? eq.arma.wtype : CLASSES[cls].weapon;
     const aT = eq.armadura ? tierOf(eq.armadura) : -1;
     let tint = cfg.tint || '#ffffff';
@@ -1332,6 +1333,48 @@ const Scene3D = (() => {
     st.shake = Math.max(st.shake, 0.3);
   }
   function bossRage(sid) { const e = st.ents.get(sid); if (!e) return; fxShock(e.root.position, '#ff2010', 3, 6); burst(V3(e.root.position.x, 1.5, e.root.position.z), '#ff3010', 60, 6, 0.2); st.shake = 0.4; }
+
+  // outros jogadores (multiplayer)
+  const others = new Map();
+  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.h.root); disposeObj(o.h.root); if (o.label) o.label.remove(); others.delete(id); }
+  function updateOthers(t, dt) {
+    const list = typeof Net !== 'undefined' && Net.st.others ? Net.st.others : new Map();
+    const layer = document.getElementById('pl-labels');
+    for (const id of [...others.keys()]) if (!list.has(id)) removeOther(id);
+    for (const [id, p] of list) {
+      const sig = p.cls + JSON.stringify(p.look || {}) + (modelsReady() ? 'm' : 'p');
+      let o = others.get(id);
+      if (o && o.sig !== sig) { removeOther(id); o = null; }
+      if (!o) {
+        const eq = p.look || {};
+        const h = (modelsReady() && buildHeroModel(p.cls, eq)) || buildCharacter(LOOK[p.cls], CLASSES[p.cls].weapon, eq);
+        h.root.position.set(p.x, 0, p.z); scene.add(h.root);
+        let label = null;
+        if (layer) { label = document.createElement('div'); label.className = 'npc-label pl-label'; layer.appendChild(label); }
+        o = { h, sig, label }; others.set(id, o);
+      }
+      const h = o.h, rp = h.root.position;
+      rp.x = lerp(rp.x, p.x, Math.min(1, dt * 8)); rp.z = lerp(rp.z, p.z, Math.min(1, dt * 8));
+      const want = -(p.face || 0); let df = want - h.inner.rotation.y; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; h.inner.rotation.y += df * Math.min(1, dt * 10);
+      if (h.model) {
+        const md = h.model;
+        if (now() >= (md.busyUntil || 0)) {
+          if (p.atk && !p.moving && Math.random() < dt * 1.4) playAnim(h, heroAttackClipFor(p.look && p.look.arma ? p.look.arma.wtype : CLASSES[p.cls].weapon), { loop: false, dur: 0.7, fade: 0.06 });
+          else playAnim(h, p.moving ? 'Running_A' : (p.atk ? 'Idle_Combat' : 'Idle'), { fade: 0.2 });
+        }
+        md.mixer.update(dt);
+      } else if (h.legs) { const ph = t * 11, la = p.moving ? Math.sin(ph) * 0.8 : 0; h.legs[0].rotation.z = la; h.legs[1].rotation.z = -la; }
+      if (o.label) {
+        o.label.innerHTML = `<b>${esc(p.name)}</b> <span style="font-size:10px">${p.rb ? '★' + p.rb + ' ' : ''}Nv.${p.lvl}</span>${p.title ? `<small>« ${esc(p.title)} »</small>` : ''}`;
+        tmpV.set(rp.x, 2.35, rp.z).project(camera);
+        if (tmpV.z > 1) o.label.style.display = 'none'; else { o.label.style.display = ''; o.label.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; o.label.style.top = ((1 - tmpV.y) / 2 * H) + 'px'; }
+      }
+    }
+  }
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function heroAttackClipFor(wt) {
+    return { foice: '2H_Melee_Attack_Slice', lanca: '2H_Melee_Attack_Slice', arco: '2H_Ranged_Shoot', dardo: 'Throw', cajado: 'Spellcast_Shoot', cetro: 'Spellcast_Shoot', espada: '1H_Melee_Attack_Slice_Diagonal' }[wt] || '1H_Melee_Attack_Chop';
+  }
 
   // montaria e mascote
   function updateCompanions(t, dt) {
@@ -2461,6 +2504,7 @@ const Scene3D = (() => {
     updateWorldUI(t);
     updateTelegraphs();
     updateCompanions(t, dt);
+    updateOthers(t, dt);
     ambient(dt);
     updateParticles(dt);
     if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
@@ -2512,6 +2556,7 @@ const Scene3D = (() => {
     for (const f of st.fx) scene.remove(f.obj);
     if (st.mount) { scene.remove(st.mount.e.root); st.mount = null; } if (st.comp) { scene.remove(st.comp.e.root); st.comp = null; }
     for (const o of teleObjs.values()) scene.remove(o); teleObjs.clear();
+    for (const id of [...others.keys()]) removeOther(id);
     st.hero = null; st.mon = null; st.dying = []; st.fx = []; st.timers = []; parts.length = 0;
     curZone = null; curCls = null;
     cam.yaw = 0; cam.pitch = 0; cam.zoom = 1;
@@ -2519,7 +2564,7 @@ const Scene3D = (() => {
     resize();
     if (!running) { running = true; lastT = 0; raf = requestAnimationFrame(frame); }
   }
-  function stop() { running = false; cancelAnimationFrame(raf); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
+  function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
   return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();

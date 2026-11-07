@@ -39,6 +39,10 @@ versão original com as mesmas mecânicas.
   Se a simulação mostrar uma classe travada sem morrer, procure laços assim.
 - Nomes de ossos dos modelos vêm **sem ponto** (`handslotr`, `upperarml`…). Classes de CSS usam prefixos (`lg-`, `fx-`) para não colidir.
 - Ao mudar arquivos servidos pelo app instalado, aumente `VERSAO` em `sw.js`.
+- Nada de console com erro no modo offline: o cliente só procura o servidor quando a página traz `window.VALDARIA_SERVER`.
+- Texto vindo de outros jogadores (nome, chat, título) **sempre** passa por `esc()` antes de ir para o HTML.
+- No ambiente de nuvem do Claude, `docker build` falha no `npm install` por causa do certificado do proxy (não é erro do Dockerfile);
+  para testar, use uma cópia do Dockerfile que copie `/root/.ccr/ca-bundle.crt` e rode `npm config set cafile` antes.
 
 ## Rodar e testar
 ```bash
@@ -46,6 +50,8 @@ python3 -m http.server 8000          # jogar: http://localhost:8000 (modelos 3D 
 node tools/test/features.cjs         # sistemas (tutorial, habilidades, loja, forja, gemas, chefe, masmorra, diárias, login, conjuntos, renascimento, PWA, duplicatas) ~20 s
 node tools/test/smoke.cjs            # navegador: 8 classes, cidade, NPC, janelas, Conta Full em iframe, celular (~3 min); --rapido para ~1 min
 node tools/test/balance.cjs 24       # simulação de 24 h por classe (ou: node tools/test/balance.cjs 12 lanceiro,arcanista)
+node tools/test/multiplayer.cjs      # sobe o servidor e testa 2 jogadores: presença, chat, save na nuvem, ranking, segurança (cd server && npm install antes)
+cd server && npm install && node server.js   # jogar online localmente em http://localhost:8080
 node --check js/*.js                 # sintaxe
 ```
 Os testes saem com código 1 se algo falhar. O smoke salva capturas em `build/test/` — **olhe as capturas** antes de dizer que ficou bom.
@@ -61,7 +67,7 @@ Publique `index.html` (Artifact, sempre o mesmo arquivo para manter o link) com 
 `js/scene.js`, `js/scene3d.js`, `js/game.js`, `manifest.webmanifest`, `sw.js`, `assets/icons/*.png`, `js/vendor/*.js` e cada
 `assets/models/<Nome>.json` → `build/models-json/<Nome>.json`. Numa atualização, envie só o que mudou.
 Link atual: https://claude.ai/artifact/WujEedKd9zmdsGRmU8Rwq6. No link do claude.ai o app não é instalável (roda em iframe); num servidor
-próprio, sirva a pasta como estática e o PWA funciona.
+próprio, use o servidor do jogo (`DEPLOY.md`: Docker + Caddy com HTTPS) — aí o multiplayer e o PWA funcionam.
 
 ## Fluxo de trabalho
 1. Mude o código. 2. `node --check js/*.js`. 3. `node tools/test/features.cjs`. 4. `node tools/test/smoke.cjs` e confira as capturas.

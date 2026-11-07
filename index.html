@@ -23,6 +23,7 @@
       <h1>Crônicas de Valdária</h1>
       <p class="subtitle">Idle MMORPG · Escolha seu herói</p>
     </div>
+    <div id="acct" class="acct hidden"></div>
     <div id="slots" class="slots"></div>
     <button class="btn primary install-btn hidden" id="install-btn">📲 Instalar o jogo no celular</button>
     <p class="muted center small-note" id="install-tip"></p>
@@ -53,6 +54,7 @@
         <div id="npc-labels" class="npc-labels"></div>
         <div id="mon-bars-layer" class="mon-bars-layer"></div>
         <div id="hit-flash" class="hit-flash"></div>
+        <div id="pl-labels" class="npc-labels"></div>
       </div>
 
       <!-- personagem -->
@@ -126,6 +128,7 @@
         <button data-win="missoes" title="Missões (J)">📋<small>Missões</small></button>
         <button data-win="mapas" title="Mapas (M)">🗺️<small>Mapas</small></button>
         <button data-win="conquistas" title="Conquistas (L)">🏆<small>Feitos</small></button>
+        <button data-win="ranking" title="Ranking (R)">🏅<small>Ranking</small></button>
         <button data-win="config" title="Configurações">⚙️<small>Config</small></button>
         <button id="mute-btn" title="Som">🔊</button>
         <button id="btn-exit" title="Trocar herói">🚪</button>
@@ -152,6 +155,7 @@
   <script src="js/audio.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/scene3d.js"></script>
+  <script src="js/net.js"></script>
   <script src="js/game.js"></script>
   <script>
     // aplicativo instalável (PWA): funciona quando o jogo está no próprio domínio

@@ -38,16 +38,27 @@ const POINTS_PER_LEVEL = 5;
 
 // ---------- slots / save ----------
 const memSlots = {}; // usado quando o navegador bloqueia o localStorage
-function loadSlot(i) {
+const online = () => typeof Net !== 'undefined' && Net.isOnline();
+function loadLocal(i) {
   try { const raw = localStorage.getItem(SAVE_PREFIX + i); if (raw) return JSON.parse(raw); } catch (e) { /* armazenamento bloqueado */ }
   return memSlots[i] ? JSON.parse(JSON.stringify(memSlots[i])) : null;
+}
+function loadSlot(i) {
+  if (online()) { const c = Net.st.slots[i]; return c ? JSON.parse(JSON.stringify(c)) : null; }
+  return loadLocal(i);
+}
+function writeSlot(i, obj) {
+  if (online()) { Net.setSlot(i, obj); return true; }
+  try { localStorage.setItem(SAVE_PREFIX + i, JSON.stringify(obj)); return true; } catch (e) { memSlots[i] = obj; return false; }
 }
 function save() {
   if (!S) return;
   S.lastSave = Date.now();
+  if (online()) { Net.queueSave(slot, S); return; }
   try { localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(S)); } catch (e) { memSlots[slot] = JSON.parse(JSON.stringify(S)); }
 }
 function deleteSlot(i) {
+  if (online()) { Net.setSlot(i, null); return; }
   try { localStorage.removeItem(SAVE_PREFIX + i); } catch (e) {}
   delete memSlots[i];
 }
@@ -937,9 +948,43 @@ function showScreen(id) {
 }
 
 // ---------- seleção de personagem ----------
+function renderAccount() {
+  const el = document.getElementById('acct'); if (!el) return;
+  if (typeof Net === 'undefined' || !Net.st.available) { el.innerHTML = ''; el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  if (Net.isOnline()) {
+    const hasLocal = [0, 1, 2].some((i) => loadLocal(i));
+    el.innerHTML = `<div class="acct-on">🌐 Conectado como <b>${esc(Net.st.user)}</b> · heróis salvos na nuvem
+      ${hasLocal ? '<button class="btn small" data-act="acct-import">Enviar heróis deste aparelho</button>' : ''}
+      <button class="btn small" data-act="acct-logout">Sair</button></div>`;
+  } else {
+    el.innerHTML = `<div class="acct-form"><b>🌐 Jogar online</b><span class="muted">Crie uma conta para salvar na nuvem, ver outros jogadores e entrar no ranking.</span>
+      <input id="acct-user" maxlength="16" placeholder="Usuário" autocomplete="username">
+      <input id="acct-pass" type="password" maxlength="64" placeholder="Senha (mín. 6)" autocomplete="current-password">
+      <div class="row-btns"><button class="btn primary" data-act="acct-login">Entrar</button><button class="btn" data-act="acct-register">Criar conta</button></div>
+      <small class="muted">Sem conta, seus heróis ficam só neste aparelho.</small></div>`;
+  }
+}
+async function accountAction(kind) {
+  try {
+    if (kind === 'logout') { Net.logout(); renderSelect(); return; }
+    if (kind === 'import') {
+      let n = 0;
+      for (let i = 0; i < 3; i++) { const c = loadLocal(i); if (c && !Net.st.slots[i]) { await Net.setSlot(i, c); n++; } }
+      toast(n ? `${n} herói(s) enviado(s) para a conta.` : 'Os espaços da conta já estão ocupados.', n ? 'good' : 'bad'); renderSelect(); return;
+    }
+    const u = document.getElementById('acct-user').value.trim(), pw = document.getElementById('acct-pass').value;
+    await Net.login(u, pw, kind === 'register');
+    toast(kind === 'register' ? 'Conta criada! Bem-vindo(a).' : 'Conectado!', 'good');
+    renderSelect();
+  } catch (e) { toast(e.message, 'bad'); }
+}
+
 function renderSelect() {
   stopLoop();
   Scene.stop();
+  if (typeof Net !== 'undefined') Net.disconnect();
+  renderAccount();
   showScreen('screen-select');
   let html = '';
   for (let i = 0; i < MAX_SLOTS; i++) {
@@ -1014,7 +1059,7 @@ async function createFullAccount() {
   if (used && !(await uiConfirm('Conta Full', 'Isso vai substituir os heróis dos 3 espaços pela Conta Full (nível 100, tudo lendário +10). Continuar?', 'Substituir'))) return;
   const chars = [makeFullChar('Ferreus', 'engenheiro', 'martelo'), makeFullChar('Ceifador', 'lanceiro', 'foice'), makeFullChar('Arcana', 'arcanista', 'cajado')];
   let okSave = true;
-  chars.forEach((c, i) => { try { localStorage.setItem(SAVE_PREFIX + i, JSON.stringify(c)); } catch (e) { okSave = false; memSlots[i] = c; } });
+  chars.forEach((c, i) => { if (!writeSlot(i, c)) okSave = false; });
   if (!okSave) toast('Este navegador bloqueou o armazenamento: a conta vale só enquanto a página estiver aberta.', 'bad');
   toast('Conta Full criada: Engenheiro, Lanceiro e Arcanista no nível 100!', 'good');
   renderSelect();
@@ -1052,6 +1097,7 @@ function startGame(i) {
   S.hp = d.maxHp; S.mp = d.maxMp;
   showScreen('screen-game');
   Scene.start($('#scene'));
+  if (online()) Net.connect();
   log(`Bem-vindo(a) de volta, <b>${esc(S.name)}</b>!`, 'lvl');
   const lg = checkLogin();
   if (off) showOffline(off);
@@ -1060,6 +1106,14 @@ function startGame(i) {
   renderAll();
   renderTut();
   startLoop();
+}
+
+function netState() {
+  if (!online() || !Net.connected() || !R.pos && !R.inTown) return;
+  const look = {};
+  for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (it) look[sl] = { slot: sl, wtype: it.wtype, ilvl: it.ilvl, rarity: it.rarity, refine: it.refine || 0, set: it.set || null, req: 1 }; }
+  Net.sendState({ name: S.name, cls: S.cls, lvl: S.lvl, rb: S.rebirths || 0, title: S.title || '', zone: S.zone, town: !!R.inTown, dun: !!R.dungeon,
+    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look });
 }
 
 function startLoop() {
@@ -1073,6 +1127,7 @@ function startLoop() {
     if (now - R.lastTick > 60000) R.lastTick = now;
     while (n-- > 0) tick();
     renderLive();
+    if ((R.netT = (R.netT || 0) + 1) % 2 === 0) netState();
     if (R.dirty.all) { renderAll(); R.dirty = {}; }
     else {
       if (R.dirty.log) { renderLog(); R.dirty.log = false; }
@@ -1150,6 +1205,7 @@ function drawMinimap() {
       g.fillStyle = '#fff'; g.fill(); g.strokeStyle = '#000'; g.stroke(); g.restore();
     }
   }
+  if (online() && Net.connected()) label += ` · 🌐 ${Net.st.online}`;
   const lb = document.getElementById('mm-label'); if (lb && lb.textContent !== label) lb.textContent = label;
 }
 
@@ -1378,11 +1434,13 @@ function renderLog() {
 }
 function chatCommand(txt) {
   const t = txt.trim(); if (!t) return;
-  if (!t.startsWith('/')) { log(`<b style="color:#9ad0ff">[${esc(S.name)}]</b> ${esc(t)}`, 'chat'); return; }
+  if (!t.startsWith('/')) { if (!(online() && Net.chat(t, 'global'))) log(`<b style="color:#9ad0ff">[${esc(S.name)}]</b> ${esc(t)}`, 'chat'); return; }
+  if (/^\/z(ona)?\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'zone'))) log('Sem conexão com o servidor.', 'chat'); return; }
   const [cmd, ...args] = t.slice(1).toLowerCase().split(/\s+/);
   const arg = args.join(' ');
   switch (cmd) {
-    case 'ajuda': case 'help': log('Comandos: /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /limpar', 'chat'); break;
+    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
+    case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;
     case 'auto': S.settings.auto = !S.settings.auto; log(`Modo automático ${S.settings.auto ? 'ligado' : 'desligado'}.`, 'chat'); break;
     case 'cidade': setTown(true); break;
     case 'cacar': case 'caçar': setTown(false); break;
@@ -1471,6 +1529,17 @@ function rebirth() {
     log(`🌟 <b>Renascimento ${S.rebirths}!</b> Seu herói recomeça mais forte.`, 'lvl'); Scene.levelUp(); Sfx.play('levelup');
     closeWin(); R.dirty.all = true;
   });
+}
+
+// ---------- ranking (servidor) ----------
+function tabRanking() {
+  if (!online()) return '<p class="muted">O ranking aparece quando você joga com uma conta online.</p>';
+  Net.ranking().then((list) => {
+    if (R.tab !== 'ranking') return;
+    const el = document.getElementById('rank-list'); if (!el) return;
+    el.innerHTML = list.length ? list.map((r, i) => `<div class="rank-row ${r.user === Net.st.user ? 'me' : ''}"><b>${i + 1}º</b><span>${CLASSES[r.cls].icon} ${esc(r.name)} <small class="muted">(${esc(r.user)})</small></span><span>${r.rebirths ? '★' + r.rebirths + ' ' : ''}Nv. ${r.lvl}</span><small class="muted">${fmt(r.kills)} abates</small></div>`).join('') : '<p class="muted">Ninguém no ranking ainda.</p>';
+  }).catch(() => {});
+  return `<p class="muted">Os melhores heróis do servidor (renascimentos, nível e abates). 🌐 ${Net.st.online} online agora.</p><div id="rank-list" class="rank-list">Carregando...</div>`;
 }
 
 // ---------- conquistas ----------
@@ -1682,7 +1751,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -1702,7 +1771,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -1998,12 +2067,13 @@ document.addEventListener('click', (e) => {
     slot = createState.slot;
     S = newCharacter(name, createState.cls);
     S.settings.auto = false;
-    save();
+    writeSlot(slot, S);
     return startGame(slot);
   }
   if (t.id === 'btn-exit') { save(); return renderSelect(); }
   if (t.id === 'modal-close') { $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); if (R) R.npc = null; if (R && R.pendingLogin) { const lg = R.pendingLogin; R.pendingLogin = null; showLogin(lg); } return; }
   if (ds.act === 'full-account') return createFullAccount();
+  if (ds.act && ds.act.startsWith('acct-')) return accountAction(ds.act.slice(5));
   if (!S) return;
   if (ds.attr) {
     const n = Math.min(+ds.n, S.pts);
@@ -2066,6 +2136,10 @@ document.addEventListener('click', (e) => {
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
     case 'equip-best': equipBest(); break;
+    case 'acct-login': accountAction('login'); break;
+    case 'acct-register': accountAction('register'); break;
+    case 'acct-logout': accountAction('logout'); break;
+    case 'acct-import': accountAction('import'); break;
     case 'rebirth': rebirth(); break;
     case 'auto-pts': S.settings.autoPts = !S.settings.autoPts; if (S.settings.autoPts) autoDistribute(); renderChar(); break;
     case 'reset-pts': {
@@ -2132,7 +2206,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   const k = e.key.toLowerCase();
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
-  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas' };
+  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking' };
   if (wins[k]) { openWin(wins[k]); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');
@@ -2145,3 +2219,11 @@ document.addEventListener('pointerdown', (e) => {
   const r = mm.getBoundingClientRect(), C = r.width / 2, k = (C - 6 * r.width / mm.width) / 36;
   window.gameOrder({ type: 'move', x: (e.clientX - r.left - C) / k, z: (e.clientY - r.top - C) / k });
 });
+
+// ---------- chat e avisos vindos do servidor ----------
+if (typeof Net !== 'undefined') {
+  const CLS_COLOR = { gladiador: '#ff8a5a', engenheiro: '#b8c4d8', cacadora: '#8ae07a', lanceiro: '#c090ff', paladino: '#ffe070', valquiria: '#9ad0ff', arcanista: '#d0a0ff', cleriga: '#fff0c0' };
+  Net.onChat = (m) => { if (!S || !R) return; log(`${m.ch === 'zone' ? '<small>[mapa]</small> ' : ''}<b style="color:${CLS_COLOR[m.cls] || '#9ad0ff'}">[${esc(m.from)}]</b> ${esc(m.text)}`, 'chat'); if (R.dirty) renderLog(); };
+  Net.onSys = (text) => { if (S && R && R.log) log(`🌐 ${esc(text)}`, 'muted'); };
+  Net.probe().then((ok) => { if (!ok) return; Net.resume().finally(() => { if (!S || document.getElementById('screen-select').offsetParent) renderSelect(); }); });
+}

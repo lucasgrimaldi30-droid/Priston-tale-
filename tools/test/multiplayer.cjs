@@ -1,0 +1,60 @@
+// Teste do multiplayer: sobe o servidor, abre 2 navegadores independentes, cria 2 contas e 2 heróis
+// e confere: presença (um vê o outro), chat, salvamento na nuvem (sobrevive a recarregar) e ranking.
+// Uso: node tools/test/multiplayer.cjs   (precisa de: cd server && npm install)
+const { chromium } = require('playwright');
+const { spawn } = require('child_process');
+const fs = require('fs'), os = require('os'), path = require('path');
+const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test');
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'valdaria-'));
+  const port = 18000 + Math.floor(Math.random() * 1000);
+  const srv = spawn('node', [path.join(ROOT, 'server/server.js')], { env: { ...process.env, PORT: port, DATA_DIR: data }, stdio: 'pipe' });
+  await new Promise((r) => srv.stdout.on('data', (d) => { if (/rodando/.test(d)) r(); }));
+  const url = `http://localhost:${port}/`;
+  const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const out = [], errs = [], ok = (n, c, i = '') => out.push(`${c ? '✅' : '❌'} ${n}${i ? ' — ' + i : ''}`);
+  const player = async (user, cls, hero) => {
+    const ctx = await b.newContext({ viewport: { width: 1100, height: 700 } });
+    const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(user + ': ' + e.message));
+    await p.goto(url); await p.waitForSelector('#acct-user', { timeout: 10000 });
+    await p.fill('#acct-user', user); await p.fill('#acct-pass', 'segredo123'); await p.click('[data-act="acct-register"]');
+    await p.waitForSelector('.acct-on', { timeout: 10000 });
+    await p.click('[data-new="0"]'); await p.click(`[data-faction="${cls === 'paladino' ? 'luz' : 'ferro'}"]`); await p.click(`[data-cls="${cls}"]`);
+    await p.fill('#char-name', hero); await p.click('#create-btn');
+    await p.waitForTimeout(500); await p.evaluate(() => { S.tut = 99; renderTut(); });
+    return p;
+  };
+  const A = await player('Alfa', 'gladiador', 'Brutus');
+  const B = await player('Beta', 'paladino', 'Lumen');
+  await A.waitForTimeout(6000);
+  const seeA = await A.evaluate(() => [...Net.st.others.values()].map((o) => o.name).join(','));
+  const seeB = await B.evaluate(() => [...Net.st.others.values()].map((o) => o.name).join(','));
+  ok('Presença: cada um vê o outro no mapa', seeA.includes('Lumen') && seeB.includes('Brutus'), `Alfa vê [${seeA}], Beta vê [${seeB}]`);
+  for (const P of [A, B]) await P.evaluate(() => { $('#modal').classList.add('hidden'); S.settings.auto = false; R.mon = null; R.move = null; });
+  const pa = await A.evaluate(() => ({ x: R.pos.x, z: R.pos.z }));
+  await B.evaluate((pa) => { R.pos.x = pa.x + 1.6; R.pos.z = pa.z + 0.4; }, pa);
+  await A.waitForTimeout(2500);
+  const drawn = await A.evaluate(() => document.querySelectorAll('#pl-labels .pl-label').length);
+  ok('Outro jogador desenhado com nome', drawn >= 1);
+  await A.screenshot({ path: path.join(OUT, 'multiplayer.png') });
+  await A.evaluate(() => chatCommand('Olá do Brutus!'));
+  await B.waitForTimeout(800);
+  const got = await B.evaluate(() => R.log.some((l) => l.msg.includes('Olá do Brutus!')));
+  ok('Chat chega no outro jogador', got);
+  await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });
+  await B.waitForTimeout(800);
+  await B.reload(); await B.waitForSelector('.acct-on', { timeout: 10000 });
+  const cloud = await B.evaluate(() => { const c = loadSlot(0); return c && c.name + ':' + c.gold; });
+  ok('Salvamento na nuvem sobrevive a recarregar', cloud === 'Lumen:777', cloud);
+  const rank = await A.evaluate(async () => (await Net.ranking()).map((r) => r.name).join(','));
+  ok('Ranking', rank.includes('Brutus') && rank.includes('Lumen'), rank);
+  const bad = await A.evaluate(async () => { const r = await fetch('api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: 'Alfa', pass: 'errada' }) }); return r.status; });
+  ok('Senha errada é recusada', bad === 401);
+  const leak = await A.evaluate(async () => (await fetch('server/data/db.json')).status);
+  ok('Banco de dados não fica público', leak === 404);
+  await b.close(); srv.kill();
+  console.log(out.join('\n'));
+  if (errs.length) console.log('❌ Erros:\n' + errs.join('\n'));
+  process.exit(out.some((l) => l.startsWith('❌')) || errs.length ? 1 : 0);
+})();

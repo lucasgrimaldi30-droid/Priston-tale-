@@ -12,7 +12,10 @@
 | `js/audio.js` | Áudio procedural: `Sfx.play(nome)`, `Sfx.music(trilha)`, sem arquivos |
 | `js/vendor/` | three.min.js r128, GLTFLoader, SkeletonUtils (sem CDN) |
 | `assets/models/` | KayKit (CC0) otimizados: personagens sem animação + `anims.glb` (32 clipes compartilhados) + `skel_props.glb` |
-| `tools/` | `models-to-json.mjs` (publicação) e `test/` (smoke, balance, servidor estático) |
+| `js/net.js` | Cliente do servidor (`Net`): contas, saves na nuvem, presença por WebSocket, chat e ranking. Fica offline se a página não tiver `window.VALDARIA_SERVER` |
+| `server/` | Servidor Node.js (`server.js` + `ws`): entrega o jogo, API REST, tempo real e banco em `DATA_DIR/db.json` |
+| `Dockerfile`, `docker-compose.yml`, `Caddyfile`, `DEPLOY.md` | Subir num VPS com HTTPS automático |
+| `tools/` | `models-to-json.mjs` (publicação) e `test/` (features, smoke, balance, multiplayer, servidor estático) |
 
 ## Estado
 - `S` = personagem salvo (localStorage `valdaria_slot_N`):
@@ -93,3 +96,15 @@ Atalhos no `keydown` do fim de `game.js`.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).
+
+## Multiplayer (Fase 5)
+- **Servidor** (`server/server.js`): `GET /api/ping`, `POST /api/register|login` (senha com scrypt, sessões de 30 dias em `db.tokens`),
+  `GET /api/me`, `GET|PUT|DELETE /api/save/0..2` (validação básica em `validSave`), `GET /api/ranking` (renascimentos > nível > abates).
+  WebSocket `/ws?token=`: o cliente manda `{t:'state', ...}` 5×/s e `{t:'chat', text, ch:'global'|'zone'}`; o servidor manda `{t:'players', list, online}`
+  só com quem está na mesma sala (`roomOf`: mapa, cidade da facção; masmorra é privada), `{t:'chat'}` e `{t:'sys'}`. Limites contra abuso em `limited`.
+  Ao servir `index.html`, injeta `window.VALDARIA_SERVER = true` (sem isso o cliente nem tenta conectar — evita erro 404 no link do claude.ai).
+  Nunca sirva `server/`, `build/`, `node_modules` ou arquivos ocultos (`serveStatic`).
+- **Cliente:** `online()` em `game.js` decide entre nuvem (`Net.st.slots`) e localStorage em `loadSlot`/`writeSlot`/`save`/`deleteSlot`.
+  `renderAccount` (login/criar conta, enviar heróis do aparelho para a conta), `netState()` envia a presença, `Net.onChat`/`onSys` caem no chat,
+  `tabRanking`. Na cena, `updateOthers` desenha os outros jogadores (`buildHeroModel(cls, look)`), com nome em `#pl-labels`.
+- O servidor ainda **confia no cliente** (nível, ouro). Próximo passo para anti-trapaça: o servidor calcular combate, XP e drops.

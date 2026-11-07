@@ -26,6 +26,13 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - Loja de poções com uso e compra automáticos.
 - **Progresso offline** de até 8 horas e save automático no navegador (com exportar/importar).
 
+## Jogar online (multiplayer)
+Com o servidor do jogo, os heróis ficam salvos na nuvem, você vê os outros jogadores no mapa, conversa no chat e entra no ranking.
+```bash
+cd server && npm install && node server.js   # http://localhost:8080
+```
+Para colocar num servidor com domínio e HTTPS, siga o **[DEPLOY.md](DEPLOY.md)** (Docker + Caddy). Sem servidor, o jogo funciona offline.
+
 ## Desenvolvimento
 O guia completo para mexer, testar e publicar está na skill `.claude/skills/valdaria-dev/` (`SKILL.md` + `references/`).
 
@@ -33,6 +40,7 @@ O guia completo para mexer, testar e publicar está na skill `.claude/skills/val
 node tools/test/features.cjs     # sistemas de progressão (rápido)
 node tools/test/smoke.cjs        # teste no navegador: 8 classes, cidade, NPC, janelas, Conta Full, celular
 node tools/test/balance.cjs 24   # simulação de balanceamento (24 h por classe)
+node tools/test/multiplayer.cjs  # 2 jogadores no servidor: presença, chat, nuvem, ranking
 ```
 
 ## Rodando localmente

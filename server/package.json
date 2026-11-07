@@ -1,0 +1,10 @@
+{
+  "name": "valdaria-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor do Crônicas de Valdária: contas, salvamento na nuvem, ranking, presença em tempo real e chat.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "8.18.0" }
+}

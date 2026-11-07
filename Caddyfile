@@ -1,0 +1,5 @@
+# Caddy pega o certificado HTTPS sozinho e repassa tudo (inclusive o tempo real) para o jogo.
+{$DOMINIO} {
+	encode gzip
+	reverse_proxy jogo:8080
+}
