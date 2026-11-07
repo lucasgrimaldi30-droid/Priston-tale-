@@ -8,6 +8,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0d0f14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="icon" href="assets/icons/icon-192.png">
 </head>
 <body>
   <!-- Seleção de personagem -->
@@ -17,6 +24,8 @@
       <p class="subtitle">Idle MMORPG · Escolha seu herói</p>
     </div>
     <div id="slots" class="slots"></div>
+    <button class="btn primary install-btn hidden" id="install-btn">📲 Instalar o jogo no celular</button>
+    <p class="muted center small-note" id="install-tip"></p>
     <p class="muted center small-note">Seu progresso fica salvo neste navegador. O herói continua caçando mesmo com o jogo fechado (até 8h).</p>
   </section>
 
@@ -43,6 +52,7 @@
         <div id="floats3d" class="floats3d"></div>
         <div id="npc-labels" class="npc-labels"></div>
         <div id="mon-bars-layer" class="mon-bars-layer"></div>
+        <div id="hit-flash" class="hit-flash"></div>
       </div>
 
       <!-- personagem -->
@@ -143,5 +153,14 @@
   <script src="js/scene.js"></script>
   <script src="js/scene3d.js"></script>
   <script src="js/game.js"></script>
+  <script>
+    // aplicativo instalável (PWA): funciona quando o jogo está no próprio domínio
+    try { if ('serviceWorker' in navigator && window.top === window.self) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+    let installEvt = null;
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; document.getElementById('install-btn').classList.remove('hidden'); });
+    document.getElementById('install-btn').addEventListener('click', async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; document.getElementById('install-btn').classList.add('hidden'); });
+    (() => { const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      if (ios && !standalone && window.top === window.self) document.getElementById('install-tip').textContent = 'No iPhone: toque em Compartilhar ➜ "Adicionar à Tela de Início" para instalar.'; })();
+  </script>
 </body>
 </html>

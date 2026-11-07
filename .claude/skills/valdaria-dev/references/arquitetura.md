@@ -78,3 +78,13 @@ Atalhos no `keydown` do fim de `game.js`.
 - **Conquistas:** `ACH` (22) com recompensas e títulos (`S.ach`, `S.title`), verificadas a cada 50 ticks em `checkAch`. Janela `conquistas` (tecla L).
 - **Tutorial:** `TUT` (6 passos), `S.tut` (heróis novos começam em 0 e com o Auto desligado; saves antigos sem `tut` não veem o tutorial).
 - **Equipar melhores:** `equipBest()` usa `itemScore()`. **Qualidade gráfica:** `S.settings.quality` (alta/média/baixa) → `Scene.setQuality`.
+- **Diárias e login:** `dailyState()` (3 missões por dia escolhidas por semente da data, `dailyProgress(tipo, n)` nos ganchos de abate,
+  ouro, habilidades, masmorras e missões; `claimDaily`; bônus ao completar as 3). `checkLogin()` dá o prêmio do dia (ciclo de 7 em `LOGIN_DAYS`)
+  e `showLogin` mostra a tela (depois da tela de progresso offline, se houver).
+- **Renascimento:** `rebirth()` no nível 100 (`S.rebirths`): volta ao nível 1 e dá +10% ataque/XP/ouro e +5% vida por renascimento.
+  Itens com `req` acima do nível ficam **inativos** em `derived()` até o herói alcançá-los.
+- **Conjuntos:** `SETS` (um por tier 2–5), `maybeSet` (18% das peças raras+ de armadura/elmo/luvas/botas), `setCounts`, `setBonus` (2 e 4 peças).
+  Na cena, as peças usam a cor do conjunto e o herói ganha aura (`setfull` com 4 peças).
+- **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
+- **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
+  ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

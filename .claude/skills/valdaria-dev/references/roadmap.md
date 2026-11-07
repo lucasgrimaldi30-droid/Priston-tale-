@@ -10,6 +10,7 @@
 
 - **Melhorias gerais:** níveis de habilidade, elites, chefes com mecânicas, masmorras, gemas, forja, loja nova, montarias, mascotes,
   conquistas e títulos, tutorial, equipar melhores, qualidade gráfica.
+- **Retenção:** missões diárias, prêmio de login (7 dias), renascimento, conjuntos de equipamento, impacto dos golpes, aplicativo (PWA).
 
 ## Planejado (o dono pediu para deixar os modelos de personagens e monstros para o final)
 - **Fase 5 — multiplayer:** servidor (Node.js), contas, salvamento online, outros jogadores no mapa, chat real, anti-trapaça (servidor calcula XP/drops).

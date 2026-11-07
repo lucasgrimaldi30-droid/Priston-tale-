@@ -110,7 +110,7 @@ function genItem(ilvl, boost = 1, forceSlot = null) {
     if (a.pct) val = Math.min(val, a.stat === 'crit' ? 15 : 50);
     it.affixes.push({ stat: a.stat, val });
   }
-  return it;
+  return maybeSet(it);
 }
 
 function itemValue(it) {
@@ -163,6 +163,28 @@ function upgradeSkill(id) {
   S.skillLv = S.skillLv || {}; S.skillLv[id] = skLv(id) + 1;
   Sfx.play('refineOk'); log(`📈 ${esc(sk.name)} subiu para o nível ${S.skillLv[id]}!`, 'lvl');
   renderSkillBar(); renderTab();
+}
+
+// ---------- conjuntos de equipamento ----------
+const SETS = {
+  guardiao: { name: 'Guardião de Ferro', tier: 2, color: '#7ac0ff', b2: { defp: 20 }, b4: { hpp: 15, block: 0.1 }, d2: '+20% de defesa', d4: '+15% de vida e +10% de bloqueio' },
+  sombra:   { name: 'Sombra Rúnica', tier: 3, color: '#b070ff', b2: { crit: 8 }, b4: { critdmg: 0.4 }, d2: '+8% de crítico', d4: '+40% de dano crítico' },
+  furia:    { name: 'Fúria Dracônica', tier: 4, color: '#ff6040', b2: { atkp: 15 }, b4: { spd: 0.1, atkp: 10 }, d2: '+15% de ataque', d4: '+10% de velocidade e +10% de ataque' },
+  celeste:  { name: 'Ascensão Celestial', tier: 5, color: '#ffe080', b2: { hpp: 15, xpb: 10 }, b4: { atkp: 20, hpp: 10 }, d2: '+15% de vida e +10% de experiência', d4: '+20% de ataque e +10% de vida' },
+};
+const SET_SLOTS = ['armadura', 'elmo', 'luvas', 'botas'];
+// itens raros ou melhores de armadura podem nascer como peça de conjunto do seu tier
+function maybeSet(it) {
+  if (!SET_SLOTS.includes(it.slot) || RARITIES.findIndex((r) => r.id === it.rarity) < 2 || Math.random() > 0.18) return it;
+  const tier = clamp(Math.floor(it.ilvl / 17), 0, 5), id = Object.keys(SETS).find((k) => SETS[k].tier === tier);
+  if (!id) return it;
+  it.set = id; it.name = `${it.name} · ${SETS[id].name}`;
+  return it;
+}
+function setCounts() { const c = {}; for (const sl of SET_SLOTS) { const it = S.equip[sl]; if (it && it.set && S.lvl >= it.req) c[it.set] = (c[it.set] || 0) + 1; } return c; }
+function setBonus(b) {
+  const c = setCounts();
+  for (const id in c) { const st = SETS[id]; for (const [k, need] of [['b2', 2], ['b4', 4]]) if (c[id] >= need) for (const st2 in st[k]) b[st2] = (b[st2] || 0) + st[k][st2]; }
 }
 
 // ---------- gemas e forja ----------
@@ -239,7 +261,7 @@ function derived() {
   let wmin = 1, wmax = 3, def = 0;
   for (const sl of SLOT_ORDER) {
     const it = S.equip[sl];
-    if (!it) continue;
+    if (!it || S.lvl < it.req) continue; // item acima do nível fica inativo
     const m = refineMult(it);
     if (sl === 'arma') {
       if (canUseWeapon(it)) { wmin = it.min * m; wmax = it.max * m; }
@@ -247,6 +269,9 @@ function derived() {
     for (const a of it.affixes) bonus[a.stat] += a.val;
   }
   gemBonus(bonus);
+  const SB = {}; setBonus(SB);
+  const rb = S.rebirths || 0;
+  bonus.xpb += (SB.xpb || 0) + rb * 10; bonus.gold += rb * 10; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * 10;
   { const pc = S.companion && SHOP.find((x) => x.id === S.companion); if (pc) { bonus.gold += pc.gold || 0; bonus.xpb += pc.xp || 0; } }
   const A = {};
   for (const k of ['for', 'int', 'des', 'agi', 'vit']) A[k] = S.attr[k] + bonus[k];
@@ -257,15 +282,16 @@ function derived() {
   for (const sk of classSkills()) if (sk.type === 'passive' && sk.stat && S.lvl >= sk.lvl) B[sk.stat] = (B[sk.stat] || 0) + sk.val;
   const buff = (k) => B[k] || 0;
   if (R.pet && PETS[R.pet.kind].spd) B.spd = (B.spd || 0) + PETS[R.pet.kind].spd;
+  for (const k of ['critdmg', 'spd', 'block']) if (SB[k]) B[k] = (B[k] || 0) + SB[k];
   const atkMul = 1 + buff('atk') + bonus.atkp / 100;
   const baseHp = 40 + A.vit * 8 + S.lvl * 10 + bonus.hp;
   const d = {
     A,
-    maxHp: Math.round(baseHp * (1 + buff('hpmax'))),
+    maxHp: Math.round(baseHp * (1 + buff('hpmax') + (SB.hpp || 0) / 100 + rb * 0.05)),
     maxMp: Math.round(15 + A.int * 4 + S.lvl * 3 + bonus.mp),
     atkMin: Math.round((wmin + main * 0.8 + S.lvl) * atkMul),
     atkMax: Math.round((wmax + main * 1.0 + S.lvl) * atkMul),
-    def: Math.round((def + A.agi * 0.6 + A.vit * 0.2) * (1 + buff('def'))),
+    def: Math.round((def + A.agi * 0.6 + A.vit * 0.2) * (1 + buff('def') + (SB.defp || 0) / 100)),
     crit: clamp(5 + A.des * 0.08 + bonus.crit + buff('crit') * 100, 0, 75),
     critMult: (c.critMult || 1.75) + buff('critdmg'),
     aps: c.speed * (1 + A.agi / 400) * (1 + buff('spd')),
@@ -410,7 +436,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20);
+  dropGem(1, z.min + 20); dailyProgress('dungeons');
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -530,6 +556,7 @@ function killMonster(m) {
   const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1));
   const gold = Math.round(m.gold * (1 + d.goldb / 100));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++;
+  dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
@@ -775,7 +802,7 @@ function playerAI(dt, d) {
   if (R.playerTimer <= 0) {
     R.playerTimer = 1 / d.aps;
     const sk = trySkills(d);
-    if (sk) { S.mp -= sk.mp; R.cds[sk.id] = sk.cd; playerHit(sk.mult, sk); }
+    if (sk) { S.mp -= sk.mp; R.cds[sk.id] = sk.cd; playerHit(sk.mult, sk); dailyProgress('skills'); }
     else playerHit(1);
   }
 }
@@ -1026,7 +1053,10 @@ function startGame(i) {
   showScreen('screen-game');
   Scene.start($('#scene'));
   log(`Bem-vindo(a) de volta, <b>${esc(S.name)}</b>!`, 'lvl');
+  const lg = checkLogin();
   if (off) showOffline(off);
+  else if (lg) showLogin(lg);
+  if (off && lg) R.pendingLogin = lg;
   renderAll();
   renderTut();
   startLoop();
@@ -1131,7 +1161,7 @@ function renderHeader() {
 
 function renderLive() {
   const d = derived();
-  $('#hdr-lvl').textContent = 'Nv. ' + S.lvl;
+  $('#hdr-lvl').textContent = (S.rebirths ? '★' + S.rebirths + ' ' : '') + 'Nv. ' + S.lvl;
   $('#hdr-gold').textContent = fmt(S.gold);
   $('#hdr-stones').textContent = S.stones;
   const need = xpNeed(S.lvl);
@@ -1204,6 +1234,9 @@ function renderChar() {
       <button class="btn tiny" data-attr="${k}" data-n="1" ${S.pts < 1 ? 'disabled' : ''}>+1</button>
       <button class="btn tiny" data-attr="${k}" data-n="5" ${S.pts < 5 ? 'disabled' : ''}>+5</button>
     </div>`).join('')}
+    ${S.lvl >= MAX_LEVEL ? `<button class="btn primary rebirth-btn" data-act="rebirth">🌟 Renascer (${(S.rebirths || 0) + 1}º)</button>` : ''}
+    ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
+    ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
     <h3>Status</h3>
     <div class="stat-grid">
       <span>Ataque</span><b>${fmt(d.atkMin)} - ${fmt(d.atkMax)}</b>
@@ -1249,6 +1282,8 @@ function itemDetail(it, compare = true) {
       }
     }
   }
+  if (it.set) { const st = SETS[it.set], n = setCounts()[it.set] || 0; h += `<div class="set-info" style="--sc:${st.color}"><b>Conjunto ${st.name}</b> (${n}/4 equipadas)<br><span class="${n >= 2 ? 'on' : ''}">2 peças: ${st.d2}</span><br><span class="${n >= 4 ? 'on' : ''}">4 peças: ${st.d4}</span></div>`; }
+  if (S.lvl < it.req) h += `<div class="bad">Inativo até o nível ${it.req}</div>`;
   if (sockets(it)) h += `<div class="affix">Encaixes: ${(it.gems || []).map((g) => `${GEMS[g.t].icon}+${GEMS[g.t].per * g.l}${GEMS[g.t].label}`).join(' ') || ''} ${'◇'.repeat(sockets(it) - (it.gems || []).length)}</div>`;
   h += `<div class="muted">Valor: ${fmt(itemValue(it))} ouro</div></div>`;
   return h;
@@ -1360,6 +1395,84 @@ function chatCommand(txt) {
   R.dirty.log = true; renderLog();
 }
 
+// ---------- missões diárias e prêmio de login ----------
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const DAILY_TYPES = [
+  { k: 'kills', t: (n) => `Derrote ${n} monstros`, n: () => 150 },
+  { k: 'elites', t: (n) => `Derrote ${n} monstros elite`, n: () => 5 },
+  { k: 'bosses', t: (n) => `Derrote ${n} chefe${n > 1 ? 's' : ''}`, n: () => 1 },
+  { k: 'skills', t: (n) => `Use habilidades ${n} vezes`, n: () => 200 },
+  { k: 'gold', t: (n) => `Ganhe ${fmt(n)} de ouro`, n: () => Math.round(800 * Math.pow(S.lvl, 1.4)) },
+  { k: 'dungeons', t: (n) => `Conclua ${n} masmorra`, n: () => 1, minLvl: 6 },
+  { k: 'quests', t: (n) => `Conclua ${n} missões do Comandante`, n: () => 3 },
+];
+function dailyState() {
+  const d = today();
+  if (!S.daily || S.daily.day !== d) {
+    const r = seeded(+d.replace(/-/g, '') + S.cls.length * 31);
+    const pool = DAILY_TYPES.filter((x) => !x.minLvl || S.lvl >= x.minLvl), picked = [];
+    while (picked.length < 3) { const x = pool[Math.floor(r() * pool.length)]; if (!picked.includes(x)) picked.push(x); }
+    S.daily = { day: d, list: picked.map((x) => ({ k: x.k, need: x.n(), prog: 0, done: false })), streak: S.daily ? S.daily.streak : 0, last: S.daily ? S.daily.last : null, bonusTaken: false };
+  }
+  return S.daily;
+}
+function dailyProgress(k, n = 1) {
+  if (!S) return;
+  const D = dailyState();
+  for (const m of D.list) if (m.k === k && !m.done) { m.prog = Math.min(m.need, m.prog + n); if (m.prog >= m.need) { m.done = true; toast('Missão diária pronta!', 'good'); log(`📅 Missão diária concluída: ${DAILY_TYPES.find((x) => x.k === k).t(m.need)}. Pegue o prêmio em Missões!`, 'lvl'); } }
+}
+function dailyReward() { return { gold: Math.round(300 * Math.pow(S.lvl, 1.3)), stones: 2 + Math.floor(S.lvl / 25) }; }
+function claimDaily(i) {
+  const D = dailyState(), m = D.list[i]; if (!m || !m.done || m.claimed) return;
+  m.claimed = true; const r = dailyReward();
+  S.gold += r.gold; S.stones += r.stones; Sfx.play('coin');
+  log(`📅 Prêmio diário: +${fmt(r.gold)} ouro, +${r.stones} 💎.`, 'lvl');
+  if (D.list.every((x) => x.claimed) && !D.bonusTaken) { D.bonusTaken = true; dropGem(1, S.lvl + 20); S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + 30 * 60000; log('🎉 Todas as diárias feitas! Bônus: uma gema e +50% de XP por 30 min.', 'lvl'); toast('Bônus diário completo!', 'good'); }
+  renderTab();
+}
+// prêmio por dias seguidos (ciclo de 7)
+const LOGIN_DAYS = [
+  { t: 'Ouro', f: () => ({ gold: 500 * S.lvl }) }, { t: 'Poções', f: () => ({ pots: 30 }) }, { t: 'Pedras', f: () => ({ stones: 5 }) },
+  { t: 'Ouro', f: () => ({ gold: 1200 * S.lvl }) }, { t: 'Gemas', f: () => ({ gems: 3 }) }, { t: 'Pedras', f: () => ({ stones: 10 }) },
+  { t: 'Baú especial', f: () => ({ gold: 3000 * S.lvl, stones: 15, gems: 3, xp: 60 }) },
+];
+function checkLogin() {
+  const D = dailyState(), d = today();
+  if (D.last === d) return null;
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yd = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+  D.streak = D.last === yd ? D.streak + 1 : 1; D.last = d;
+  const idx = (D.streak - 1) % 7, rw = LOGIN_DAYS[idx].f();
+  if (rw.gold) S.gold += rw.gold; if (rw.stones) S.stones += rw.stones; if (rw.pots) { S.pots.hp1 += rw.pots; S.pots.mp1 += rw.pots; }
+  if (rw.gems) for (let i = 0; i < rw.gems; i++) dropGem(1, S.lvl);
+  if (rw.xp) S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + rw.xp * 60000;
+  return { day: idx + 1, streak: D.streak, rw };
+}
+function showLogin(L) {
+  const txt = (rw) => [rw.gold && `${fmt(rw.gold)} ouro`, rw.stones && `${rw.stones} 💎`, rw.pots && `${rw.pots * 2} poções`, rw.gems && `${rw.gems} gemas`, rw.xp && `+50% XP por ${rw.xp} min`].filter(Boolean).join(' · ');
+  $('#modal-body').innerHTML = `<h2>🎁 Prêmio diário</h2><p>Dia <b>${L.streak}</b> seguido! Entre todo dia para ganhar prêmios melhores.</p>
+    <div class="login-track">${LOGIN_DAYS.map((x, i) => `<div class="ld ${i + 1 < L.day ? 'got' : ''} ${i + 1 === L.day ? 'now' : ''}"><small>Dia ${i + 1}</small><b>${i === 6 ? '🎁' : ['💰', '🧪', '💎', '💰', '💠', '💎'][i]}</b><small>${x.t}</small></div>`).join('')}</div>
+    <p class="good center">Hoje: ${txt(L.rw)}</p><button class="btn primary" id="modal-close">Pegar</button>`;
+  $('#modal').classList.remove('hidden');
+  Sfx.play('levelup');
+}
+
+// ---------- renascimento ----------
+function canRebirth() { return S.lvl >= MAX_LEVEL; }
+function rebirth() {
+  if (!canRebirth()) return;
+  uiConfirm('Renascer', `Você volta ao nível 1, mas ganha para sempre +10% de ataque, +10% de experiência, +10% de ouro e +5% de vida (acumula a cada renascimento). Itens, ouro, gemas, montarias e conquistas ficam com você; os equipamentos acima do seu nível ficam inativos até você alcançá-los.`, 'Renascer').then((y) => {
+    if (!y) return;
+    S.rebirths = (S.rebirths || 0) + 1;
+    S.lvl = 1; S.xp = 0; S.pts = 0; S.attr = { ...CLASSES[S.cls].base }; S.skillLv = {};
+    S.zone = 'z1'; S.zoneKills = {}; R.worldZone = null; R.mon = null; R.buffs = []; R.pet = null;
+    if (S.quests) S.quests.active = {};
+    const d = derived(); S.hp = d.maxHp; S.mp = d.maxMp;
+    log(`🌟 <b>Renascimento ${S.rebirths}!</b> Seu herói recomeça mais forte.`, 'lvl'); Scene.levelUp(); Sfx.play('levelup');
+    closeWin(); R.dirty.all = true;
+  });
+}
+
 // ---------- conquistas ----------
 const anyEquip = (f) => SLOT_ORDER.some((sl) => S.equip[sl] && f(S.equip[sl]));
 const ACH = [
@@ -1384,6 +1497,8 @@ const ACH = [
   { id: 'q40', name: 'Herói do Povo', desc: 'Conclua as 40 missões', ok: () => Object.keys(questState().done).length >= 40, stones: 30, title: 'Herói do Povo' },
   { id: 'd1', name: 'Explorador de Masmorras', desc: 'Conclua uma masmorra', ok: () => (S.stats.dungeons || 0) >= 1, stones: 3 },
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
+  { id: 'rb1', name: 'Renascido', desc: 'Renasça pela primeira vez', ok: () => (S.rebirths || 0) >= 1, stones: 30, title: 'Renascido' },
+  { id: 'rb5', name: 'Imortal', desc: 'Renasça 5 vezes', ok: () => (S.rebirths || 0) >= 5, stones: 80, title: 'Imortal' },
   { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.owned && (S.owned.mount1 || S.owned.mount2), gold: 10000 },
 ];
 function checkAch() {
@@ -1463,7 +1578,7 @@ function acceptQuest(id) {
 function turnInQuest(id) {
   const q = questState(), def = questDefs().find((x) => x.id === id);
   if (!def || (q.active[id] || 0) < def.need) return;
-  delete q.active[id]; q.done[id] = true;
+  delete q.active[id]; q.done[id] = true; dailyProgress('quests');
   S.gold += def.gold; S.stones += def.stones;
   if (def.item) { const z = zoneById(def.zone); dropItem(genItem(z.min + zoneSpan(z), 8)); }
   log(`🏆 Missão concluída: <b>${esc(def.title)}</b>! +${fmt(def.xp)} XP, +${fmt(def.gold)} ouro${def.stones ? `, +${def.stones} 💎` : ''}${def.item ? ' e um item especial' : ''}.`, 'lvl');
@@ -1492,7 +1607,18 @@ function autoQuests() {
     if (def.zone === S.zone && S.lvl >= def.minLvl && q.active[def.id] == null && !q.done[def.id]) acceptQuest(def.id);
   }
 }
+function tabDaily() {
+  const D = dailyState(), r = dailyReward();
+  return `<div class="q-sec">📅 Missões diárias <small class="muted">(novas a cada dia · ${D.streak || 0} dia(s) seguido(s))</small></div>
+  ${D.list.map((m, i) => `<div class="q-card ${m.done ? 'ok' : ''}"><h4><span>${DAILY_TYPES.find((x) => x.k === m.k).t(m.need)}</span><small class="q-rew">${fmt(r.gold)} ouro · ${r.stones} 💎</small></h4>
+    <div class="q-prog"><i style="width:${m.prog / m.need * 100}%"></i></div><small>${fmt(m.prog)}/${fmt(m.need)}</small>
+    ${m.done && !m.claimed ? `<div class="item-actions"><button class="btn primary small" data-dclaim="${i}">Pegar prêmio</button></div>` : m.claimed ? '<small class="good"> ✔ recebido</small>' : ''}</div>`).join('')}
+  <p class="muted">Faça as 3 para ganhar uma gema e +50% de experiência por 30 minutos.</p>`;
+}
 function tabQuests() {
+  return tabDaily() + tabQuestsMain();
+}
+function tabQuestsMain() {
   const q = questState(), defs = questDefs();
   const act = Object.keys(q.active).map((id) => defs.find((d) => d.id === id)).filter(Boolean);
   const avail = defs.filter((d) => S.lvl >= d.minLvl && q.active[d.id] == null && !q.done[d.id]).sort((a, b) => (b.zone === S.zone) - (a.zone === S.zone) || ZONES.findIndex((z) => z.id === b.zone) - ZONES.findIndex((z) => z.id === a.zone)).slice(0, 8);
@@ -1853,7 +1979,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-dun],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-dun],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -1876,7 +2002,7 @@ document.addEventListener('click', (e) => {
     return startGame(slot);
   }
   if (t.id === 'btn-exit') { save(); return renderSelect(); }
-  if (t.id === 'modal-close') { $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); if (R) R.npc = null; return; }
+  if (t.id === 'modal-close') { $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); if (R) R.npc = null; if (R && R.pendingLogin) { const lg = R.pendingLogin; R.pendingLogin = null; showLogin(lg); } return; }
   if (ds.act === 'full-account') return createFullAccount();
   if (!S) return;
   if (ds.attr) {
@@ -1899,6 +2025,7 @@ document.addEventListener('click', (e) => {
   if (ds.forge) { forgeItem(ds.forge); return; }
   if (ds.ach) { S.title = ds.ach === '-' ? '' : ds.ach; renderHeader(); return renderTab(); }
   if (ds.tutskip !== undefined) { S.tut = 99; renderTut(); return; }
+  if (ds.dclaim !== undefined) { claimDaily(+ds.dclaim); return; }
   if (ds.skup) { upgradeSkill(ds.skup); return; }
   if (ds.qacc) { acceptQuest(ds.qacc); renderTab(); return; }
   if (ds.qturn) { turnInQuest(ds.qturn); renderTab(); return; }
@@ -1939,6 +2066,7 @@ document.addEventListener('click', (e) => {
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
     case 'equip-best': equipBest(); break;
+    case 'rebirth': rebirth(); break;
     case 'auto-pts': S.settings.autoPts = !S.settings.autoPts; if (S.settings.autoPts) autoDistribute(); renderChar(); break;
     case 'reset-pts': {
       const cost = resetCost();

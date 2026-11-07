@@ -47,7 +47,7 @@ O publicador não serve `.glb`. Gere cópias glTF em JSON (o jogo tenta `.glb` e
 (cd tools && npm i @gltf-transform/core@4.1.1 @gltf-transform/extensions@4.1.1) && node tools/models-to-json.mjs build/models-json
 ```
 Publique `index.html` (Artifact, mesmo arquivo para manter o link) com `files`: `css/style.css`, `js/data.js`, `js/audio.js`, `js/scene.js`,
-`js/scene3d.js`, `js/game.js`, `js/vendor/three.min.js`, `js/vendor/GLTFLoader.js`, `js/vendor/SkeletonUtils.js` e cada
+`js/scene3d.js`, `js/game.js`, `manifest.webmanifest`, `sw.js`, `assets/icons/*.png`, `js/vendor/three.min.js`, `js/vendor/GLTFLoader.js`, `js/vendor/SkeletonUtils.js` e cada
 `assets/models/<Nome>.json` → `build/models-json/<Nome>.json`. Numa atualização, basta enviar os arquivos que mudaram.
 Link atual: https://claude.ai/artifact/WujEedKd9zmdsGRmU8Rwq6. Num servidor próprio, sirva a pasta como estática (usa o `.glb` direto).
 

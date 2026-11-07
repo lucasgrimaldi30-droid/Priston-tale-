@@ -891,7 +891,7 @@ const Scene3D = (() => {
 
   // ELMO dos modelos: capuz de couro, meio-elmo, elmo fechado, rúnico com chifres, dracônico com crista, celestial com auréola
   function buildHelmetModel(hg, it, M) {
-    const t = tierOf(it), rc = rarIdx(it) > 0 ? rarOf(it).color : '#d0b060';
+    const t = tierOf(it), rc = it.set ? SETS[it.set].color : rarIdx(it) > 0 ? rarOf(it).color : '#d0b060';
     const k = gearMats(M, t, rc, rarIdx(it), it.refine);
     const R0 = 0.5, cy = 0.42;
     const cap = mk(new THREE.SphereGeometry(R0, 18, 10, 0, Math.PI * 2, 0, Math.PI * (t === 0 ? 0.42 : 0.52)), t === 0 ? M('#7a5030', { r: 0.9 }) : k.metal, hg, 0, cy, 0);
@@ -913,7 +913,7 @@ const Scene3D = (() => {
     const inv = 1 / md.scale, B = (n) => md.obj.getObjectByName(n);
     const piece = (bone) => { const b = B(bone); if (!b) return null; const g = group(b); g.scale.setScalar(inv); return g; };
     if (eq.luvas) {
-      const t = tierOf(eq.luvas), rc = rarOf(eq.luvas).color, k = gearMats(M, t, rc, rarIdx(eq.luvas), eq.luvas.refine);
+      const t = tierOf(eq.luvas), rc = eq.luvas.set ? SETS[eq.luvas.set].color : rarOf(eq.luvas).color, k = gearMats(M, t, rc, rarIdx(eq.luvas), eq.luvas.refine);
       for (const side of ['l', 'r']) {
         const g = piece('wrist' + side); if (!g) continue;
         const cuff = mk(G.cyl(0.085 + t * 0.006, 0.075, 0.09, 10), k.metal, g, 0, 0.02, 0);
@@ -923,7 +923,7 @@ const Scene3D = (() => {
       }
     }
     if (eq.botas) {
-      const t = tierOf(eq.botas), rc = rarOf(eq.botas).color, k = gearMats(M, t, rc, rarIdx(eq.botas), eq.botas.refine);
+      const t = tierOf(eq.botas), rc = eq.botas.set ? SETS[eq.botas.set].color : rarOf(eq.botas).color, k = gearMats(M, t, rc, rarIdx(eq.botas), eq.botas.refine);
       for (const side of ['l', 'r']) {
         const g = piece('lowerleg' + side); if (!g) continue;
         mk(G.cyl(0.1 + t * 0.006, 0.09, 0.16 + t * 0.02, 10), k.metal, g, 0, 0.12, 0);
@@ -933,7 +933,7 @@ const Scene3D = (() => {
       }
     }
     if (eq.armadura) {
-      const t = tierOf(eq.armadura), rc = rarOf(eq.armadura).color, k = gearMats(M, t, rc, rarIdx(eq.armadura), eq.armadura.refine);
+      const t = tierOf(eq.armadura), rc = eq.armadura.set ? SETS[eq.armadura.set].color : rarOf(eq.armadura).color, k = gearMats(M, t, rc, rarIdx(eq.armadura), eq.armadura.refine);
       for (const side of ['l', 'r']) {
         const g = piece('upperarm' + side); if (!g) continue;
         const p = mk(G.sph(0.13 + t * 0.018, 10, 0), k.metal, g, 0, 0.05, 0); p.scale.set(1.15, 0.8, 1.15);
@@ -1128,7 +1128,7 @@ const Scene3D = (() => {
     // capa a partir do tier 2 da armadura (ou padrão da classe)
     if (cfg.cape && (aT >= 2 || cfg.capeDefault)) {
       const cp = showPart(md, cfg.cape);
-      if (cp && eq.armadura) cp.traverse((o) => { if (o.isMesh) o.material.color = new THREE.Color(rarIdx(eq.armadura) > 0 ? rarOf(eq.armadura).color : TIER_COL[aT]).lerp(new THREE.Color('#ffffff'), 0.2); });
+      if (cp && eq.armadura) cp.traverse((o) => { if (o.isMesh) o.material.color = new THREE.Color(eq.armadura.set ? SETS[eq.armadura.set].color : rarIdx(eq.armadura) > 0 ? rarOf(eq.armadura).color : TIER_COL[aT]).lerp(new THREE.Color('#ffffff'), 0.2); });
     }
     attachArmor(md, eq, M);
     if (eq.amuleto && md.bones.chest) {
@@ -2007,16 +2007,20 @@ const Scene3D = (() => {
   function updateBuffVisuals(h, t) {
     h.bv = h.bv || {};
     const on = new Set((R.inTown ? [] : R.buffs || []).map((b) => b.id));
+    // aura do conjunto (2 peças: brilho; 4 peças: anel no chão também)
+    if (typeof setCounts === 'function') for (const [sid, n] of Object.entries(setCounts())) if (n >= 2) { const key = 'set_' + sid; BUFF_VIS[key] = BUFF_VIS[key] || [n >= 4 ? 'setfull' : 'holy', SETS[sid].color]; BUFF_VIS[key][0] = n >= 4 ? 'setfull' : 'holy'; on.add(key); }
     const hp = h.root.position;
     for (const id in h.bv) if (!on.has(id)) { scene.remove(h.bv[id].obj); disposeObj(h.bv[id].obj); delete h.bv[id]; }
     for (const id of on) {
       const def = BUFF_VIS[id]; if (!def) continue;
       const [type, color] = def;
       let v = h.bv[id];
+      if (v && v.type !== type) { scene.remove(v.obj); disposeObj(v.obj); delete h.bv[id]; v = null; }
       if (!v) {
         const obj = new THREE.Group();
         if (type === 'shield') { const sp = mk(G.sph(1.05, 20), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }), obj, 0, 0.95, 0, false); sp.scale.y = 1.15; }
         if (type === 'orbs') for (let k = 0; k < 3; k++) { const o = mk(G.sph(0.11, 10), new THREE.MeshBasicMaterial({ color: '#ffffff' }), obj, 0, 0, 0, false); o.add(glowSprite(color, 0.7, 0.9)); }
+        if (type === 'setfull') { const rg = mk(new THREE.RingGeometry(0.7, 0.85, 40), fxMat(color, 0.6), obj, 0, 0.04, 0, false); rg.rotation.x = -Math.PI / 2; }
         if (type === 'aim') { const rg = mk(new THREE.RingGeometry(0.28, 0.34, 24), fxMat(color, 0.9), obj, 0, 2.5, 0, false); rg.rotation.x = -Math.PI / 2; for (let k = 0; k < 4; k++) { const b = mk(G.box(0.16, 0.02, 0.03), fxMat(color, 0.9), obj, Math.cos(k * Math.PI / 2) * 0.42, 2.5, Math.sin(k * Math.PI / 2) * 0.42, false); b.rotation.y = -k * Math.PI / 2; } }
         scene.add(obj); v = h.bv[id] = { obj, type, color };
       }
@@ -2025,6 +2029,7 @@ const Scene3D = (() => {
       if (type === 'shield') { v.obj.children[0].material.opacity = 0.14 + Math.sin(t * 3) * 0.05; v.obj.rotation.y += 0.01; }
       if (type === 'orbs') v.obj.children.forEach((o, k) => { const a = t * 2.4 + k * 2.09; o.position.set(Math.cos(a) * 0.95, 1 + Math.sin(t * 3 + k) * 0.15, Math.sin(a) * 0.95); });
       if (type === 'aim') v.obj.rotation.y += 0.03;
+      if (type === 'setfull') { v.obj.rotation.y += 0.02; if (Math.random() < 0.45) spawnP({ x: hp.x + rand(-0.5, 0.5), y: rand(0.2, 1.8), z: hp.z + rand(-0.5, 0.5), vx: 0, vy: 0.9, vz: 0, life: 1, ...c, size: 0.11 }); }
       if (type === 'speed' && Math.random() < 0.5) { const a = Math.random() * 6.28; spawnP({ x: hp.x + Math.cos(a) * 0.7, y: 0.1, z: hp.z + Math.sin(a) * 0.7, vx: -Math.sin(a) * 2, vy: 0.6, vz: Math.cos(a) * 2, life: 0.4, ...c, size: 0.09 }); }
       if (type === 'flame' && Math.random() < 0.7) { const p0 = heroHand(); spawnP({ x: p0.x + rand(-0.1, 0.1), y: p0.y + rand(-0.2, 0.3), z: p0.z + rand(-0.1, 0.1), vx: 0, vy: rand(0.5, 1.2), vz: 0, life: 0.45, ...c, size: 0.13 }); }
       if ((type === 'holy' || type === 'life') && Math.random() < 0.35) spawnP({ x: hp.x + rand(-0.5, 0.5), y: rand(0.2, 1.6), z: hp.z + rand(-0.5, 0.5), vx: 0, vy: 0.8, vz: 0, life: 0.9, ...c, size: 0.1 });
@@ -2049,6 +2054,11 @@ const Scene3D = (() => {
       if (e.model && !o.miss && !e.atk && now() >= (e.model.busyUntil || 0)) playAnim(e, Math.random() < 0.5 ? 'Hit_A' : 'Hit_B', { loop: false, dur: 0.35, fade: 0.05 });
       const c = monCenter(e);
       if (!o.miss) {
+        // impacto: pausa curta, recuo do monstro e clarão nos críticos de habilidade
+        const crit = h.cls === 'crit';
+        if (crit || o.skill) st.hitstop = Math.max(st.hitstop || 0, crit ? 0.075 : 0.04);
+        if (st.hero) { const hp1 = st.hero.root.position, dx = e.root.position.x - hp1.x, dz = e.root.position.z - hp1.z, dd = Math.hypot(dx, dz) || 1, f = (crit ? 5 : o.skill ? 3.5 : 1.8) * (e.boss ? 0.25 : 1); e.kbv = { x: dx / dd * f, z: dz / dd * f }; }
+        if (crit && o.skill) flashScreen();
         burst(c, o.crit ? '#ffb040' : color, o.skill ? 26 : 14, o.skill ? 4.5 : 3);
         if (o.stealth) burst(c, '#5a2a9a', 30, 3.5, 0.18);
         if (o.crit || o.skill) st.shake = Math.max(st.shake, o.skill ? 0.16 : 0.1);
@@ -2115,6 +2125,11 @@ const Scene3D = (() => {
       }
       floatAt(new THREE.Vector3(h.root.position.x, 2.2, h.root.position.z), o.text, o.cls);
     });
+  }
+
+  function flashScreen() {
+    const el = document.getElementById('hit-flash'); if (!el) return;
+    el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 60);
   }
 
   function petAttack(o) {
@@ -2365,7 +2380,9 @@ const Scene3D = (() => {
     if (!running) return;
     raf = requestAnimationFrame(frame);
     if (document.hidden || !S) return;
-    const t = now(), dt = Math.min(0.05, t - (lastT || t)); lastT = t;
+    const t = now(), dtReal = Math.min(0.05, t - (lastT || t)); lastT = t;
+    let dt = dtReal;
+    if (st.hitstop > 0) { st.hitstop -= dtReal; dt = dtReal * 0.08; }
     sync(t);
     const due = st.timers.filter((x) => x.at <= t); st.timers = st.timers.filter((x) => x.at > t);
     for (const d of due) d.fn();
@@ -2374,6 +2391,7 @@ const Scene3D = (() => {
     for (const m of st.ents.values()) {
       const rf = m.ref || {}, p = m.root.position;
       if (rf.x != null) { p.x = lerp(p.x, rf.x, Math.min(1, dt * 10)); p.z = lerp(p.z, rf.z, Math.min(1, dt * 10)); }
+      if (m.kbv) { p.x += m.kbv.x * dtReal; p.z += m.kbv.z * dtReal; m.kbv.x *= 0.82; m.kbv.z *= 0.82; if (Math.abs(m.kbv.x) + Math.abs(m.kbv.z) < 0.05) m.kbv = null; }
       if (rf.face != null) { const want = -rf.face + Math.PI; let df = want - m.inner.rotation.y; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; m.inner.rotation.y += df * Math.min(1, dt * 8); }
       animMonster(m, t, dt);
       const atkA = m.atk ? clamp((t - m.atk) / 0.4, 0, 1) : 0;
@@ -2416,6 +2434,7 @@ const Scene3D = (() => {
     }
     for (const d of st.dying) {
       animMonster(d, t, dt);
+      if (t > d.dieAt && t - d.dieAt < 0.35 && st.hero) { const hp2 = st.hero.root.position, dx = d.root.position.x - hp2.x, dz = d.root.position.z - hp2.z, dd = Math.hypot(dx, dz) || 1, f = d.boss ? 0.5 : 3; d.root.position.x += dx / dd * f * dtReal; d.root.position.z += dz / dd * f * dtReal; if (!d.model) d.root.position.y = Math.sin((t - d.dieAt) / 0.35 * Math.PI) * 0.5; }
       if (st.run) d.root.position.x -= RUN_SPEED * dt;
       if (t > d.dieAt && d.model) {
         const p = clamp((t - d.dieAt - 0.8) / 0.6, 0, 1);
