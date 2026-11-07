@@ -2078,6 +2078,13 @@ const Scene3D = (() => {
     }
   }
   const rgb = (c) => { const cc = col(c); return { r: cc.r, gg: cc.g, b: cc.b }; };
+  // foice fantasma gigante que varre em volta do herói (Ceifa Final)
+  function fxGhostScythe(c, color) {
+    const R0 = 3.4 * FXS, g = new THREE.Group(); g.position.set(c.x, 0.9, c.z);
+    const blade = new THREE.Mesh(G.torus(R0, 0.22, Math.PI * 0.9), fxMat(color, 0.95)); blade.rotation.x = Math.PI / 2; g.add(blade);
+    const edge = new THREE.Mesh(G.torus(R0 + 0.25, 0.06, Math.PI * 0.9), fxMat('#ffffff', 0.9)); edge.rotation.x = Math.PI / 2; g.add(edge);
+    addFx({ obj: g, life: 0.6, upd: (f, p) => { g.rotation.y = -p * Math.PI * 2.2; blade.material.opacity = 0.95 * (1 - p); edge.material.opacity = 0.9 * (1 - p); if (Math.random() < 0.9) { const a = -p * Math.PI * 2.2; spawnP({ x: c.x + Math.cos(a) * R0, y: 0.9, z: c.z - Math.sin(a) * R0, vx: 0, vy: 1.2, vz: 0, life: 0.5, ...rgb(color), size: 0.2 }); } }, dispose: true });
+  }
   // ondas de choque no chão
   function fxShock(c, color, n = 3, size = 4) {
     size *= FXS; for (let i = 0; i < n; i++) later(i * 0.1, () => ring(V3(c.x, 0, c.z), color, size * (1 + i * 0.3), 0.55)); }
@@ -2175,9 +2182,15 @@ const Scene3D = (() => {
     e6: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.9 }, fx: (c) => later(c.dur * 0.62, () => { for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; fxSpikes(V3(c.tc.x + Math.cos(a) * 2.2, 0, c.tc.z + Math.sin(a) * 2.2), '#9a8a70', 2, 0.3, 1.6); } fxShock(c.tc, '#c0a070', 3, 5); st.shake = 0.38; c.hitAll(); }) },
     // Lanceiro (foice)
     l1: { anim: '2H_Melee_Attack_Slice', fx: (c) => later(c.dur * 0.5, () => { slash(V3(c.tc.x, 1, c.tc.z), '#c080ff', true); c.hitAll(); }) },
-    l3: { anim: '2H_Melee_Attack_Stab', fx: (c) => later(c.dur * 0.4, () => { for (const e of c.ents) fxSpikes(monCenter(e), '#a060ff', 6, 0.6, 1.5); c.hitAll(); }) },
-    l5: { anim: '2H_Melee_Attack_Spin', motion: { type: 'dash', n: 4 }, fx: (c) => { for (let i = 0; i < 4; i++) later(i * c.dur / 4, () => { slash(V3(c.tc.x + rand(-0.3, 0.3), 1 + rand(-0.2, 0.3), c.tc.z), i % 2 ? '#e0a0ff' : '#8040ff', true); burst(c.tc, '#7030c0', 10, 3); }); later(c.dur * 0.9, c.hitAll); } },
-    l6: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spin', turns: 3 }, fx: (c) => { fxVortex(c.hp, '#5a1a9a', c.dur + 0.3); fxWhirl(c.hp, '#b070ff', c.dur, 2.4); later(c.dur * 0.55, c.hitAll); } },
+    // Rodopio da Foice: gira no lugar com a foice aberta e corta tudo em volta
+    l3: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spin', turns: 2 }, fx: (c) => { fxWhirl(c.hp, '#b070ff', c.dur, 2.1); for (let i = 0; i < 6; i++) later(i * c.dur / 6, () => { const a = i * 1.05; slash(V3(c.hp.x + Math.cos(a) * 1.4, 0.9, c.hp.z + Math.sin(a) * 1.4), i % 2 ? '#d0a0ff' : '#8a40ff', true); }); later(c.dur * 0.5, c.hitAll); } },
+    // Salto Ceifador: salta girando com a foice e cai em cima do alvo com vários cortes
+    l5: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spinleap', h: 2.3, turns: 3 }, fx: (c) => {
+      for (let i = 0; i < 5; i++) later(i * c.dur * 0.13, () => { const hp = st.hero.root.position; burst(V3(hp.x, hp.y + 1, hp.z), '#b070ff', 8, 2.5, 0.12, 0); });
+      later(c.dur * 0.74, () => { for (let i = 0; i < 4; i++) later(i * 0.06, () => slash(V3(c.tc.x + rand(-0.3, 0.3), 0.8 + i * 0.25, c.tc.z + rand(-0.3, 0.3)), i % 2 ? '#e0a0ff' : '#7a30ff', true)); fxCracks(c.tc, '#9050ff', 8, 2.2); fxShock(c.tc, '#c090ff', 2, 3); st.shake = 0.35; c.hitAll(); });
+    } },
+    // Ceifa Final: uma foice gigante de sombra varre a área inteira
+    l6: { anim: '2H_Melee_Attack_Slice', fx: (c) => { fxVortex(c.hp, '#5a1a9a', c.dur + 0.4); later(c.dur * 0.45, () => { fxGhostScythe(c.hp, '#b070ff'); fxShock(c.hp, '#8040ff', 3, 5); st.shake = 0.4; c.hitAll(); }); } },
     // Caçadora
     c3: { anim: '2H_Ranged_Shoot', fx: (c) => { fxRain(c.tc, 'arrow', '#fff0c0', 16, 2.6); later(0.75, c.hitAll); } },
     c6: { anim: '2H_Ranged_Shoot', fx: (c) => c.hits.forEach((h, i) => later(c.dur * 0.4 + i * 0.07, () => { const e = entOf(h.sid); if (!e) return; const to = monCenter(e); projectile('arrow', heroHand(), to, '#ff9030', true, 0.3, () => { burst(to, '#ff6010', 34, 5, 0.2); ring(to, '#ff8030', 2.4, 0.4); c.impact(h); }); })) },
@@ -2503,9 +2516,17 @@ const Scene3D = (() => {
     const mo = h.motion;
     if (mo) {
       const k = (now() - mo.start) / mo.dur;
-      if (k >= 1) { h.motion = null; h.root.position.y = 0; }
+      if (k >= 1) { h.motion = null; h.root.position.y = 0; h.inner.rotation.x = 0; }
       else if (mo.type === 'spin') h.inner.rotation.y = want + ease(k) * mo.turns * Math.PI * 2;
       else if (mo.type === 'leap') { h.root.position.y = Math.sin(Math.min(1, k / 0.62) * Math.PI) * mo.h * (k < 0.62 ? 1 : 0); if (mo.target) { const j = Math.sin(Math.min(1, k / 0.62) * Math.PI) * 0.5; h.root.position.x = lerp(h.root.position.x, lerp(p.x, mo.target.x, j * 0.6), 0.5); h.root.position.z = lerp(h.root.position.z, lerp(p.z, mo.target.z, j * 0.6), 0.5); } }
+      else if (mo.type === 'spinleap') { // salta alto girando e cai no alvo
+        const up = Math.min(1, k / 0.74);
+        h.root.position.y = k < 0.74 ? Math.sin(up * Math.PI) * mo.h : 0;
+        h.inner.rotation.y = want + ease(Math.min(1, k / 0.74)) * mo.turns * Math.PI * 2;
+        h.inner.rotation.x = k < 0.74 ? Math.sin(up * Math.PI) * 0.35 : 0;
+        if (mo.target) { const tx = lerp(p.x, mo.target.x, 0.75), tz = lerp(p.z, mo.target.z, 0.75); h.root.position.x = lerp(h.root.position.x, lerp(p.x, tx, up), 0.4); h.root.position.z = lerp(h.root.position.z, lerp(p.z, tz, up), 0.4); }
+        if (k < 0.74 && Math.random() < 0.8) spawnP({ x: h.root.position.x + rand(-0.4, 0.4), y: h.root.position.y + rand(0.6, 1.6), z: h.root.position.z + rand(-0.4, 0.4), vx: 0, vy: -0.3, vz: 0, life: 0.4, r: 0.7, gg: 0.45, b: 1, size: 0.18 });
+      }
       else if (mo.type === 'dash' && mo.target) {
         const seg = Math.floor(k * mo.n), a = seg * 2.4 + 0.6, tx = mo.target.x + Math.cos(a) * 1.25, tz = mo.target.z + Math.sin(a) * 1.25;
         h.root.position.x = lerp(h.root.position.x, tx, 0.6); h.root.position.z = lerp(h.root.position.z, tz, 0.6);

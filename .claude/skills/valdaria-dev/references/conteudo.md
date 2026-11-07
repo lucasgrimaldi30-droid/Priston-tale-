@@ -11,9 +11,11 @@ Cada classe deve ter um jeito próprio de jogar (`CLASSES[x].mech`). Revisão co
 - **Lanceiro — Colheita de Almas (`mech: 'souls'`, feito):** o **dano causado** (não abates — por causa do PK) enche a foice: ~5 golpes
   normais (`SOUL_HITS`) = 1 alma, máximo 5 (`R.souls`). No PK conta o dano cheio (antes do redutor), para valer igual a monstro.
   `soul.gain` acelera (Corte da Foice ×1,5); sair do Desvanecer atacando = +1 alma. Golpes com `soul.max` gastam (`soulSpend` em
-  `playerHit` e `pvpStep`): Espetos até 2 (+25% cada), Dança das Sombras todas (+20% cada, +1 golpe a cada 2), Ceifa Final todas
+  `playerHit` e `pvpStep`): Rodopio da Foice até 2 (+25% cada), Salto Ceifador todas (+20% cada, +1 golpe a cada 2), Ceifa Final todas
   (+30% cada, com 5 atordoa). Fora de combate somem (`soulTick`). Auto guarda para os grandes (`soulWait`: ≥3 almas, chefe/elite ou 4+ alvos).
   Visual: bolinhas no painel (`soul-pips`) e almas girando (`updateSouls`, `soulBurst`). Balanceado igual ao Gladiador em 24 h.
+  Golpes pedidos pelo dono: **Rodopio da Foice** (gira no lugar, área), **Salto Ceifador** (movimento `spinleap`: salta girando e cai no alvo),
+  **Ceifa Final** (foice fantasma gigante `fxGhostScythe` varrendo em volta).
 - Ideias para as próximas (a combinar): Gladiador fúria que cresce com dano levado; Engenheiro torres/máquinas no chão;
   Arcanista combina elementos (fogo + gelo = explosão); Clériga cura que sobra vira escudo nos aliados.
 
