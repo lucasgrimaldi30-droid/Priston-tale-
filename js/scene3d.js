@@ -729,7 +729,9 @@ const Scene3D = (() => {
       if (Assets.state === 'ready') { curCls = null; curZone = null; }
     };
     for (const f of files) {
-      loader.load(MODEL_DIR + f + '.glb', (g) => {
+      // tenta .glb (binário, menor); se não existir, a versão glTF em JSON
+      const tryLoad = (ok, fail) => loader.load(MODEL_DIR + f + '.glb', ok, undefined, () => loader.load(MODEL_DIR + f + '.json', ok, undefined, fail));
+      tryLoad((g) => {
         if (f === 'anims') for (const c of g.animations) Assets.clips[c.name] = c;
         else {
           Assets.gltf[f] = g;
@@ -741,7 +743,7 @@ const Scene3D = (() => {
           }
         }
         done();
-      }, undefined, (e) => { fail++; console.warn('Falha ao carregar modelo', f, e && e.message); done(); });
+      }, (e) => { fail++; console.warn('Falha ao carregar modelo', f, e && e.message); done(); });
     }
   }
   const modelsReady = () => Assets.state === 'ready';
