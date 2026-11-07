@@ -60,15 +60,13 @@
             <button class="btn small boss" id="boss-btn"></button>
           </div>
           <div class="arena">
-            <div class="fighter" id="player-card">
-              <div class="f-icon" id="p-icon"></div>
-              <div class="f-name">Você</div>
+            <canvas id="scene"></canvas>
+            <div class="hud hud-left" id="player-card">
+              <div class="f-name" id="p-name"></div>
               <div id="p-bars"></div>
               <div id="p-buffs" class="buffs"></div>
             </div>
-            <div class="vs">⚔️</div>
-            <div class="fighter" id="mon-card">
-              <div class="f-icon" id="mon-icon"></div>
+            <div class="hud hud-right" id="mon-card">
               <div class="f-name" id="mon-name"></div>
               <div id="mon-bars"></div>
             </div>
@@ -98,6 +96,7 @@
   <div id="toasts" class="toasts"></div>
 
   <script src="js/data.js"></script>
+  <script src="js/scene.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

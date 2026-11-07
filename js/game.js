@@ -171,7 +171,7 @@ function spawnMonster(boss = false) {
   }
   const hp = Math.round((30 + Math.pow(lvl, 1.5) * 10) * (boss ? 10 : 1));
   R.mon = {
-    name, icon, lvl, boss, hp, maxHp: hp,
+    sid: uid(), name, icon, lvl, boss, hp, maxHp: hp,
     atk: Math.round((4 + lvl * 3.2) * (boss ? 1.8 : 1)),
     def: Math.round(lvl * 1.5 * (boss ? 1.5 : 1)),
     xp: Math.round((8 + Math.pow(lvl, 1.5) * 3) * (boss ? 12 : 1)),
@@ -188,29 +188,19 @@ function log(msg, cls = '') {
   R.dirty.log = true;
 }
 
-function floatText(target, text, cls) {
-  if (document.hidden) return;
-  const el = document.getElementById(target === 'mon' ? 'mon-card' : 'player-card');
-  if (!el) return;
-  const f = document.createElement('div');
-  f.className = 'float ' + cls;
-  f.textContent = text;
-  f.style.left = rint(30, 70) + '%';
-  el.appendChild(f);
-  setTimeout(() => f.remove(), 900);
-}
+function floatText(target, text, cls) { Scene.float(target, text, cls); }
 
 function playerHit(mult = 1, skillName = null) {
   const d = derived();
   const m = R.mon;
   const hitChance = clamp(0.85 + (d.A.des - m.lvl * 2.5) * 0.003, 0.6, 0.98);
-  if (!skillName && Math.random() > hitChance) { floatText('mon', 'Errou', 'miss'); return; }
+  if (!skillName && Math.random() > hitChance) { Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true }); return; }
   let dmg = rnd(d.atkMin, d.atkMax) * mult;
   const crit = Math.random() * 100 < d.crit;
   if (crit) dmg *= 1.75;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
   m.hp -= dmg;
-  floatText('mon', (crit ? '💥 ' : '') + fmt(dmg), crit ? 'crit' : (skillName ? 'skill' : 'dmg'));
+  Scene.playerAttack({ text: fmt(dmg) + (crit ? '!' : ''), cls: crit ? 'crit' : (skillName ? 'skill' : 'dmg'), crit, skill: !!skillName, skillName });
   if (skillName) log(`Você usou <b>${esc(skillName)}</b> causando ${fmt(dmg)} de dano.`, 'skill');
   if (m.hp <= 0) killMonster();
 }
@@ -218,11 +208,11 @@ function playerHit(mult = 1, skillName = null) {
 function monsterHit() {
   const d = derived();
   const m = R.mon;
-  if (Math.random() < d.evade) { floatText('player', 'Esquiva', 'miss'); return; }
+  if (Math.random() < d.evade) { Scene.monsterAttack({ text: 'Esquiva', cls: 'miss' }); return; }
   let dmg = m.atk * rnd(0.85, 1.15) * 150 / (150 + d.def);
   dmg = Math.max(1, Math.round(dmg));
   S.hp -= dmg;
-  floatText('player', '-' + fmt(dmg), 'hurt');
+  Scene.monsterAttack({ text: '-' + fmt(dmg), cls: 'hurt' });
   if (S.hp <= 0) die();
 }
 
@@ -278,6 +268,7 @@ function gainXp(xp) {
     S.pts += POINTS_PER_LEVEL;
     const d = derived();
     S.hp = d.maxHp; S.mp = d.maxMp;
+    Scene.levelUp();
     log(`⭐ <b>LEVEL UP!</b> Você alcançou o nível ${S.lvl}! (+${POINTS_PER_LEVEL} pontos de atributo)`, 'lvl');
     const sk = CLASSES[S.cls].skills.find((s) => s.lvl === S.lvl);
     if (sk) log(`📜 Nova habilidade: <b>${esc(sk.name)}</b>`, 'lvl');
@@ -318,7 +309,7 @@ function trySkills(d) {
     if (S.hp / d.maxHp < 0.6) {
       const h = Math.round(d.maxHp * s.mult);
       S.hp = Math.min(d.maxHp, S.hp + h); S.mp -= s.mp; R.cds[s.id] = s.cd;
-      floatText('player', '+' + fmt(h), 'heal');
+      floatText('player', '+' + fmt(h), 'heal'); Scene.heal();
       log(`💚 ${esc(s.name)} restaurou ${fmt(h)} de vida.`, 'heal');
       return null;
     }
@@ -328,7 +319,7 @@ function trySkills(d) {
     if (!R.buffs.some((b) => b.id === s.id)) {
       R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur });
       S.mp -= s.mp; R.cds[s.id] = s.cd;
-      log(`✨ ${esc(s.name)} ativado.`, 'skill');
+      log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff();
       return null;
     }
   }
@@ -346,7 +337,7 @@ function usePotions(d) {
       const p = SHOP.find((x) => x.id === id);
       const h = Math.round(d.maxHp * p.heal);
       S.hp = Math.min(d.maxHp, S.hp + h); S.pots[id]--; R.potCd = 1.5;
-      floatText('player', '+' + fmt(h), 'heal');
+      floatText('player', '+' + fmt(h), 'heal'); Scene.heal();
       R.dirty.shop = true;
       return;
     }
@@ -453,6 +444,7 @@ function showScreen(id) {
 // ---------- seleção de personagem ----------
 function renderSelect() {
   stopLoop();
+  Scene.stop();
   showScreen('screen-select');
   let html = '';
   for (let i = 0; i < MAX_SLOTS; i++) {
@@ -502,6 +494,7 @@ function startGame(i) {
   const d = derived();
   S.hp = d.maxHp; S.mp = d.maxMp;
   showScreen('screen-game');
+  Scene.start($('#scene'));
   log(`Bem-vindo(a) de volta, <b>${esc(S.name)}</b>!`, 'lvl');
   if (off) showOffline(off);
   renderAll();
@@ -564,7 +557,7 @@ function renderAll() {
 
 function renderHeader() {
   const c = CLASSES[S.cls];
-  $('#p-icon').textContent = c.icon;
+  $('#p-name').textContent = `${S.name}`;
   $('#hdr-name').innerHTML = `${c.icon} ${esc(S.name)} <span class="muted">· ${c.name} · ${FACTIONS[c.faction].name}</span>`;
 }
 
@@ -581,16 +574,12 @@ function renderLive() {
   // monstro
   const m = R.mon;
   if (R.dead > 0) {
-    $('#mon-icon').textContent = '🪦';
     $('#mon-name').innerHTML = `Renascendo em ${Math.ceil(R.dead)}s...`;
     $('#mon-bars').innerHTML = '';
   } else if (m) {
-    $('#mon-icon').textContent = m.icon;
     $('#mon-name').innerHTML = `${m.boss ? '👑 ' : ''}${esc(m.name)} <span class="muted">Nv. ${m.lvl}</span>`;
     $('#mon-bars').innerHTML = bar(m.hp, m.maxHp, m.boss ? 'boss' : 'hp', `${fmt(Math.max(0, m.hp))} / ${fmt(m.maxHp)}`);
-    $('#mon-card').classList.toggle('is-boss', m.boss);
   } else {
-    $('#mon-icon').textContent = '…';
     $('#mon-name').innerHTML = '<span class="muted">Procurando monstros...</span>';
     $('#mon-bars').innerHTML = '';
   }
