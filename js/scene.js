@@ -3,7 +3,7 @@
 //  Lê o estado do jogo (S, R) e recebe eventos de combate.
 // ============================================================
 
-const Scene = (() => {
+const Scene2D = (() => {
   let cv = null, ctx = null, W = 600, H = 320, dpr = 1, raf = 0, running = false;
   let lastT = 0, scroll = 0, shake = 0;
   const st = { hero: { atk: null, hurt: -9, cast: -9 }, mon: null, dying: [], fx: [], parts: [], floats: [], timers: [], amb: [] };
@@ -800,5 +800,5 @@ const Scene = (() => {
   window.addEventListener('resize', resize);
   const ro = window.ResizeObserver ? new ResizeObserver(() => resize()) : null;
 
-  return { start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp };
+  return { start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp, LOOK, MON, THEMES, RANGED };
 })();

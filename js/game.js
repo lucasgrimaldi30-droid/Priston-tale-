@@ -57,7 +57,7 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d' },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
     lastSave: Date.now(),
   };
@@ -810,6 +810,11 @@ function tabConfig() {
         <option value="nenhum" ${st.autoSell === 'nenhum' ? 'selected' : ''}>Não vender</option>
         ${RARITIES.slice(0, 3).map((r) => `<option value="${r.id}" ${st.autoSell === r.id ? 'selected' : ''}>${r.name}</option>`).join('')}
       </select></label>
+    <label>Gráficos da batalha:
+      <select data-set="gfx">
+        <option value="3d" ${st.gfx !== '2d' ? 'selected' : ''}>3D (Three.js)</option>
+        <option value="2d" ${st.gfx === '2d' ? 'selected' : ''}>2D (mais leve)</option>
+      </select></label>
     <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates)</label>
     <label class="check"><input type="checkbox" data-set="autoBuyPots" ${st.autoBuyPots ? 'checked' : ''}> Comprar poções menores automaticamente quando acabarem</label>
     <hr>
@@ -988,6 +993,7 @@ document.addEventListener('input', (e) => {
   if (!k || !S) return;
   const v = e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' ? +e.target.value : e.target.value);
   S.settings[k] = v;
+  if (k === 'gfx') Scene.start();
   if (e.target.type === 'range') e.target.previousElementSibling.textContent = v + '%';
 });
 
