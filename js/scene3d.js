@@ -1164,6 +1164,7 @@ const Scene3D = (() => {
     const buffOn = !R.inTown && R.buffs && R.buffs.length > 0;
     h.aura.material.opacity = lerp(h.aura.material.opacity, buffOn ? 0.55 + Math.sin(t * 4) * 0.15 : 0, Math.min(1, dt * 6));
     h.aura.rotation.z += dt; h.auraGlow.material.opacity = h.aura.material.opacity * 0.35;
+    updateBuffVisuals(h, t);
   }
 
   function buildMonsterModel(name, boss) {
@@ -1770,6 +1771,168 @@ const Scene3D = (() => {
   const SLOTS = [[0, 0], [0.95, -1.15], [1.05, 1.05], [1.95, -0.1]];
   function slotPos(i, boss) { const b = monBaseX(boss), o = SLOTS[i % 4]; return { x: b + o[0], z: o[1] }; }
 
+  // ---------- efeitos próprios de cada habilidade ----------
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  function heroPos(y = 0) { const p = st.hero ? st.hero.root.position : V3(0, 0, 0); return V3(p.x, y, p.z); }
+  function heroHand() { const p = heroPos(1.2), f = R.face || 0; return V3(p.x + Math.cos(f) * 0.5, 1.2, p.z + Math.sin(f) * 0.5); }
+  // redemoinho de lâminas girando em volta de um ponto
+  function fxWhirl(c, color, life = 0.7, r = 1.6) {
+    for (let k = 0; k < 2; k++) {
+      const m = new THREE.Mesh(G.torus(r * (1 - k * 0.25), 0.07 - k * 0.02, Math.PI * 1.5), fxMat(color, 0.9));
+      m.position.set(c.x, 0.7 + k * 0.5, c.z); m.rotation.x = Math.PI / 2 + (k ? 0.25 : -0.1);
+      addFx({ obj: m, life, upd: (f, p) => { m.rotation.z += 0.45; m.material.opacity = 0.9 * (1 - p * p); m.scale.setScalar(0.8 + p * 0.35); if (Math.random() < 0.8) { const a = Math.random() * 6.28; spawnP({ x: c.x + Math.cos(a) * r, y: 0.5 + Math.random(), z: c.z + Math.sin(a) * r, vx: -Math.sin(a) * 3, vy: 0.5, vz: Math.cos(a) * 3, life: 0.35, ...rgb(color), size: 0.1 }); } }, dispose: true });
+    }
+  }
+  const rgb = (c) => { const cc = col(c); return { r: cc.r, gg: cc.g, b: cc.b }; };
+  // ondas de choque no chão
+  function fxShock(c, color, n = 3, size = 4) { for (let i = 0; i < n; i++) later(i * 0.1, () => ring(V3(c.x, 0, c.z), color, size * (1 + i * 0.3), 0.55)); }
+  // rachaduras no chão
+  function fxCracks(c, color, n = 7, len = 2.2) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, L = len * (0.6 + Math.random() * 0.6);
+      const m = new THREE.Mesh(G.box(L, 0.02, 0.09), fxMat(color, 1));
+      m.position.set(c.x + Math.cos(a) * L / 2, 0.03, c.z + Math.sin(a) * L / 2); m.rotation.y = -a;
+      addFx({ obj: m, life: 1.1, upd: (f, p) => { m.scale.x = Math.min(1, p * 6); m.material.opacity = p < 0.6 ? 1 : (1 - p) / 0.4; }, dispose: true });
+    }
+    for (let i = 0; i < 18; i++) spawnP({ x: c.x + rand(-0.6, 0.6), y: 0.1, z: c.z + rand(-0.6, 0.6), vx: rand(-3, 3), vy: rand(3, 6), vz: rand(-3, 3), life: 0.8, r: 0.45, gg: 0.38, b: 0.3, size: 0.16, g: -14 });
+  }
+  // espetos saindo do chão
+  function fxSpikes(c, color, n = 5, r = 0.6, h = 1.3) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, m = new THREE.Mesh(G.cone(0.13, h, 5), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, flatShading: true }));
+      m.position.set(c.x + Math.cos(a) * r * Math.random(), 0, c.z + Math.sin(a) * r * Math.random()); m.rotation.set(rand(-0.3, 0.3), 0, rand(-0.3, 0.3));
+      addFx({ obj: m, life: 0.9, upd: (f, p) => { const s0 = p < 0.15 ? p / 0.15 : p > 0.7 ? (1 - p) / 0.3 : 1; m.scale.set(1, Math.max(0.01, s0), 1); m.position.y = h * 0.5 * s0 - 0.05; }, dispose: true });
+    }
+    burst(V3(c.x, 0.3, c.z), color, 14, 3);
+  }
+  // feixe de luz caindo do céu
+  function fxBeam(c, color, w = 0.5) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w, 12, 16, 1, true), fxMat(color, 0.8));
+    m.position.set(c.x, 6, c.z);
+    addFx({ obj: m, life: 0.55, upd: (f, p) => { m.material.opacity = 0.8 * (1 - p); m.scale.set(1 + p, 1, 1 + p); }, dispose: true });
+    ring(V3(c.x, 0, c.z), color, 1.8, 0.45);
+    for (let i = 0; i < 16; i++) spawnP({ x: c.x + rand(-0.4, 0.4), y: rand(0, 2), z: c.z + rand(-0.4, 0.4), vx: 0, vy: rand(2, 5), vz: 0, life: 0.7, ...rgb(color), size: 0.13 });
+  }
+  // raio elétrico em zigue-zague
+  function fxBolt(a, b, color, life = 0.3) {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) { const k = i / 8; pts.push(V3(lerp(a.x, b.x, k) + (i && i < 8 ? rand(-0.25, 0.25) : 0), lerp(a.y, b.y, k) + (i && i < 8 ? rand(-0.25, 0.25) : 0), lerp(a.z, b.z, k) + (i && i < 8 ? rand(-0.25, 0.25) : 0))); }
+    const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0), 24, 0.035, 4, false), fxMat(color, 1));
+    addFx({ obj: m, life, upd: (f, p) => { m.material.opacity = Math.random() < 0.3 ? 0.2 : 1 - p; }, dispose: true });
+    burst(b, color, 10, 3, 0.1);
+  }
+  // cruz de luz no chão
+  function fxCross(c, color, s0 = 1) {
+    for (const rot of [0, Math.PI / 2]) {
+      const m = new THREE.Mesh(G.box(6 * s0, 0.03, 0.55 * s0), fxMat(color, 0.9));
+      m.position.set(c.x, 0.05, c.z); m.rotation.y = rot + 0.785;
+      addFx({ obj: m, life: 0.9, upd: (f, p) => { m.scale.x = Math.min(1, p * 5); m.material.opacity = 0.9 * (1 - p); }, dispose: true });
+    }
+    fxBeam(c, color, 0.7);
+  }
+  // cristais de gelo
+  function fxShards(c, color) {
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(G.oct(0.22), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, transparent: true, opacity: 0.9, flatShading: true }));
+      m.position.set(c.x + rand(-0.4, 0.4), 0, c.z + rand(-0.4, 0.4)); m.scale.set(0.6, 2.4, 0.6); m.rotation.z = rand(-0.4, 0.4);
+      addFx({ obj: m, life: 1.0, upd: (f, p) => { m.position.y = Math.min(1, p * 6) * 0.5; m.material.opacity = p > 0.7 ? (1 - p) / 0.3 : 0.9; }, dispose: true });
+    }
+    burst(V3(c.x, 0.6, c.z), '#e0f8ff', 14, 2.5, 0.1);
+  }
+  // meteoro caindo
+  function fxMeteor(c, color, onHit) {
+    const from = V3(c.x + 4, 11, c.z - 3), core = new THREE.Group();
+    mk(G.ico(0.45, 1), new THREE.MeshBasicMaterial({ color: '#ffd080' }), core, 0, 0, 0, false);
+    core.add(glowSprite(color, 3.2, 0.9));
+    core.position.copy(from);
+    addFx({ obj: core, life: 0.55, upd: (f, p) => { core.position.set(lerp(from.x, c.x, p), lerp(from.y, 0.4, p), lerp(from.z, c.z, p)); for (let i = 0; i < 3; i++) spawnP({ x: core.position.x + rand(-0.3, 0.3), y: core.position.y, z: core.position.z + rand(-0.3, 0.3), vx: 0, vy: 0.5, vz: 0, life: 0.5, ...rgb(color), size: 0.4 }); },
+      end: () => { burst(V3(c.x, 0.5, c.z), color, 60, 7, 0.22, 3); burst(V3(c.x, 0.5, c.z), '#ffe0a0', 20, 4); fxShock(c, color, 2, 5); fxCracks(c, '#ff5010', 9, 2.8); st.shake = 0.35; onHit && onHit(); }, dispose: true });
+  }
+  // vórtice sombrio
+  function fxVortex(c, color, life = 0.9) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(2.6, 32), fxMat(color, 0.6));
+    m.rotation.x = -Math.PI / 2; m.position.set(c.x, 0.04, c.z);
+    addFx({ obj: m, life, upd: (f, p) => { m.rotation.z += 0.2; m.material.opacity = 0.6 * Math.sin(p * Math.PI); m.scale.setScalar(1.2 - p * 0.5); }, dispose: true });
+  }
+  // nova de três elementos
+  function fxNova(c) { ['#ff6020', '#80d8ff', '#e0b0ff'].forEach((cc, i) => later(i * 0.12, () => { ring(V3(c.x, 0, c.z), cc, 6 + i, 0.6); burst(V3(c.x, 0.8, c.z), cc, 30, 6); })); st.shake = 0.3; }
+  // chuva de projéteis numa área
+  function fxRain(c, kind, color, n, r, onEach) {
+    for (let i = 0; i < n; i++) later(i * 0.04, () => { const to = V3(c.x + rand(-r, r), 0.2, c.z + rand(-r, r)); projectile(kind, V3(to.x - 1.5, 8, to.z - 1), to, color, true, 0.35, () => { burst(to, color, 6, 2); onEach && onEach(to); }); });
+  }
+
+  // o que cada habilidade faz na tela (animação do modelo, movimento do herói e efeitos)
+  const SFX = {
+    // Gladiador
+    g1: { anim: '1H_Melee_Attack_Chop', fx: (c) => later(c.dur * 0.5, () => { fxCracks(c.tc, '#ffb060'); slash(V3(c.tc.x, 1, c.tc.z), '#ffffff', true); c.hitAll(); }) },
+    g3: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spin', turns: 2 }, fx: (c) => { fxWhirl(c.hp, '#ff5030', c.dur, 1.7); later(c.dur * 0.5, c.hitAll); } },
+    g4: { anim: 'Taunt', fx: (c) => { fxShock(c.hp, '#ffd060', 3, 5); st.shake = 0.22; later(0.25, c.hitAll); } },
+    g5: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.7 }, fx: (c) => later(c.dur * 0.62, () => { fxCracks(c.tc, '#ff7030', 9, 2.6); fxShock(c.tc, '#ffa040', 2, 3.5); st.shake = 0.32; c.hitAll(); }) },
+    g6: { anim: '2H_Melee_Attack_Chop', fx: (c) => later(c.dur * 0.5, () => { const p = V3(c.tc.x, 1, c.tc.z); slash(p, '#ff2020', true); later(0.08, () => { const m = p.clone(); slash(m, '#ff6040', true); }); burst(p, '#ff3020', 40, 6, 0.18); st.shake = 0.3; c.hitAll(); }) },
+    // Engenheiro
+    e1: { anim: '1H_Melee_Attack_Stab', fx: (c) => later(c.dur * 0.45, () => { fxBolt(heroHand(), V3(c.tc.x, 1, c.tc.z), '#80e0ff'); c.hitAll(); }) },
+    e3: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.45, () => { fxShock(c.tc, '#80e0ff', 2, 3); for (const e of c.ents) fxBolt(V3(c.tc.x, 3, c.tc.z), monCenter(e), '#a0f0ff'); c.hitAll(); }) },
+    e6: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.9 }, fx: (c) => later(c.dur * 0.62, () => { for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; fxSpikes(V3(c.tc.x + Math.cos(a) * 2.2, 0, c.tc.z + Math.sin(a) * 2.2), '#9a8a70', 2, 0.3, 1.6); } fxShock(c.tc, '#c0a070', 3, 5); st.shake = 0.38; c.hitAll(); }) },
+    // Lanceiro (foice)
+    l1: { anim: '2H_Melee_Attack_Slice', fx: (c) => later(c.dur * 0.5, () => { slash(V3(c.tc.x, 1, c.tc.z), '#c080ff', true); c.hitAll(); }) },
+    l3: { anim: '2H_Melee_Attack_Stab', fx: (c) => later(c.dur * 0.4, () => { for (const e of c.ents) fxSpikes(monCenter(e), '#a060ff', 6, 0.6, 1.5); c.hitAll(); }) },
+    l5: { anim: '2H_Melee_Attack_Spin', motion: { type: 'dash', n: 4 }, fx: (c) => { for (let i = 0; i < 4; i++) later(i * c.dur / 4, () => { slash(V3(c.tc.x + rand(-0.3, 0.3), 1 + rand(-0.2, 0.3), c.tc.z), i % 2 ? '#e0a0ff' : '#8040ff', true); burst(c.tc, '#7030c0', 10, 3); }); later(c.dur * 0.9, c.hitAll); } },
+    l6: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spin', turns: 3 }, fx: (c) => { fxVortex(c.hp, '#5a1a9a', c.dur + 0.3); fxWhirl(c.hp, '#b070ff', c.dur, 2.4); later(c.dur * 0.55, c.hitAll); } },
+    // Caçadora
+    c3: { anim: '2H_Ranged_Shoot', fx: (c) => { fxRain(c.tc, 'arrow', '#fff0c0', 16, 2.6); later(0.75, c.hitAll); } },
+    c6: { anim: '2H_Ranged_Shoot', fx: (c) => c.hits.forEach((h, i) => later(c.dur * 0.4 + i * 0.07, () => { const e = entOf(h.sid); if (!e) return; const to = monCenter(e); projectile('arrow', heroHand(), to, '#ff9030', true, 0.3, () => { burst(to, '#ff6010', 34, 5, 0.2); ring(to, '#ff8030', 2.4, 0.4); c.impact(h); }); })) },
+    // Paladino
+    p1: { anim: '1H_Melee_Attack_Slice_Diagonal', fx: (c) => later(c.dur * 0.5, () => { slash(V3(c.tc.x, 1, c.tc.z), '#ffe070', true); fxCross(c.tc, '#fff0a0', 0.25); c.hitAll(); }) },
+    p5: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.1 }, fx: (c) => later(c.dur * 0.6, () => { fxCross(c.tc, '#ffe070', 1); st.shake = 0.25; c.hitAll(); }) },
+    p6: { anim: 'Spellcast_Long', fx: (c) => c.hits.forEach((h, i) => later(0.2 + i * 0.12, () => { const e = entOf(h.sid); if (e) fxBeam(monCenter(e), '#fff4b0', 0.6); c.impact(h); })) },
+    // Valquíria
+    v3: { anim: 'Throw', fx: (c) => c.hits.forEach((h, i) => later(c.dur * 0.4 + i * 0.05, () => { const e = entOf(h.sid); if (!e) return c.impact(h); const to = monCenter(e); projectile('dart', heroHand(), to, '#c0e0ff', true, 0.25, () => c.impact(h)); })) },
+    v6: { anim: 'Spellcast_Long', fx: (c) => { fxWhirl(c.tc, '#c0e8ff', 0.9, 2); fxRain(c.tc, 'dart', '#d0e8ff', 16, 2.6); later(0.75, c.hitAll); } },
+    // Arcanista
+    a1: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.4, () => { const to = V3(c.tc.x, c.tc.y, c.tc.z); projectile('orb', heroHand(), to, '#ff6a20', true, 0.3, () => { burst(to, '#ff6010', 30, 4.5, 0.18); ring(to, '#ff8030', 1.8, 0.35); c.hitAll(); }); }) },
+    a3: { anim: 'Spellcast_Shoot', fx: (c) => { ring(c.hp, '#a0e8ff', 7, 0.6); c.hits.forEach((h, i) => later(0.25 + i * 0.06, () => { const e = entOf(h.sid); if (e) fxShards(monCenter(e), '#a8ecff'); c.impact(h); })); } },
+    a4: { anim: 'Spellcast_Shoot', fx: (c) => { let from = heroHand(); c.hits.forEach((h, i) => later(c.dur * 0.35 + i * 0.09, () => { const e = entOf(h.sid); if (!e) return c.impact(h); const to = monCenter(e); fxBolt(from, to, '#d0b0ff', 0.35); from = to; c.impact(h); })); } },
+    a5: { anim: 'Spellcast_Long', fx: (c) => fxMeteor(c.tc, '#ff6a20', c.hitAll) },
+    a6: { anim: 'Spellcast_Long', fx: (c) => { fxNova(c.hp); later(0.35, c.hitAll); } },
+    // Clériga
+    r1: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.4, () => { fxBeam(c.tc, '#fff0a0', 0.35); c.hitAll(); }) },
+    r6: { anim: 'Spellcast_Long', fx: (c) => { ring(c.hp, '#ffe890', 8, 0.8); heal(); c.hits.forEach((h, i) => later(0.3 + i * 0.07, () => { const e = entOf(h.sid); if (e) fxBeam(monCenter(e), '#fff8c0', 0.4); c.impact(h); })); } },
+  };
+
+  // bônus visíveis enquanto estiverem ativos
+  const BUFF_VIS = {
+    e2: ['shield', '#b0c0d8'], a2: ['shield', '#60a8ff'], r4: ['shield', '#ffe080'], p4: ['shield', '#ffd040'],
+    e5: ['orbs', '#80e0ff'], g2: ['speed', '#ff5030'], v4: ['speed', '#c8e8ff'], c4: ['speed', '#a0ffb0'],
+    v2: ['flame', '#ff8a20'], p3: ['holy', '#ffe070'], l4: ['shadow', '#6a2aaa'], c5: ['aim', '#ff4040'], r3: ['life', '#70f090'],
+  };
+  function updateBuffVisuals(h, t) {
+    h.bv = h.bv || {};
+    const on = new Set((R.inTown ? [] : R.buffs || []).map((b) => b.id));
+    const hp = h.root.position;
+    for (const id in h.bv) if (!on.has(id)) { scene.remove(h.bv[id].obj); disposeObj(h.bv[id].obj); delete h.bv[id]; }
+    for (const id of on) {
+      const def = BUFF_VIS[id]; if (!def) continue;
+      const [type, color] = def;
+      let v = h.bv[id];
+      if (!v) {
+        const obj = new THREE.Group();
+        if (type === 'shield') { const sp = mk(G.sph(1.05, 20), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }), obj, 0, 0.95, 0, false); sp.scale.y = 1.15; }
+        if (type === 'orbs') for (let k = 0; k < 3; k++) { const o = mk(G.sph(0.11, 10), new THREE.MeshBasicMaterial({ color: '#ffffff' }), obj, 0, 0, 0, false); o.add(glowSprite(color, 0.7, 0.9)); }
+        if (type === 'aim') { const rg = mk(new THREE.RingGeometry(0.28, 0.34, 24), fxMat(color, 0.9), obj, 0, 2.5, 0, false); rg.rotation.x = -Math.PI / 2; for (let k = 0; k < 4; k++) { const b = mk(G.box(0.16, 0.02, 0.03), fxMat(color, 0.9), obj, Math.cos(k * Math.PI / 2) * 0.42, 2.5, Math.sin(k * Math.PI / 2) * 0.42, false); b.rotation.y = -k * Math.PI / 2; } }
+        scene.add(obj); v = h.bv[id] = { obj, type, color };
+      }
+      v.obj.position.set(hp.x, hp.y, hp.z);
+      const c = rgb(color);
+      if (type === 'shield') { v.obj.children[0].material.opacity = 0.14 + Math.sin(t * 3) * 0.05; v.obj.rotation.y += 0.01; }
+      if (type === 'orbs') v.obj.children.forEach((o, k) => { const a = t * 2.4 + k * 2.09; o.position.set(Math.cos(a) * 0.95, 1 + Math.sin(t * 3 + k) * 0.15, Math.sin(a) * 0.95); });
+      if (type === 'aim') v.obj.rotation.y += 0.03;
+      if (type === 'speed' && Math.random() < 0.5) { const a = Math.random() * 6.28; spawnP({ x: hp.x + Math.cos(a) * 0.7, y: 0.1, z: hp.z + Math.sin(a) * 0.7, vx: -Math.sin(a) * 2, vy: 0.6, vz: Math.cos(a) * 2, life: 0.4, ...c, size: 0.09 }); }
+      if (type === 'flame' && Math.random() < 0.7) { const p0 = heroHand(); spawnP({ x: p0.x + rand(-0.1, 0.1), y: p0.y + rand(-0.2, 0.3), z: p0.z + rand(-0.1, 0.1), vx: 0, vy: rand(0.5, 1.2), vz: 0, life: 0.45, ...c, size: 0.13 }); }
+      if ((type === 'holy' || type === 'life') && Math.random() < 0.35) spawnP({ x: hp.x + rand(-0.5, 0.5), y: rand(0.2, 1.6), z: hp.z + rand(-0.5, 0.5), vx: 0, vy: 0.8, vz: 0, life: 0.9, ...c, size: 0.1 });
+      if (type === 'shadow' && Math.random() < 0.6) spawnP({ x: hp.x + rand(-0.4, 0.4), y: rand(0.1, 1.2), z: hp.z + rand(-0.4, 0.4), vx: rand(-0.2, 0.2), vy: 0.5, vz: rand(-0.2, 0.2), life: 0.9, ...c, size: 0.28, fadeIn: true });
+    }
+  }
+
   // ---------- eventos ----------
   function playerAttack(o) {
     if (!running || document.hidden || !st.hero) return;
@@ -1782,6 +1945,7 @@ const Scene3D = (() => {
     const hits = (o.hits && o.hits.length ? o.hits : [{ sid: st.mon.sid, text: o.text, cls: o.cls }]);
     const impact = (h) => {
       const e = entOf(h.sid); if (!e) return;
+      if (h.done) return; h.done = true;
       e.hurt = now();
       if (e.model && !o.miss && !e.atk && now() >= (e.model.busyUntil || 0)) playAnim(e, Math.random() < 0.5 ? 'Hit_A' : 'Hit_B', { loop: false, dur: 0.35, fade: 0.05 });
       const c = monCenter(e);
@@ -1792,6 +1956,18 @@ const Scene3D = (() => {
       }
       floatAt(monTop(e) || c, h.text, h.cls);
     };
+    const special = o.skillId && SFX[o.skillId];
+    if (special && !o.miss) {
+      const sd = Math.max(st.hero.model ? attackDur() * 1.25 : 0.6, 0.6);
+      if (st.hero.model && special.anim) playAnim(st.hero, special.anim, { loop: false, dur: sd, fade: 0.05 });
+      if (special.motion) st.hero.motion = Object.assign({}, special.motion, { start: now(), dur: sd, target: st.mon.root.position.clone() });
+      st.hero.atk = { start: t, dur: sd, skill: true };
+      const ctx = { hits, impact, color, dur: sd, tc: monCenter(), hp: heroPos(0), ents: hits.map((h) => entOf(h.sid)).filter(Boolean) };
+      ctx.hitAll = () => hits.forEach(impact);
+      special.fx(ctx);
+      later(sd + 0.6, ctx.hitAll); // garante os números mesmo se algum alvo sumir
+      return;
+    }
     if (melee) {
       later(dur * 0.5, () => {
         const c = monCenter() || new THREE.Vector3(2, 1, 0);
@@ -1859,18 +2035,23 @@ const Scene3D = (() => {
     if (target === 'player' && st.hero) floatAt(new THREE.Vector3(st.hero.root.position.x, 2.2, st.hero.root.position.z), text, cls);
     else { const p = monTop(); if (p) floatAt(p, text, cls); }
   }
-  function heal() {
+  function heal(id) {
     if (!running || document.hidden || !st.hero) return;
+    if (id === 'r2') fxBeam(heroPos(0), '#90ffa0', 0.6);
     const x = st.hero.root.position.x;
     const hz1 = st.hero.root.position.z; for (let i = 0; i < 24; i++) spawnP({ x: x + rand(-0.5, 0.5), y: rand(0, 1.6), z: hz1 + rand(-0.5, 0.5), vx: 0, vy: rand(1, 2), vz: 0, life: 1, r: 0.4, gg: 1, b: 0.5, size: 0.16 });
     ring(st.hero.root.position, '#70f080', 1.6, 0.6);
     if (st.hero.model && !st.hero.atk) playAnim(st.hero, 'Spellcast_Raise', { loop: false, dur: 0.7, fade: 0.08 });
   }
-  function buff() {
+  function buff(id) {
     if (!running || document.hidden || !st.hero) return;
-    const x = st.hero.root.position.x;
-    ring(st.hero.root.position, '#ffd860', 2, 0.6);
-    if (st.hero.model && !st.hero.atk) playAnim(st.hero, 'Spellcast_Raise', { loop: false, dur: 0.7, fade: 0.08 });
+    const x = st.hero.root.position.x, hp0 = heroPos(0);
+    const summon = id === 'e4' || id === 'c2' || id === 'v5', bv = BUFF_VIS[id];
+    if (id === 'l2') { burst(V3(hp0.x, 0.8, hp0.z), '#2a1a3a', 40, 3, 0.3, 1); fxVortex(hp0, '#3a1a5a', 0.6); return; }
+    if (summon) { ring(hp0, '#80c0ff', 3, 0.8); fxBeam(V3(hp0.x + 0.9, 0, hp0.z - 0.9), '#a0d0ff', 0.5); }
+    else if (bv) { const cc = bv[1]; ring(hp0, cc, 2.4, 0.6); if (bv[0] === 'shield') fxShock(hp0, cc, 2, 2); }
+    else ring(st.hero.root.position, '#ffd860', 2, 0.6);
+    if (st.hero.model && !st.hero.atk) playAnim(st.hero, summon ? 'Spellcast_Summon' : (id === 'g4' ? 'Taunt' : 'Spellcast_Raise'), { loop: false, dur: summon ? 1 : 0.7, fade: 0.08 });
     const hz2 = st.hero.root.position.z; for (let i = 0; i < 26; i++) { const a = Math.random() * 6.28; spawnP({ x: x + Math.cos(a) * 0.7, y: 0.1, z: hz2 + Math.sin(a) * 0.7, vx: 0, vy: rand(2, 4), vz: 0, life: 0.8, r: 1, gg: 0.85, b: 0.4, size: 0.12 }); }
   }
   function levelUp() {
@@ -1900,6 +2081,7 @@ const Scene3D = (() => {
       const old = st.hero;
       curCls = sig; weaponKey = '';
       st.hero = buildHero(S.cls); scene.add(st.hero.root);
+      if (old && old.bv) for (const id in old.bv) { scene.remove(old.bv[id].obj); disposeObj(old.bv[id].obj); }
       if (old) { st.hero.root.position.copy(old.root.position); st.hero.inner.rotation.y = old.inner.rotation.y; st.hero.walk = old.walk; scene.remove(old.root); disposeObj(old.root); }
       else { st.hero.root.position.set(R.inTown ? HERO_TOWN.x : (R.pos ? R.pos.x : 0), 0, R.inTown ? HERO_TOWN.z : (R.pos ? R.pos.z : 0)); if (R.inTown) st.hero.inner.rotation.y = -1.25; }
     }
@@ -1972,6 +2154,19 @@ const Scene3D = (() => {
     const want = -(R.face || 0);
     let diff = want - h.inner.rotation.y; while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
     h.inner.rotation.y += diff * Math.min(1, dt * 12);
+    const mo = h.motion;
+    if (mo) {
+      const k = (now() - mo.start) / mo.dur;
+      if (k >= 1) { h.motion = null; h.root.position.y = 0; }
+      else if (mo.type === 'spin') h.inner.rotation.y = want + ease(k) * mo.turns * Math.PI * 2;
+      else if (mo.type === 'leap') { h.root.position.y = Math.sin(Math.min(1, k / 0.62) * Math.PI) * mo.h * (k < 0.62 ? 1 : 0); if (mo.target) { const j = Math.sin(Math.min(1, k / 0.62) * Math.PI) * 0.5; h.root.position.x = lerp(h.root.position.x, lerp(p.x, mo.target.x, j * 0.6), 0.5); h.root.position.z = lerp(h.root.position.z, lerp(p.z, mo.target.z, j * 0.6), 0.5); } }
+      else if (mo.type === 'dash' && mo.target) {
+        const seg = Math.floor(k * mo.n), a = seg * 2.4 + 0.6, tx = mo.target.x + Math.cos(a) * 1.25, tz = mo.target.z + Math.sin(a) * 1.25;
+        h.root.position.x = lerp(h.root.position.x, tx, 0.6); h.root.position.z = lerp(h.root.position.z, tz, 0.6);
+        h.inner.rotation.y = -Math.atan2(mo.target.z - tz, mo.target.x - tx);
+        for (let i = 0; i < 3; i++) spawnP({ x: h.root.position.x + rand(-0.2, 0.2), y: rand(0.3, 1.5), z: h.root.position.z + rand(-0.2, 0.2), vx: 0, vy: 0.2, vz: 0, life: 0.4, r: 0.45, gg: 0.2, b: 0.8, size: 0.22 });
+      }
+    }
   }
 
   // ---------- animação do herói ----------
@@ -2026,6 +2221,7 @@ const Scene3D = (() => {
     const buffOn = R.buffs && R.buffs.length > 0;
     h.aura.material.opacity = lerp(h.aura.material.opacity, buffOn ? 0.55 + Math.sin(t * 4) * 0.15 : 0, Math.min(1, dt * 6));
     h.aura.rotation.z += dt; h.auraGlow.material.opacity = h.aura.material.opacity * 0.35;
+    updateBuffVisuals(h, t);
   }
 
   function animHeroTown(t, dt) {
@@ -2168,6 +2364,7 @@ const Scene3D = (() => {
       bindControls();
     }
     // reinicia o estado visual
+    if (st.hero && st.hero.bv) for (const id in st.hero.bv) scene.remove(st.hero.bv[id].obj);
     if (st.hero) { scene.remove(st.hero.root); disposeObj(st.hero.root); }
     for (const e of st.ents.values()) { scene.remove(e.root); disposeObj(e.root); }
     st.ents.clear();

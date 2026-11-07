@@ -53,6 +53,11 @@ Atalhos no `keydown` do fim de `game.js`.
 - Herói: `buildHeroModel` (KayKit + armas procedurais por tier `buildWeaponT`, `buildShieldT`, `buildHelmetModel`, `attachArmor`) ou `buildCharacter`
   (boneco procedural, reserva). Posição/direção vêm de `R.pos`/`R.face` (`heroFollowWorld`). Animações: `playAnim`, `heroAttackClip`.
 - Monstros: `buildMonsterModel` (esqueletos KayKit, `MON_MODEL`) ou `buildMonster` (12 tipos de corpo procedurais, `MON`).
+- **Efeito próprio por habilidade:** `SFX[idDaHabilidade] = { anim, motion: {type: 'spin'|'leap'|'dash'}, fx(ctx) }`. O jogo envia `skillId` em
+  `Scene.playerAttack`; `fx` agenda os efeitos e chama `ctx.impact(hit)`/`ctx.hitAll()` para mostrar os números. Ajudantes: `fxWhirl`, `fxShock`, `fxCracks`,
+  `fxSpikes`, `fxBeam`, `fxBolt`, `fxCross`, `fxShards`, `fxMeteor`, `fxVortex`, `fxNova`, `fxRain`. Movimento do herói em `heroFollowWorld` (`h.motion`).
+  Bônus visíveis enquanto ativos: `BUFF_VIS[id] = [tipo, cor]` (shield, orbs, speed, flame, holy, shadow, aim, life) em `updateBuffVisuals`.
+  Habilidade nova sem entrada em `SFX` usa o efeito genérico.
 - Efeitos: `projectile`, `slash`, `ring`, `pillar`, partículas por shader (`spawnP`, `burst`), números (`floatAt`, DOM), `updateWorldUI` (anel do alvo, barras).
 - Câmera: `updateCamera` (isométrica no mundo, fixa na cidade), controles em `bindControls` (arrastar, roda, pinça, duplo clique), toque → `pickWorld`/`pickNpc`.
 - Tiers visuais: `floor(ilvl/17)` → 0–5; `TIER_COL`, `METAL`, `GRIP`; raridade dá cor e brilho, refino aumenta a intensidade.

@@ -251,8 +251,6 @@ window.gameOrder = (o) => {
   if (o.type === 'attack') { const m = aliveMons().find((x) => x.sid === o.sid); if (m) { R.mon = m; R.move = null; } }
 };
 
-function aliveMons() { return (R.mons || []).filter((m) => m.hp > 0); }
-function retarget() { R.mon = aliveMons()[0] || null; }
 
 // ---------- combate ----------
 function log(msg, cls = '') {
@@ -311,7 +309,7 @@ function playerHit(mult = 1, sk = null) {
     hits.push({ sid: t.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : (sk ? 'skill' : 'dmg'), stun: t.stun > 0, slow: t.slow > 0 });
   }
   attackSound(skillName, anyCrit, false);
-  Scene.playerAttack({ text: hits[0].text, cls: hits[0].cls, crit: anyCrit, skill: !!sk, skillName, aoe: targets.length > 1 || (sk && sk.type === 'aoe'), hits, stealth, multi: sk && sk.hits });
+  Scene.playerAttack({ text: hits[0].text, cls: hits[0].cls, crit: anyCrit, skill: !!sk, skillName, aoe: targets.length > 1 || (sk && sk.type === 'aoe'), hits, stealth, multi: sk && sk.hits, skillId: sk && sk.id });
   if (sk) log(`Você usou <b>${esc(skillName)}</b>${targets.length > 1 ? ` em ${targets.length} monstros` : ''} causando ${fmt(total)} de dano${sk.stun ? ' e atordoando' : ''}${sk.slow ? ' e congelando' : ''}.`, 'skill');
   if (sk && sk.healPct) { const h = Math.round(d.maxHp * sk.healPct); S.hp = Math.min(d.maxHp, S.hp + h); floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); }
   for (const t of targets) if (t.hp <= 0) killMonster(t);
@@ -562,9 +560,9 @@ function playerAI(dt, d) {
     R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
     return;
   }
-  if (!R.mon) {
+  if (!R.mon && S.settings.auto) { // no modo manual o herói só ataca o que o jogador tocar
     const attackers = aliveMons().filter((m) => m.aggro && !m.returning);
-    const pool = attackers.length ? attackers : (S.settings.auto ? aliveMons().filter((m) => dist2(m, R.pos) < 40 && !m.boss) : []);
+    const pool = attackers.length ? attackers : aliveMons().filter((m) => dist2(m, R.pos) < 40 && !m.boss);
     let best = null, bd = 1e9;
     for (const m of pool) { const dd = dist2(m, R.pos); if (dd < bd) { bd = dd; best = m; } }
     R.mon = best;
@@ -1031,7 +1029,7 @@ function useUtility(s, d, forced) {
     if (!forced && S.hp / d.maxHp >= 0.6) return false;
     const h = Math.round(d.maxHp * s.mult);
     S.hp = Math.min(d.maxHp, S.hp + h);
-    floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); Sfx.play('heal');
+    floatText('player', '+' + fmt(h), 'heal'); Scene.heal(s.id); Sfx.play('heal');
     log(`💚 ${esc(s.name)} restaurou ${fmt(h)} de vida.`, 'heal');
     return true;
   }
@@ -1039,20 +1037,20 @@ function useUtility(s, d, forced) {
     if (R.pet && !forced) return false;
     const P = PETS[s.pet];
     R.pet = { kind: s.pet, name: P.name, icon: P.icon, t: s.dur, mult: s.mult, timer: 1, hp: Math.round(d.maxHp * (P.hp || 0)), maxHp: Math.round(d.maxHp * (P.hp || 0)), sid: uid() };
-    log(`${P.icon} Você invocou <b>${P.name}</b>!`, 'skill'); Scene.buff(); Sfx.play('portal');
+    log(`${P.icon} Você invocou <b>${P.name}</b>!`, 'skill'); Scene.buff(s.id); Sfx.play('portal');
     return true;
   }
   if (s.type === 'stealth') {
     if (R.stealth > 0 || (!forced && !R.mon)) return false;
     R.stealth = s.dur;
-    log(`🌑 ${esc(s.name)}: você sumiu nas sombras.`, 'skill'); Sfx.play('whiff');
+    log(`🌑 ${esc(s.name)}: você sumiu nas sombras.`, 'skill'); Scene.buff(s.id); Sfx.play('whiff');
     return true;
   }
   if (s.type === 'buff') {
     if (R.buffs.some((b) => b.id === s.id)) { if (!forced) return false; R.buffs = R.buffs.filter((b) => b.id !== s.id && b.id !== s.id + '+'); }
     R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur });
     if (s.also) R.buffs.push({ id: s.id + '+', name: '', stat: s.also.stat, val: s.also.val, t: s.dur, hidden: true });
-    log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff(); Sfx.play('buff');
+    log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff(s.id); Sfx.play('buff');
     return true;
   }
   return false;

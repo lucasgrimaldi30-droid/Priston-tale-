@@ -24,6 +24,9 @@ que caça sozinho e mantém o progresso offline. Referência de estilo do dono d
 - Nomes de ossos dos modelos vêm **sem ponto** (`handslotr`, `upperarml`, `lowerlegl`…). O GLTFLoader remove os pontos.
 - Classes de CSS da interface já colidiram com nomes genéricos (`.skill`): use prefixos (`lg-`, `fx-`).
 - Estado novo em `S` precisa de valor padrão para saves antigos (veja a migração em `startGame`).
+- **Funções duplicadas:** em JS a última declaração vence em silêncio. Uma cópia antiga de `retarget()` fazia o herói continuar atacando com o Auto desligado.
+  Ao reescrever um sistema, apague a versão antiga e confira com: `grep -o "^function [a-zA-Z0-9_]*" js/game.js | sort | uniq -d`.
+- Modo Auto desligado = o herói só ataca o que o jogador tocar (sem revidar sozinho).
 - Chefes nunca devem prender o modo Auto num laço de morte: o chefe que vence some (`die`), e o Auto só ataca chefe desafiado ou que já está atacando.
 
 ## Rodar e testar
