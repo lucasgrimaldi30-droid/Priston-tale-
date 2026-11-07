@@ -30,6 +30,14 @@ Ordens vêm da cena por `window.gameOrder({type:'move', x, z})` / `({type:'attac
 `updateWorldUI` (anel do alvo e barrinhas de vida). `S.settings.auto` liga a caça automática. A área (aoe) atinge monstros a até 4,2 m do alvo.
 Próximas fases planejadas: 2 corpos humanos (MakeHuman + Mixamo, feito pelo usuário no PC), 3 interface de MMO, 4 equipamentos humanos, 5 multiplayer, 6 monstros novos.
 
+### Interface de MMO (Fase 3)
+Tela cheia (`#stage`) com HUD flutuante: `#player-card`, `.hud-top` (mapa, Auto, Cidade, Chefe), `.hud-right-col` (alvo, `#minimap`, `#quest-track`),
+`#chat` (abas Todos/Combate/Sistema via `LOG_CAT`, comandos em `chatCommand`), `.bottom-bar` (poções + `#skill-bar` + XP) e `.menu-btns`.
+Menus abrem em `#gwin` com `openWin(nome)` (personagem, inventario, habilidades, missoes, mapas, config). A barra de habilidades usa a skill ao tocar
+(`castSkill` → `R.forceSkill` ou `useUtility`); o ponto "A" liga ou desliga o uso automático. Teclas: 1–6 habilidades, Q/E poções, C/I/K/J/M janelas,
+Enter para o chat, Espaço para o Auto, Esc para fechar. Missões: `questDefs()` (3 caçadas + 1 chefe por mapa), `S.quests`, `questProgress` (em `killMonster`),
+`autoQuests` (quando `S.settings.autoQuest`), NPC `guarda` (Comandante Varek) na cidade.
+
 ### Habilidades (`CLASSES[x].skills`)
 Tipos: `dmg` (alvo único; `hits`, `boss`, `holy`), `aoe` (todos; `targets`, `stun`, `slow`, `healPct`), `buff` (`stat` + `also`), `heal`, `summon` (`pet`: golem/falcao/fera), `stealth`, `passive` (`stat`/`val` ou `revive`).
 Stats de buff aceitos em `derived()`: atk, def, crit, critdmg, spd, evade, block, absorb, reflect, hpmax, undead, mshield.

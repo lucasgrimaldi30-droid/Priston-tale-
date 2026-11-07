@@ -984,6 +984,7 @@ const Scene3D = (() => {
     ferreiro: { m: 'Barbarian', r: '1H_Axe', anim: '1H_Melee_Attack_Chop', loop: true },
     portal:   { m: 'Mage', tint: '#b8c8ff', r: '2H_Staff', hat: 'Mage_Hat', cape: 'Mage_Cape', anim: 'Spellcast_Long', loop: true },
     mestra:   { m: 'Mage', tint: '#fffaf0', l: 'Spellbook_open', cape: 'Mage_Cape', anim: 'Idle' },
+    guarda:   { m: 'Knight', tint: '#ffd8d0', hat: 'Knight_Helmet', cape: 'Knight_Cape', r: '1H_Sword', l: 'Badge_Shield', anim: 'Idle_Combat' },
   };
 
   function loadAssets() {
@@ -1302,9 +1303,10 @@ const Scene3D = (() => {
     portal:   { L: { body: '#2a3a8a', trim: '#80c0ff', pants: '#1a2050', skin: '#f0d0b0', head: 'wizard', hair: '#e0e0f0', robe: true }, wt: 'cajado', pos: [2.1, -3.3] },
     mestra:   { L: { body: '#f0e8d8', trim: '#a070d0', pants: '#c8c0a8', skin: '#f6d6bc', head: 'hood', hair: '#f0d080', robe: true }, wt: 'cetro', pos: [3.5, -0.3] },
     bau:      { chest: true, pos: [1.3, 0.5] },
+    guarda:   { L: { body: '#7a8494', trim: '#c03030', pants: '#3a404a', skin: '#e8b890', head: 'helm', hair: '#5a4030' }, wt: 'espada', pos: [-1.4, 0.6] },
   };
-  const NPC_NAMES = { mercador: 'Mercadora', ferreiro: 'Ferreiro', portal: 'Portais', mestra: 'Mestra', bau: 'Baú' };
-  const NPC_ICON = { mercador: '🛒', ferreiro: '🔨', portal: '🌀', mestra: '📜', bau: '🧰' };
+  const NPC_NAMES = { mercador: 'Mercadora', ferreiro: 'Ferreiro', portal: 'Portais', mestra: 'Mestra', bau: 'Baú', guarda: 'Comandante' };
+  const NPC_ICON = { mercador: '🛒', ferreiro: '🔨', portal: '🌀', mestra: '📜', bau: '🧰', guarda: '📋' };
   const HERO_TOWN = new THREE.Vector3(0, 0, 1.4);
 
   function buildTown() {
@@ -1902,7 +1904,7 @@ const Scene3D = (() => {
       else { st.hero.root.position.set(R.inTown ? HERO_TOWN.x : (R.pos ? R.pos.x : 0), 0, R.inTown ? HERO_TOWN.z : (R.pos ? R.pos.z : 0)); if (R.inTown) st.hero.inner.rotation.y = -1.25; }
     }
     updateWeaponLook();
-    const live = (R.mons || []).filter((m) => m.hp > 0);
+    const live = R.inTown ? [] : (R.mons || []).filter((m) => m.hp > 0);
     const ids = new Set(live.map((m) => m.sid));
     for (const [sid, e] of st.ents) if (!ids.has(sid)) { killEnt(e, t); st.ents.delete(sid); }
     live.forEach((m, i) => {
