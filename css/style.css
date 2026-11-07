@@ -483,3 +483,18 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .stat-cards div { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; }
 .stat-cards b { font-size: 20px; color: var(--gold); }
 .dmg-row { display: grid; grid-template-columns: 120px 1fr 36px; gap: 6px; align-items: center; font-size: 12px; }
+
+/* Bloco 2: torre, eventos, clima, coleta */
+.tower-box, .ev-box { background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 210, 120, .25); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.tower-box h3 { margin: 0 0 6px; font-family: Cinzel, serif; color: #f0c860; }
+.tower-box p { margin: 4px 0; font-size: 13px; }
+.tower-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.ev-box { font-size: 13px; display: grid; gap: 4px; border-color: rgba(255, 120, 80, .3); }
+.sky-ico { font-size: 14px; }
+.ev-tag { font-size: 11px; background: rgba(255, 120, 60, .25); border: 1px solid rgba(255, 140, 80, .5); border-radius: 8px; padding: 1px 6px; color: #ffd0a0; white-space: nowrap; }
+.craft-head { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
+.craft-list { display: grid; gap: 6px; }
+.craft-row { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, .04); border-radius: 8px; padding: 6px 10px; }
+.cr-ico { font-size: 22px; }
+.cr-info { flex: 1; display: grid; }
+.cr-info small { color: #aab; }

@@ -99,6 +99,19 @@ Atalhos no `keydown` do fim de `game.js`.
 - **Bestiário:** `S.best[nome]` conta abates; marcos `BEST_TIERS` (50/250/1000) dão +0,25% de dano e XP cada (`bestTiers()`). Janela `bestiario` (tecla B).
 - **Medidor:** `R.meter` (`meter()`, `meterHit(dano, fonte)` chamado em `hitMonster`), janela `stats` (tecla D): DPS 30 s, XP/ouro/abates por hora, dano por habilidade.
 - **Efeito cresce com o nível:** em `scene3d.js`, `FXS = 1 + (nv−1) × 0,07` aumenta os efeitos grandes; no nível 10 sai um brilho dourado extra.
+- **Torre Infinita:** `enterTower('1'|'top')` usa `R.dungeon = { tower: true, floors: Infinity, ... }`; `towerFloor` (monstros nv `3 + andar×2`,
+  tema `towerZone(andar)` que troca a cada 5 andares, chefe guardião a cada 5, além do andar 50 vida/ataque +8% por andar), `towerClear`
+  (ouro sempre, triplo na primeira vez; guardião novo dá pedras, item e gema), recorde em `S.towerBest`, recomeço de 10 em 10 (`towerStart`).
+  Monstros da torre têm `m.tower` (não contam abates/chefes do mapa). Painel `tabTower()` no topo da janela de mapas.
+- **Eventos do mundo:** `EVENTS` (xp, gold, elite, boss) pelo relógio real: a cada 30 min um evento de 10 min (`eventNow()`), igual para todos.
+  `eventTick()` (1×/s no `tick`) anuncia e cria o **Chefe Mundial** (`spawnWorldBoss`: "Avatar de <chefe>", vida ×5, `m.wboss`, `m.skin` para o modelo
+  da cena) uma vez por evento (`S.wbSlot`); `worldBossReward`. O Auto só ataca o Avatar com nível ≥ nível dele − 6. Quadro `eventsBox()`.
+- **Dia, noite e chuva:** `worldSky(zid)` em `data.js` (dia de 24 min; chuva em janelas de 6 min, 35%, nunca em caverna/deserto/neve/vulcão/abismo).
+  Noite dá +10% XP e chuva +10% ouro (`killMonster`). Na cena: `skyCycle` (luz, cor, neblina, céu noturno, fogueiras maiores) e `rainFx` (gotas e raios).
+- **Coleta e artesanato:** `zoneNodes(zid)` (6 pontos por mapa, semente própria: minério, erva, essência), `R.nodes` (recarga 60 s),
+  `gatherStep` dentro do `playerAI` (tocar no ponto manda `gameOrder({type:'gather'})`; o Auto coleta pontos a até 14 m sem monstros agressivos;
+  `S.settings.autoGather === false` desliga), `gatherDone`, `S.mats`, `S.prof` (coleta e arte, `profLvl`). Receitas `RECIPES` na aba "Criar" do Ferreiro.
+  Elites deixam essência (25%). Diária "coletas". Cena: `buildNode`/`updateNodes` (pontos brilham, encolhem quando vazios, herói usa a animação Interact).
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

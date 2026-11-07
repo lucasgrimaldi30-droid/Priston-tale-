@@ -436,7 +436,7 @@ function spawnWorldMonster(initial = false) {
     const m = makeMonster(z.monsters[i][0], z.monsters[i][1], lvl, false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
     m.xp = Math.round(m.xp * 1.3); m.gold = Math.round(m.gold * 1.15); // compensa o tempo andando
-    if (Math.random() < (R.dungeon ? 0.18 : 0.07)) { // monstro elite
+    if (Math.random() < (R.dungeon ? 0.18 : 0.07) * (eventNow().id === 'elite' ? 3 : 1)) { // monstro elite
       m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 2.6); m.atk = Math.round(m.atk * 1.35); m.def = Math.round(m.def * 1.15);
       m.xp *= 4; m.gold *= 4;
     }
@@ -456,10 +456,126 @@ function spawnBoss() {
   return m;
 }
 function initWorld() {
-  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = [];
+  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null;
+  R.nodes = zoneNodes(S.zone).map((n, i) => ({ ...n, id: i, cd: 0 }));
   R.pos = { ...WORLD.entry };
   for (let i = 0; i < WORLD.cap; i++) spawnWorldMonster(true);
 }
+// ---------- eventos do mundo (pelo relógio real, iguais para todos os jogadores) ----------
+// a cada 30 minutos começa um evento de 10 minutos, em rodízio
+const EVENTS = [
+  { id: 'xp', name: 'Maré da Sabedoria', icon: '📘', desc: '+50% de experiência em todos os mapas.' },
+  { id: 'gold', name: 'Chuva de Ouro', icon: '💰', desc: '+50% de ouro dos monstros.' },
+  { id: 'elite', name: 'Hora das Elites', icon: '⭐', desc: 'Monstros elite aparecem 3× mais.' },
+  { id: 'boss', name: 'Chefe Mundial', icon: '🔥', desc: 'Um Avatar gigante surge na arena de cada mapa. Derrote-o por um grande prêmio.' },
+];
+const EV_SLOT = 30 * 60000, EV_LEN = 10 * 60000;
+function eventNow(t = Date.now()) {
+  const slot = Math.floor(t / EV_SLOT), into = t - slot * EV_SLOT, e = EVENTS[slot % EVENTS.length];
+  if (into < EV_LEN) return { ...e, slot, left: EV_LEN - into };
+  const ne = EVENTS[(slot + 1) % EVENTS.length];
+  return { id: null, slot, next: ne, nextIn: EV_SLOT - into };
+}
+function eventTick() {
+  const ev = eventNow();
+  if (ev.id !== R.lastEv) {
+    if (ev.id) { log(`${ev.icon} <b>Evento: ${ev.name}!</b> ${ev.desc} (10 min)`, 'boss'); toast(`${ev.icon} Evento: ${ev.name}!`, 'good'); }
+    else if (R.lastEv) log('O evento terminou.', 'muted');
+    R.lastEv = ev.id; R.dirty.all = true;
+  }
+  if (ev.id === 'boss' && !R.inTown && !R.dungeon && R.pos && S.wbSlot !== ev.slot && S.lvl >= 5 && !R.mons.some((m) => m.wboss)) spawnWorldBoss(ev.slot);
+  if (ev.id !== 'boss' && R.mons) { const wb = R.mons.find((m) => m.wboss && m.hp > 0); if (wb) { R.mons = R.mons.filter((m) => m !== wb); if (R.mon === wb) R.mon = null; log(`🔥 ${esc(wb.name)} desapareceu com o fim do evento.`, 'muted'); } }
+}
+function spawnWorldBoss(slot) {
+  const z = zoneById(S.zone);
+  const m = makeMonster(z.boss[0], z.boss[1], z.min + zoneSpan(z) + 4, true, 1);
+  Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2, wboss: true, slot, skin: z.boss[0] });
+  m.name = 'Avatar de ' + z.boss[0];
+  m.maxHp = m.hp = Math.round(m.maxHp * 5); m.atk = Math.round(m.atk * 1.15);
+  m.xp *= 3; m.gold *= 4;
+  R.mons = R.mons.filter((x) => !x.boss); R.mons.push(m);
+  log(`🔥 <b>${esc(m.name)}</b> despertou na arena ao norte! Derrote-o antes do fim do evento.`, 'boss'); Sfx.play('boss');
+}
+function worldBossReward(m) {
+  S.wbSlot = m.slot; S.stats.wbosses = (S.stats.wbosses || 0) + 1;
+  const tier = ZONES.findIndex((z) => z.id === S.zone) + 1, st = 3 + tier;
+  S.stones += st;
+  for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 6));
+  dropGem(1, m.lvl); dropGem(1, m.lvl);
+  log(`🔥 <b>Chefe Mundial derrotado!</b> +${st} 💎, 2 itens épicos ou melhores e 2 gemas.`, 'lvl');
+  toast('Chefe Mundial derrotado!', 'good'); Sfx.play('levelup');
+}
+
+// ---------- coleta e profissões ----------
+const MATS = { minerio: { name: 'Minério', icon: '⛏️' }, erva: { name: 'Erva', icon: '🌿' }, essencia: { name: 'Essência', icon: '✨' } };
+const NODE_TYPES = ['minerio', 'erva', 'minerio', 'erva', 'erva', 'essencia'];
+const NODE_CD = 60, GATHER_T = 2.2;
+function zoneNodes(zid) {
+  const r = seeded(ZONES.findIndex((z) => z.id === zid) * 389 + 71), camps = zoneCamps(zid), out = [];
+  for (let k = 0; k < 400 && out.length < NODE_TYPES.length; k++) {
+    const a = r() * Math.PI * 2, dd = 7 + r() * 22, c = { x: Math.cos(a) * dd, z: Math.sin(a) * dd * 0.9 };
+    if (dist2(c, WORLD.entry) > 5 && dist2(c, WORLD.arena) > 8 && camps.every((o) => dist2(o, c) > 5) && out.every((o) => dist2(o, c) > 6)) out.push({ ...c, type: NODE_TYPES[out.length] });
+  }
+  return out;
+}
+function profLvl(k) { return Math.min(50, 1 + Math.floor(Math.sqrt(((S.prof || {})[k] || 0) / 8))); }
+function addMat(k, n) { S.mats = S.mats || {}; S.mats[k] = (S.mats[k] || 0) + n; }
+function gatherDone(nd) {
+  const tier = ZONES.findIndex((z) => z.id === S.zone) + 1, lv0 = profLvl('coleta');
+  let n = 1 + Math.floor(tier / 3) + (Math.random() < lv0 * 0.02 ? 1 : 0);
+  if (nd.type === 'essencia') n = Math.max(1, Math.ceil(n / 2));
+  addMat(nd.type, n); nd.cd = NODE_CD;
+  S.prof = S.prof || {}; S.prof.coleta = (S.prof.coleta || 0) + 1 + tier;
+  if (Math.random() < 0.06) { addMat('essencia', 1); n += 0; log('✨ Você achou uma Essência extra!', 'loot'); }
+  log(`${MATS[nd.type].icon} Coletou ${n} ${MATS[nd.type].name}.`, 'loot');
+  Sfx.play('loot', { rarity: 1, gap: 100 });
+  if (profLvl('coleta') > lv0) { log(`⛏️ Coleta subiu para o nível ${profLvl('coleta')}!`, 'lvl'); toast(`Coleta nível ${profLvl('coleta')}!`, 'good'); }
+  dailyProgress('gather');
+  R.dirty.inv = true;
+}
+// passo da coleta dentro do playerAI; devolve true enquanto estiver coletando
+function gatherStep(dt, speed) {
+  if (!R.gather && S.settings.auto && S.settings.autoGather !== false && !R.mon && R.nodes && !aliveMons().some((m) => m.aggro && !m.returning)) {
+    let best = null, bd = 14;
+    for (const nd of R.nodes) { const dd = dist2(nd, R.pos); if (nd.cd <= 0 && dd < bd) { bd = dd; best = nd; } }
+    if (best) R.gather = { id: best.id, t: 0 };
+  }
+  if (!R.gather) { R.gathering = false; return false; }
+  const nd = R.nodes && R.nodes[R.gather.id];
+  if (!nd || nd.cd > 0 || (R.mon && R.mon.aggro)) { R.gather = null; R.gathering = false; return false; }
+  R.face = Math.atan2(nd.z - R.pos.z, nd.x - R.pos.x);
+  if (dist2(R.pos, nd) > 1.3) { stepTo(R.pos, nd, speed * dt, 1.1); R.moving = true; R.gathering = false; return true; }
+  R.gathering = true; R.gather.t += dt;
+  if (R.gather.t >= GATHER_T) { gatherDone(nd); R.gather = null; R.gathering = false; }
+  return true;
+}
+const RECIPES = [
+  { id: 'vida', name: '5 Poções de Vida Maior', icon: '❤️', cost: { erva: 4 }, give: () => { S.pots.hp2 = (S.pots.hp2 || 0) + 5; } },
+  { id: 'mana', name: '5 Poções de Mana Maior', icon: '💙', cost: { erva: 4 }, give: () => { S.pots.mp2 = (S.pots.mp2 || 0) + 5; } },
+  { id: 'pedra', name: 'Pedra de Refino', icon: '💎', cost: { minerio: 12, essencia: 2 }, give: () => { S.stones++; } },
+  { id: 'gema', name: 'Gema aleatória', icon: '🔮', cost: { minerio: 4, essencia: 6 }, give: () => { dropGem(1, S.lvl); } },
+  { id: 'xp', name: 'Pergaminho de XP (30 min)', icon: '📜', cost: { erva: 10, essencia: 5 }, give: () => { S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + 30 * 60000; } },
+];
+function canCraft(rc) { return Object.entries(rc.cost).every(([k, n]) => ((S.mats || {})[k] || 0) >= n); }
+function craft(id) {
+  const rc = RECIPES.find((r) => r.id === id);
+  if (!rc || !canCraft(rc)) { toast('Materiais insuficientes.', 'bad'); return; }
+  for (const [k, n] of Object.entries(rc.cost)) S.mats[k] -= n;
+  const lv0 = profLvl('arte'), dbl = Math.random() < Math.min(0.5, lv0 * 0.01);
+  rc.give(); if (dbl) rc.give();
+  S.prof = S.prof || {}; S.prof.arte = (S.prof.arte || 0) + 6;
+  S.stats.crafts = (S.stats.crafts || 0) + 1;
+  log(`🔨 Você criou: ${rc.icon} ${rc.name}${dbl ? ' <b>(em dobro!)</b>' : ''}.`, 'loot'); Sfx.play('loot', { rarity: 2 });
+  if (profLvl('arte') > lv0) log(`🔨 Artesanato subiu para o nível ${profLvl('arte')}!`, 'lvl');
+  R.dirty.inv = true; renderTab();
+}
+function tabCraft() {
+  const m = S.mats || {};
+  return `<div class="craft-head">${Object.entries(MATS).map(([k, v]) => `<span>${v.icon} ${v.name}: <b>${fmt(m[k] || 0)}</b></span>`).join('')}</div>
+    <p class="muted">Colete nos pontos brilhantes do mapa (o Auto também coleta). Coleta nv. <b>${profLvl('coleta')}</b> (chance de +1 por coleta) · Artesanato nv. <b>${profLvl('arte')}</b> (${Math.min(50, profLvl('arte'))}% de chance de criar em dobro).</p>
+    <div class="craft-list">${RECIPES.map((rc) => `<div class="craft-row"><span class="cr-ico">${rc.icon}</span><span class="cr-info"><b>${rc.name}</b><small>${Object.entries(rc.cost).map(([k, n]) => `${MATS[k].icon} ${n}`).join(' · ')}</small></span><button class="btn small primary" data-craft="${rc.id}" ${canCraft(rc) ? '' : 'disabled'}>Criar</button></div>`).join('')}</div>`;
+}
+
 // ---------- masmorras (3 andares + chefe) ----------
 const DUN_CD = 5 * 60000;
 function dunCost(z) { return 300 * z.min; }
@@ -479,6 +595,7 @@ function enterDungeon(zid) {
   R.dirty.all = true;
 }
 function dungeonFloor() {
+  if (R.dungeon.tower) return towerFloor();
   const D = R.dungeon, z = zoneById(D.zone), span = zoneSpan(z);
   R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 0, z: 11 }; R.playerTimer = 0.3;
   const lvl = z.min + span;
@@ -504,10 +621,10 @@ function dungeonFloor() {
 function dungeonTick(dt) {
   const D = R.dungeon;
   if (aliveMons().length) return;
-  if (!D.next) { D.next = 2.5; if (D.floor < D.floors) log(`✅ Andar ${D.floor} limpo! Descendo...`, 'lvl'); else dungeonReward(); }
+  if (!D.next) { D.next = 2.5; if (D.tower) towerClear(); else if (D.floor < D.floors) log(`✅ Andar ${D.floor} limpo! Descendo...`, 'lvl'); else dungeonReward(); }
   D.next -= dt;
   if (D.next <= 0) {
-    if (D.floor < D.floors) { D.floor++; D.next = 0; Sfx.play('portal'); dungeonFloor(); }
+    if (D.floor < D.floors) { D.floor++; D.next = 0; if (D.tower) D.zone = towerZone(D.floor).id; Sfx.play('portal'); dungeonFloor(); }
     else exitDungeon(false);
   }
 }
@@ -522,10 +639,80 @@ function dungeonReward() {
 }
 function exitDungeon(failed) {
   if (!R.dungeon) return;
+  if (R.dungeon.tower) { log(`🗼 Você saiu da Torre no andar ${R.dungeon.floor}. Recorde: andar ${S.towerBest || 0}.`, 'boss'); if ((R.dungeon.cleared || 0) >= 3) dailyProgress('dungeons'); }
   R.dungeon = null; R.worldZone = null; R.mons = []; R.mon = null; R.tele = [];
   if (failed) log('💀 Você foi expulso da masmorra.', 'death');
   else log('🌀 Você voltou ao mapa.', 'muted');
   R.dirty.all = true;
+}
+
+// ---------- Torre Infinita (andares sem fim, um chefe a cada 5) ----------
+function towerZone(f) { return ZONES[Math.floor((f - 1) / 5) % ZONES.length]; }
+function towerStart() { return Math.max(1, Math.floor((S.towerBest || 0) / 10) * 10 + 1); }
+function towerMonLvl(f) { return 3 + f * 2; }
+function enterTower(from) {
+  if (R.dead > 0) { toast('Espere renascer para entrar.', 'bad'); return; }
+  if (S.lvl < 10) { toast('A Torre abre no nível 10.', 'bad'); return; }
+  const f = from === 'top' ? towerStart() : 1;
+  R.inTown = false; R.dungeon = { tower: true, zone: towerZone(f).id, floor: f, floors: Infinity, next: 0 }; R.worldZone = 'dun';
+  if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
+  closeWin && closeWin();
+  Sfx.play('portal'); log(`🗼 Você entrou na <b>Torre Infinita</b> no andar ${f}. Suba o quanto aguentar!`, 'boss');
+  dungeonFloor();
+  R.dirty.all = true;
+}
+function towerFloor() {
+  const D = R.dungeon, f = D.floor, z = towerZone(f), lvl = towerMonLvl(f);
+  const over = f > 50 ? 1 + (f - 50) * 0.08 : 1; // além do andar 50 os monstros ficam cada vez mais fortes
+  D.boss = f % 5 === 0;
+  R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 0, z: 11 }; R.playerTimer = 0.3;
+  const n = D.boss ? 2 : 5 + Math.min(5, Math.floor(f / 6));
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, r = D.boss ? 4 : 3 + Math.random() * 6;
+    const mi = rint(0, 2), m = makeMonster(z.monsters[mi][0], z.monsters[mi][1], lvl, false, 2);
+    Object.assign(m, { x: Math.cos(a) * r, z: -3 + Math.sin(a) * r, wp: null, wait: 1, dun: true, tower: true });
+    m.home = { x: m.x, z: m.z };
+    m.maxHp = m.hp = Math.round(m.maxHp * over); m.atk = Math.round(m.atk * over);
+    if (D.boss || Math.random() < 0.12) { m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 2.6); m.atk = Math.round(m.atk * 1.35); m.xp *= 3; m.gold *= 3; }
+    R.mons.push(m);
+  }
+  if (D.boss) {
+    const b = makeMonster(z.boss[0], z.boss[1], lvl + 3, true, 1);
+    Object.assign(b, { x: 0, z: -7, home: { x: 0, z: -7 }, wp: null, wait: 2, dun: true, tower: true });
+    b.maxHp = b.hp = Math.round(b.maxHp * over); b.atk = Math.round(b.atk * over);
+    R.mons.push(b);
+    log(`👑 Andar ${f}: o guardião <b>${esc(b.name)}</b> bloqueia a escada!`, 'boss'); Sfx.play('boss');
+  } else log(`🗼 Andar ${f}: derrote todos os monstros.`, 'boss');
+  if (S.settings.auto) R.mon = R.mons[0];
+}
+function towerClear() {
+  const f = R.dungeon.floor, first = f > (S.towerBest || 0);
+  R.dungeon.cleared = (R.dungeon.cleared || 0) + 1;
+  const gold = Math.round(60 * f * (first ? 3 : 1));
+  S.gold += gold;
+  let msg = `✅ Andar ${f} vencido! +${fmt(gold)} ouro`;
+  if (first) {
+    S.towerBest = f;
+    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
+    msg += ' (novo recorde!)';
+  }
+  log(msg + '. Subindo...', 'lvl');
+  if (first && f % 10 === 0) { toast(`🗼 Recorde na Torre: andar ${f}!`, 'good'); Sfx.play('levelup'); }
+}
+function eventsBox() {
+  const ev = eventNow(), w = worldSky(S.zone);
+  const cur = ev.id ? `<b>${ev.icon} ${ev.name}</b> — ${ev.desc} <span class="muted">(acaba em ${Math.ceil(ev.left / 60000)} min)</span>` : `Próximo: <b>${ev.next.icon} ${ev.next.name}</b> em ${Math.ceil(ev.nextIn / 60000)} min <span class="muted">(${ev.next.desc})</span>`;
+  return `<div class="ev-box"><div>🎉 ${cur}</div><div class="muted">${w.rain ? '🌧️ Chovendo aqui: +10% ouro' : w.isNight ? '🌙 Noite: +10% XP' : '☀️ Dia'} · um dia no mundo dura ${DAY_MIN} min</div></div>`;
+}
+function tabTower() {
+  const best = S.towerBest || 0, st = towerStart();
+  return eventsBox() + `<div class="tower-box"><h3>🗼 Torre Infinita</h3>
+    <p>Andares sem fim. Cada andar é mais forte que o anterior e a cada 5 andares há um guardião. Morrer só te tira da torre, sem perder nada.</p>
+    <p>Primeira vez em cada andar: <b>ouro triplo</b>. Guardiões vencidos pela primeira vez dão <b>pedras, item e gema</b>.</p>
+    <div class="stat-cards"><div><small>Seu recorde</small><b>Andar ${best}</b></div><div><small>Monstros no próximo</small><b>Nv. ${towerMonLvl(best + 1)}</b></div></div>
+    <div class="tower-btns"><button class="btn primary" data-tower="1" ${S.lvl < 10 ? 'disabled' : ''}>Começar do andar 1</button>
+    ${st > 1 ? `<button class="btn primary" data-tower="top">Continuar do andar ${st}</button>` : ''}</div>
+    ${S.lvl < 10 ? '<p class="muted">Abre no nível 10.</p>' : ''}</div>`;
 }
 
 // compatibilidade: chamado ao renascer/desafiar
@@ -537,7 +724,8 @@ function nearMons(c, r) { return aliveMons().filter((m) => dist2(m, c) <= r); }
 window.gameOrder = (o) => {
   if (!S || !R || R.inTown || R.dead > 0) return;
   if (o.type === 'move') { R.move = { x: clamp(o.x, -WORLD.size, WORLD.size), z: clamp(o.z, -WORLD.size, WORLD.size) }; R.mon = null; }
-  if (o.type === 'attack') { const m = aliveMons().find((x) => x.sid === o.sid); if (m) { R.mon = m; R.move = null; } }
+  if (o.type === 'attack') { const m = aliveMons().find((x) => x.sid === o.sid); if (m) { R.mon = m; R.move = null; R.gather = null; } }
+  if (o.type === 'gather' && R.nodes && R.nodes[o.id] && !R.dungeon) { if (R.nodes[o.id].cd > 0) { toast(`Volta em ${Math.ceil(R.nodes[o.id].cd)}s.`); return; } R.gather = { id: o.id, t: 0 }; R.mon = null; R.move = null; }
 };
 
 
@@ -635,20 +823,22 @@ function killMonster(m) {
   const d = derived();
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
-  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1));
+  const sky = !R.dungeon ? worldSky(S.zone) : { night: 0, rain: false }, ev = eventNow();
+  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1));
   S.best = S.best || {}; const bk = S.best[m.name] || 0; S.best[m.name] = bk + 1;
   if (BEST_TIERS.includes(bk + 1)) log(`📖 Bestiário: ${m.icon} ${esc(m.name)} chegou a ${bk + 1} derrotados! (+0,25% dano e XP)`, 'lvl');
   if (S.companion) { S.petXp = S.petXp || {}; const pl = petLevel(S.companion); S.petXp[S.companion] = (S.petXp[S.companion] || 0) + 1; if (petLevel(S.companion) > pl) log(`🐾 Seu mascote evoluiu para o nível ${petLevel(S.companion)}!`, 'lvl'); }
   { const M = meter(); M.kills++; M.xp += xp; }
-  const gold = Math.round(m.gold * (1 + d.goldb / 100));
+  const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
-  S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
+  if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
-    S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.stats.bosses++;
-    S.zoneKills[S.zone] = 0;
+    if (m.wboss) worldBossReward(m);
+    if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
+    S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
     S.stones += rint(1, 3); dropGem(1, m.lvl);
     log(`👑 Chefe derrotado! Você recebeu Pedras de Refino.`, 'boss');
@@ -658,6 +848,7 @@ function killMonster(m) {
     if (Math.random() < 0.6) dropItem(genItem(m.lvl, 3));
     if (Math.random() < 0.3) { S.stones++; log('💎 O elite deixou uma Pedra de Refino!', 'loot'); }
     dropGem(0.35, m.lvl);
+    if (Math.random() < 0.25) { addMat('essencia', 1); log('✨ O elite deixou uma Essência!', 'loot'); }
   } else {
     if (Math.random() < 0.09) dropItem(genItem(m.lvl));
     dropGem(0.025, m.lvl);
@@ -823,6 +1014,7 @@ function tick() {
   if (R.reviveCd > 0) R.reviveCd -= dt;
   if (R.stealth > 0) R.stealth -= dt;
   S.hp = Math.min(S.hp, d.maxHp);
+  R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); }
 
   if (R.inTown) { // cidade: zona segura, recuperação rápida
     S.hp = Math.min(d.maxHp, S.hp + d.maxHp * 0.06 * dt);
@@ -866,14 +1058,17 @@ function playerAI(dt, d) {
   R.mounted = !!S.mount && traveling;
   R.moving = false;
   autoDodge();
+  if (R.nodes && !R.dungeon) for (const nd of R.nodes) if (nd.cd > 0) nd.cd -= dt;
   if (R.move) {
+    R.gather = null; R.gathering = false;
     if (stepTo(R.pos, R.move, speed * dt)) R.move = null;
     R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
     return;
   }
+  if (!R.dungeon && gatherStep(dt, speed)) return;
   if (!R.mon && S.settings.auto) { // no modo manual o herói só ataca o que o jogador tocar
     const attackers = aliveMons().filter((m) => m.aggro && !m.returning);
-    const pool = attackers.length ? attackers : aliveMons().filter((m) => dist2(m, R.pos) < 40 && !m.boss);
+    const pool = attackers.length ? attackers : aliveMons().filter((m) => (!m.boss || (m.wboss && S.lvl >= m.lvl - 6)));
     let best = null, bd = 1e9;
     for (const m of pool) { const dd = dist2(m, R.pos); if (dd < bd) { bd = dd; best = m; } }
     R.mon = best;
@@ -1268,11 +1463,12 @@ function drawMinimap() {
     for (const id in npc) { const [px, py] = PT(npc[id][0], npc[id][1]); g.fillText(ic[id], px, py); }
     const [hx, hy] = PT(0, 1.4); g.beginPath(); g.arc(hx, hy, 4, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
   } else {
-    label = R.dungeon ? `Masmorra ${R.dungeon.floor}/3` : zoneById(S.zone).name;
+    label = R.dungeon ? (R.dungeon.tower ? `Torre ${R.dungeon.floor}` : `Masmorra ${R.dungeon.floor}/3`) : zoneById(S.zone).name;
     if (R.dungeon) { g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, 16 * k, 0, Math.PI * 2); g.stroke(); }
     if (!R.dungeon) for (const c of zoneCamps(S.zone)) dot(c.x, c.z, 4, 'rgba(120,80,40,.6)');
     if (!R.dungeon) { const [ax, ay] = P(WORLD.arena.x, WORLD.arena.z); g.beginPath(); g.arc(ax, ay, 6 * k, 0, Math.PI * 2); g.strokeStyle = '#b060ff'; g.lineWidth = 2; g.stroke(); }
     if (!R.dungeon) dot(WORLD.entry.x, WORLD.entry.z, 3.5, '#60e080', '#000');
+    if (!R.dungeon && R.nodes) for (const nd of R.nodes) if (nd.cd <= 0) dot(nd.x, nd.z, 2.4, nd.type === 'essencia' ? '#60e0ff' : nd.type === 'erva' ? '#70e060' : '#c0b0a0', '#000');
     for (const m of aliveMons()) dot(m.x, m.z, m.boss ? 5 : m.elite ? 3.6 : 2.6, m.boss ? '#c070ff' : m.elite ? '#ffd040' : m.aggro ? '#ff4040' : '#ffaa40', '#000');
     if (R.move) dot(R.move.x, R.move.z, 2, '#80ff9a');
     if (R.pos) {
@@ -1329,8 +1525,10 @@ function renderLive() {
   // chefe
   const z = zoneById(S.zone);
   const k = S.zoneKills[S.zone] || 0;
-  if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
-  else if (!R.inTown) $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span>`;
+  if (R.dungeon && R.dungeon.tower) $('#zone-title').innerHTML = `🗼 Torre Infinita <span class="muted">(andar ${R.dungeon.floor} · recorde ${S.towerBest || 0})</span>`;
+  else if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
+  else if (!R.inTown) { const w = worldSky(S.zone), ev = eventNow();
+    $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> <span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} ${ev.name} ${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
   $('#boss-btn').classList.toggle('hidden', !!R.inTown || !!R.dungeon);
   $('#mute-btn').textContent = S.settings.muted ? '🔇' : '🔊';
   { const bb = $('#boss-bar'), bs = !R.inTown && aliveMons().find((m) => m.boss && (m.aggro || (R.pos && dist2(m, R.pos) < 22)));
@@ -1541,6 +1739,7 @@ const DAILY_TYPES = [
   { k: 'gold', t: (n) => `Ganhe ${fmt(n)} de ouro`, n: () => Math.round(800 * Math.pow(S.lvl, 1.4)) },
   { k: 'dungeons', t: (n) => `Conclua ${n} masmorra`, n: () => 1, minLvl: 6 },
   { k: 'quests', t: (n) => `Conclua ${n} missões do Comandante`, n: () => 3 },
+  { k: 'gather', t: (n) => `Faça ${n} coletas no mapa`, n: () => 12 },
 ];
 function dailyState() {
   const d = today();
@@ -1643,6 +1842,10 @@ const ACH = [
   { id: 'q10', name: 'Prestativo', desc: 'Conclua 10 missões', ok: () => Object.keys(questState().done).length >= 10, gold: 15000 },
   { id: 'q40', name: 'Herói do Povo', desc: 'Conclua as 40 missões', ok: () => Object.keys(questState().done).length >= 40, stones: 30, title: 'Herói do Povo' },
   { id: 'd1', name: 'Explorador de Masmorras', desc: 'Conclua uma masmorra', ok: () => (S.stats.dungeons || 0) >= 1, stones: 3 },
+  { id: 't10', name: 'Escalador', desc: 'Chegue ao andar 10 da Torre Infinita', ok: () => (S.towerBest || 0) >= 10, stones: 5 },
+  { id: 't30', name: 'Mestre da Torre', desc: 'Chegue ao andar 30 da Torre Infinita', ok: () => (S.towerBest || 0) >= 30, stones: 20, title: 'Mestre da Torre' },
+  { id: 'wb1', name: 'Caçador de Avatares', desc: 'Derrote um Chefe Mundial', ok: () => (S.stats.wbosses || 0) >= 1, stones: 8, title: 'Caçador de Avatares' },
+  { id: 'cr10', name: 'Mãos de Artesão', desc: 'Crie 10 itens com materiais coletados', ok: () => (S.stats.crafts || 0) >= 10, stones: 5 },
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
   { id: 'rb1', name: 'Renascido', desc: 'Renasça pela primeira vez', ok: () => (S.rebirths || 0) >= 1, stones: 30, title: 'Renascido' },
   { id: 'rb5', name: 'Imortal', desc: 'Renasça 5 vezes', ok: () => (S.rebirths || 0) >= 5, stones: 80, title: 'Imortal' },
@@ -1856,7 +2059,7 @@ function renderTab() {
 }
 
 function tabMaps() {
-  return `<div class="zone-list">${ZONES.map((z) => {
+  return tabTower() + `<div class="zone-list">${ZONES.map((z) => {
     const locked = S.lvl < z.min - 3;
     const cur = z.id === S.zone;
     return `<button class="zone ${cur ? 'active' : ''}" data-zone="${z.id}" ${locked ? 'disabled' : ''}>
@@ -1961,9 +2164,10 @@ function tabShop() {
 
 function tabRefine() {
   const ft = R.forgeTab || 'refinar';
-  const tabs = `<div class="sub-tabs">${[['refinar', '🔨 Refinar'], ['gemas', '💠 Gemas'], ['forjar', '⚒️ Forjar']].map(([k, n]) => `<button class="btn small ${ft === k ? 'primary' : ''}" data-ftab="${k}">${n}</button>`).join('')}</div>`;
+  const tabs = `<div class="sub-tabs">${[['refinar', '🔨 Refinar'], ['gemas', '💠 Gemas'], ['forjar', '⚒️ Forjar'], ['criar', '🌿 Criar']].map(([k, n]) => `<button class="btn small ${ft === k ? 'primary' : ''}" data-ftab="${k}">${n}</button>`).join('')}</div>`;
   if (ft === 'gemas') return tabs + tabGems();
   if (ft === 'forjar') return tabs + tabForge();
+  if (ft === 'criar') return tabs + tabCraft();
   return tabs + tabRefineItems();
 }
 function tabGems() {
@@ -2043,6 +2247,7 @@ function tabConfig() {
         <option value="2d" ${st.gfx === '2d' ? 'selected' : ''}>2D (mais leve)</option>
       </select></label>
     <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates, quando tiver nível para ele)</label>
+    <label class="check"><input type="checkbox" data-set="autoGather" ${st.autoGather !== false ? 'checked' : ''}> Coletar materiais automaticamente no modo Auto</label>
     <label class="check"><input type="checkbox" data-set="autoBuyPots" ${st.autoBuyPots ? 'checked' : ''}> Comprar poções menores automaticamente quando acabarem</label>
     <hr>
     <div class="row-btns">
@@ -2130,7 +2335,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2170,6 +2375,8 @@ document.addEventListener('click', (e) => {
   if (ds.chat) { R.chatTab = ds.chat; for (const b of document.querySelectorAll('.chat-tab[data-chat]')) b.classList.toggle('active', b.dataset.chat === ds.chat); renderLog(); return; }
   if (t.id === 'chat-min') { $('#chat').classList.toggle('min'); t.textContent = $('#chat').classList.contains('min') ? '▴' : '▾'; return; }
   if (ds.dun) { enterDungeon(ds.dun); return; }
+  if (ds.tower) { enterTower(ds.tower); return; }
+  if (ds.craft) { craft(ds.craft); return; }
   if (ds.ftab) { R.forgeTab = ds.ftab; return renderTab(); }
   if (ds.gcomb) { const [k, l] = ds.gcomb.split(':'); combineGem(k, +l); return; }
   if (ds.gin) { const [u, k] = ds.gin.split(':'); socketGem(u, k); return; }

@@ -231,3 +231,16 @@ const GEMS = {
   topazio:   { name: 'Topázio',   icon: '🟡', color: '#ffd24a', label: '% de esquiva', per: 0.6 },
   ametista:  { name: 'Ametista',  icon: '🟣', color: '#c070ff', label: ' de vida',     per: 60 },
 };
+
+// relógio do mundo: um dia dura 24 minutos reais; a chuva vem em janelas de 6 minutos (35% de chance, por mapa)
+const DAY_MIN = 24;
+function worldSky(zid) {
+  const t = Date.now();
+  const ph = (t / (DAY_MIN * 60000)) % 1;              // 0 = meio-dia, 0,5 = meia-noite
+  const night = Math.max(0, Math.min(1, (-Math.cos(ph * Math.PI * 2) - 0.25) / 0.6)); // 0 dia … 1 noite
+  const win = Math.floor(t / 360000), zi = (ZONES.findIndex((z) => z.id === zid) + 1) * 7919;
+  let h = (win * 2654435761 + zi) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0; h ^= h >>> 13;
+  const dry = ['z4', 'z5', 'z7', 'z8', 'z10'].includes(zid) || !/^z\d+$/.test(zid || ''); // caverna, deserto, neve, vulcão, abismo
+  const rain = !dry && (h % 100) < 35;
+  return { night, rain, isNight: night > 0.5, phase: ph };
+}

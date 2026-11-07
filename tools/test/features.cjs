@@ -52,6 +52,22 @@ const startServer = require('./server.cjs');
     ok('Bestiário conta e dá marco', S.best['Lobo Filhote'] === 50 && bestTiers() === 1);
     S.owned = { pet1: true }; S.companion = 'pet1'; S.petXp = { pet1: 6000 }; ok('Mascote evolui', petLevel('pet1') === 10);
     ok('Medidor de dano registra', meter().kills >= 50 && meter().dmg >= 0 && tabStats().includes('por hora'));
+    // bloco 2: torre, eventos, chefe mundial, clima, coleta e artesanato
+    novo('lanceiro', 40, { tut: 99 }); enterTower('1'); ok('Entrar na Torre Infinita', !!R.dungeon && R.dungeon.tower && R.mons.length > 0);
+    for (let f = 0; f < 5; f++) { for (const m of aliveMons()) { m.hp = 0; killMonster(m); } ticks(30); }
+    ok('Subir andares da torre (chefe no 5)', S.towerBest >= 5 && R.dungeon && R.dungeon.floor === 6, `recorde ${S.towerBest}`);
+    die(aliveMons()[0]); ok('Morrer sai da torre', !R.dungeon); R.dead = 0; S.hp = derived().maxHp; ticks(2);
+    const ev = eventNow(); ok('Eventos em rodízio', !!(ev.id || ev.next) && EVENTS.length === 4);
+    { let t = Date.now(); while (eventNow(t).id !== 'boss') t += 60000; ok('Chefe mundial no rodízio', eventNow(t).id === 'boss'); }
+    R.mons = []; spawnWorldBoss(eventNow().slot); const wb = R.mons.find((m) => m.wboss); const st0 = S.stones; wb.hp = 0; killMonster(wb);
+    ok('Chefe mundial dá prêmio', !!wb && S.stones > st0 && S.stats.wbosses === 1 && wb.name.startsWith('Avatar'));
+    const sk = worldSky('z1'); ok('Dia/noite e chuva', sk.night >= 0 && sk.night <= 1 && typeof sk.rain === 'boolean' && worldSky('z8').rain === false);
+    initWorld(); ok('Pontos de coleta no mapa', R.nodes.length === 6);
+    const nd = R.nodes[0]; R.mons = []; R.pos = { x: nd.x, z: nd.z }; window.gameOrder({ type: 'gather', id: 0 }); const mat0 = (S.mats || {})[nd.type] || 0; ticks(30);
+    ok('Coletar material', ((S.mats || {})[nd.type] || 0) > mat0 && nd.cd > 0, `${nd.type}`);
+    S.mats = { erva: 50, minerio: 50, essencia: 50 }; const hp0 = S.pots.hp2 || 0, ston = S.stones; craft('vida'); craft('pedra');
+    ok('Artesanato cria poções e pedra', S.pots.hp2 >= hp0 + 5 && S.stones > ston && tabCraft().includes('Criar'));
+    ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });
   const pwa = await p.evaluate(async () => { try { const m = await (await fetch('manifest.webmanifest')).json(); const sw = await fetch('sw.js'); return m.icons.length === 3 && sw.ok; } catch (e) { return false; } });

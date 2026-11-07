@@ -1158,6 +1158,7 @@ const Scene3D = (() => {
     else if (now() >= (md.busyUntil || 0)) {
       if (R.inTown) playAnim(h, h.walk ? 'Walking_A' : 'Idle', { fade: 0.2 });
       else if (st.run) playAnim(h, R.mounted && S.mount ? 'Idle' : 'Running_A', { fade: 0.15 });
+      else if (R.gathering) playAnim(h, 'Interact', { fade: 0.2 });
       else playAnim(h, st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
     }
     md.mixer.update(dt);
@@ -1208,7 +1209,7 @@ const Scene3D = (() => {
     const dark = th.cave || th.amb === 'star' || th.amb === 'wisp';
     scene.background = skyTex(th.sky[0], th.sky[1]);
     scene.fog = new THREE.Fog(th.sky[1], 24, 68);
-    root.add(new THREE.HemisphereLight(th.sky[1], th.g[1], dark ? 0.75 : 0.85));
+    const hemi = new THREE.HemisphereLight(th.sky[1], th.g[1], dark ? 0.75 : 0.85); root.add(hemi);
     const sun = new THREE.DirectionalLight(th.amb === 'ember' ? '#ffa060' : dark ? '#b0c0ff' : '#fff4e0', dark ? 0.8 : 1.05);
     sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -15, right: 15, top: 15, bottom: -15, near: 1, far: 50 });
@@ -1249,11 +1250,85 @@ const Scene3D = (() => {
     // entrada: duas tochas
     for (const sx of [-2, 2]) { mk(G.cyl(0.08, 0.1, 1.8, 6), M('#4a3a2a'), root, entry.x + sx, 0.9, entry.z + 1.5); const tg = glowSprite('#ffb050', 1.2, 0.8); tg.position.set(entry.x + sx, 1.9, entry.z + 1.5); root.add(tg); }
     scene.add(root);
-    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, world: true, sun, rune };
+    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, world: true, sun, rune, zid,
+      cyc: { hemi, fill, sunI: sun.intensity, hemiI: hemi.intensity, fillI: fill.intensity, hemiC: hemi.color.clone(), sunC: sun.color.clone(),
+        fogC: new THREE.Color(th.sky[1]), skyDay: scene.background, skyNight: null, night: -1, lit: [] } };
+    // à noite as fogueiras e tochas brilham mais
+    root.traverse((o) => { if (o.isSprite) env.cyc.lit.push({ o, s: o.scale.x }); });
+  }
+
+  // ---------- pontos de coleta ----------
+  function buildNode(type) {
+    const g = new THREE.Group(), M = matFactory(null);
+    if (type === 'minerio') {
+      for (let i = 0; i < 4; i++) { const r0 = mk(G.dod(0.32 + i * 0.05), M(i % 2 ? '#6a6670' : '#7a7680'), g, Math.cos(i * 1.7) * 0.35, 0.22, Math.sin(i * 1.7) * 0.35); r0.rotation.set(i, i * 2, 0); }
+      for (let i = 0; i < 5; i++) mk(G.box(0.1, 0.1, 0.1), M('#ff9a30', { e: '#ff7a10', ei: 0.8 }), g, Math.cos(i * 1.3) * 0.32, 0.35 + (i % 2) * 0.15, Math.sin(i * 1.3) * 0.32);
+    } else if (type === 'erva') {
+      for (let i = 0; i < 6; i++) { const c = mk(G.cone(0.12, 0.55, 5), M('#3a9a3a'), g, Math.cos(i) * 0.25, 0.27, Math.sin(i) * 0.25); c.rotation.z = Math.cos(i) * 0.3; }
+      for (let i = 0; i < 4; i++) mk(G.sph(0.08, 6), M(i % 2 ? '#ff70c0' : '#fff070', { e: i % 2 ? '#ff40a0' : '#ffe040', ei: 0.5 }), g, Math.cos(i * 1.6) * 0.3, 0.55, Math.sin(i * 1.6) * 0.3);
+    } else {
+      for (let i = 0; i < 3; i++) { const c = mk(G.cone(0.16, 0.9 - i * 0.2, 5), M('#70e0ff', { e: '#30b0ff', ei: 0.9, op: 0.9 }), g, (i - 1) * 0.2, 0.4 - i * 0.08, (i % 2) * 0.15); c.rotation.z = (i - 1) * 0.35; }
+    }
+    const gl = glowSprite(type === 'essencia' ? '#60d0ff' : type === 'erva' ? '#90ff70' : '#ffb050', 1.6, 0.5); gl.position.y = 0.5; g.add(gl); g.userData.glow = gl;
+    return g;
+  }
+  function updateNodes(t, dt) {
+    if (!env || !env.world || R.dungeon || R.inTown || !R.nodes) return;
+    if (env.nodeZone !== R.worldZone || !env.nodes) {
+      if (env.nodes) for (const n of env.nodes) env.root.remove(n.g);
+      env.nodeZone = R.worldZone;
+      env.nodes = R.nodes.map((nd) => { const g = buildNode(nd.type); g.position.set(nd.x, 0, nd.z); g.userData.node = nd.id + 1; g.traverse((o) => { o.userData.node = nd.id + 1; }); env.root.add(g); return { g, nd }; });
+    }
+    for (const n of env.nodes) {
+      const nd = R.nodes[n.nd.id] || n.nd, on = nd.cd <= 0, k = on ? 1 : 0.35;
+      n.g.scale.setScalar(lerp(n.g.scale.x, k, Math.min(1, dt * 4)));
+      n.g.userData.glow.material.opacity = on ? 0.4 + Math.sin(t * 3 + nd.id) * 0.15 : 0;
+      if (R.gathering && R.gather && R.gather.id === nd.id && Math.random() < dt * 8) burst(new THREE.Vector3(nd.x, 0.5, nd.z), nd.type === 'essencia' ? '#80e0ff' : nd.type === 'erva' ? '#a0ff80' : '#ffb060', 3, 1.5, 0.08, 1.5);
+    }
+  }
+
+  // ---------- dia, noite e chuva (só no mundo aberto) ----------
+  const NIGHT_HEMI = new THREE.Color('#3a4a80'), NIGHT_SUN = new THREE.Color('#8090d0'), NIGHT_FOG = new THREE.Color('#141c34'), RAIN_FOG = new THREE.Color('#6a7480');
+  let skyT = 0, boltT = 4;
+  function skyCycle(dt) {
+    const c = env && env.cyc;
+    if (!c || typeof worldSky !== 'function') return;
+    skyT -= dt;
+    if (skyT > 0 && c.night >= 0) return;
+    skyT = 0.5;
+    const w = worldSky(env.zid), dark = env.th.cave || env.th.amb === 'star' || env.th.amb === 'wisp';
+    const n = w.night * (dark ? 0.5 : 1), rk = w.rain ? 1 : 0;
+    c.night = n; env.rain = w.rain;
+    env.sun.intensity = c.sunI * (1 - 0.6 * n) * (1 - 0.5 * rk);
+    c.hemi.intensity = c.hemiI * (1 - 0.4 * n) * (1 - 0.3 * rk);
+    c.hemi.color.copy(c.hemiC).lerp(RAIN_FOG, rk * 0.4);
+    c.fill.intensity = c.fillI * (1 - 0.3 * n);
+    c.hemi.color.lerp(NIGHT_HEMI, n * 0.7);
+    env.sun.color.copy(c.sunC).lerp(NIGHT_SUN, n * 0.8);
+    scene.fog.color.copy(c.fogC).lerp(RAIN_FOG, rk * 0.5).lerp(NIGHT_FOG, n * 0.85);
+    scene.fog.far = 68 - rk * 18;
+    if (n > 0.55) { if (!c.skyNight) c.skyNight = skyTex('#03050f', '#141c34'); scene.background = c.skyNight; }
+    else scene.background = rk ? (c.skyRain || (c.skyRain = skyTex('#4a525e', '#8a929c'))) : c.skyDay;
+    for (const l of c.lit) l.o.scale.setScalar(l.s * (1 + n * 0.6));
+  }
+  function rainFx(dt) {
+    if (!env || !env.rain || !env.cyc) return;
+    const qm = Q === 'baixa' ? 0.25 : Q === 'media' ? 0.55 : 1, hp = st.hero ? st.hero.root.position : { x: 0, z: 0 };
+    let k = 160 * qm * dt;
+    while (k > 0) {
+      if (Math.random() < k) {
+        const p = { x: hp.x + rand(-11, 11), y: rand(5, 8), z: hp.z + rand(-9, 7), vx: -0.8, vy: -13, vz: 0, life: 0.55, size: 0.085, scroll: false };
+        p.r = 0.75; p.gg = 0.85; p.b = 1; spawnP(p);
+        if (Math.random() < 0.15) { const sp = { x: p.x + rand(-2, 2), y: 0.05, z: p.z + rand(-2, 2), vx: 0, vy: 0.6, vz: 0, life: 0.25, size: 0.07, scroll: false, r: 0.8, gg: 0.9, b: 1 }; spawnP(sp); }
+      }
+      k -= 1;
+    }
+    boltT -= dt;
+    if (boltT <= 0) { boltT = rand(9, 22); if (Math.random() < 0.5) { flashScreen(); if (window.Sfx && Sfx.play) later(0.4, () => Sfx.play('boom', { gap: 500 })); } }
   }
 
   function buildDungeon(zid, th, M, root) {
-    const floor = R.dungeon ? R.dungeon.floor : 1;
+    const floor = R.dungeon ? R.dungeon.floor : 1, bossF = R.dungeon && (R.dungeon.tower ? R.dungeon.boss : floor === 3), tower = R.dungeon && R.dungeon.tower;
     scene.background = skyTex('#05040a', '#120e1c');
     scene.fog = new THREE.Fog('#120e1c', 12, 36);
     root.add(new THREE.HemisphereLight('#8a80b0', '#1a1420', 0.6));
@@ -1264,7 +1339,7 @@ const Scene3D = (() => {
     const gtex = groundTex(new THREE.Color(th.g[0]).multiplyScalar(0.55).getStyle(), new THREE.Color(th.g[1]).multiplyScalar(0.45).getStyle()); gtex.repeat.set(14, 14);
     const ground = new THREE.Mesh(new THREE.CircleGeometry(17, 48), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; root.add(ground);
-    const wallM = M('#3a3444'), capM = M('#4e4658');
+    const wallM = M(tower ? '#4a4038' : '#3a3444'), capM = M(tower ? '#6a5a40' : '#4e4658');
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * Math.PI * 2, h = 3.2 + (i % 3) * 0.6;
       const w = mk(G.box(3.9, h, 1), wallM, root, Math.cos(a) * 16.5, h / 2, Math.sin(a) * 16.5); w.rotation.y = -a + Math.PI / 2; w.receiveShadow = true;
@@ -1272,7 +1347,7 @@ const Scene3D = (() => {
     }
     const r = seeded(ZONES.findIndex((z) => z.id === zid) * 53 + floor * 7);
     for (let i = 0; i < 18; i++) { const a = r() * 6.28, d = 6 + r() * 8; const p = buildProp(th.deco === 'crystal' || th.deco === 'spike' || th.deco === 'tomb' ? th.deco : 'rock', th, M); p.position.set(Math.cos(a) * d, 0, Math.sin(a) * d - 2); p.scale.setScalar(0.9 + r() * 0.6); root.add(p); }
-    const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: floor === 3 ? '#ff4060' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, floor === 3 ? -7 : -3, false);
+    const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: bossF ? '#ff4060' : tower ? '#e0b040' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, bossF ? -7 : -3, false);
     rune.rotation.x = -Math.PI / 2;
     scene.add(root);
     env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th: { amb: 'dust' }, stars: null, world: true, sun, rune };
@@ -1427,8 +1502,10 @@ const Scene3D = (() => {
     ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     const roots = [...st.ents.values()].map((e) => e.root);
+    if (env && env.nodes && !R.dungeon) for (const n of env.nodes) roots.push(n.g);
     const hit = raycaster.intersectObjects(roots, true).find((h) => h.object.isMesh && h.object.material && h.object.material.visible !== false);
     if (hit) {
+      if (hit.object.userData.node) { window.gameOrder && window.gameOrder({ type: 'gather', id: hit.object.userData.node - 1 }); return; }
       let o = hit.object; while (o && !o.userData.sid) o = o.parent;
       if (o) { window.gameOrder && window.gameOrder({ type: 'attack', sid: o.userData.sid }); return; }
     }
@@ -2260,7 +2337,8 @@ const Scene3D = (() => {
     live.forEach((m, i) => {
       let e = st.ents.get(m.sid);
       if (!e) {
-        e = buildMonster(m.name, m.boss); e.sid = m.sid;
+        e = buildMonster(m.skin || m.name, m.boss); e.sid = m.sid;
+        if (m.wboss) { e.root.scale.multiplyScalar(1.45); const gw = glowSprite('#ff3060', 5, 0.35); gw.position.y = 1.2; e.root.add(gw); }
         const sp = slotPos(i, m.boss);
         e.root.position.set(m.x != null ? m.x : sp.x, 0, m.z != null ? m.z : sp.z);
         e.root.userData.sid = m.sid;
@@ -2516,7 +2594,7 @@ const Scene3D = (() => {
     updateTelegraphs();
     updateCompanions(t, dt);
     updateOthers(t, dt);
-    ambient(dt);
+    ambient(dt); skyCycle(dt); rainFx(dt); updateNodes(t, dt);
     updateParticles(dt);
     if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
     updateCamera(t, dt);
