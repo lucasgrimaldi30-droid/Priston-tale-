@@ -71,7 +71,7 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true, autoAlma: true },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true, autoAlma: false, almaV2: true },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
     lastSave: Date.now(), tut: 0,
   };
@@ -1452,7 +1452,8 @@ function startGame(i) {
   if (!S.settings.quality) S.settings.quality = matchMedia('(max-width: 760px)').matches ? 'media' : 'alta';
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
-  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, autoAlma: true, ...S.settings };
+  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, autoAlma: false, ...S.settings };
+  if (!S.settings.almaV2) { S.settings.almaV2 = true; S.settings.autoAlma = false; } // a montagem automática passou a ser opcional (desligada)
   R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, tradeSel: new Set(), tradeGold: 0, coop: null, dirty: { all: true } };
   const off = offlineProgress();
   const d = derived();
@@ -1996,7 +1997,7 @@ function consecrate(uidv) {
   });
 }
 function artPlace(spot) {
-  artState();
+  artState(); manualAlma();
   if (!R.artSel) { if (S.artCross[spot]) { delete S.artCross[spot]; renderTab(); } return; }
   for (const k of ART_SPOTS) if (S.artCross[k] === R.artSel) delete S.artCross[k];
   S.artCross[spot] = R.artSel; R.artSel = null; Sfx.play('click'); renderTab(); R.dirty.all = true;
@@ -2046,8 +2047,9 @@ function dropSoul(chance, lvl, n = 1) {
   Sfx.play('loot', { rarity: 3, gap: 100 }); R.dirty.inv = true;
   autoAlmaMaybe();
 }
+function manualAlma() { if (S.settings.autoAlma) { S.settings.autoAlma = false; log('🔮 Você está montando do seu jeito: "Remontar sozinho" foi desligado.', 'muted'); } }
 function soulPlace(i) {
-  const so = soulState();
+  const so = soulState(); manualAlma();
   if (!soulCellOpen(i)) { toast(`Abre com mais nível (até o nível 100 todas abrem).`); return; }
   const cur = so.grid[i];
   if (cur) { so.bag[cur.t][cur.l - 1]++; so.grid[i] = null; }
@@ -2153,8 +2155,9 @@ function autoArts(quiet) {
 function autoAlmaMaybe() { if (S.settings.autoAlma) { autoSoul(true); autoArts(true); } }
 function buildBox() {
   const b = buildWeights();
-  return `<div class="build-box"><b>✨ Sugestão para ${esc(CLASSES[S.cls].name)}</b><small>Ela ${esc(b.why)}: prioridade <b>${b.order.slice(0, 3).map((t) => SOUL[t].icon + ' ' + SOUL[t].name).join(', ')}</b>. ${esc(b.tilt)}</small>
-    <div class="row-btns"><button class="btn small primary" data-act="auto-alma">Montar Alma e Artefatos</button><label class="check"><input type="checkbox" data-set="autoAlma" ${S.settings.autoAlma ? 'checked' : ''}> Remontar sozinho</label></div></div>`;
+  return `<div class="build-box"><b>✨ Sugestão para ${esc(CLASSES[S.cls].name)} <span class="muted">(opcional)</span></b><small>Ela ${esc(b.why)}: a sugestão prioriza <b>${b.order.slice(0, 3).map((t) => SOUL[t].icon + ' ' + SOUL[t].name).join(', ')}</b>. ${esc(b.tilt)}</small>
+    <small>Você pode montar do seu jeito: qualquer pedra em qualquer espaço e qualquer artefato na cruz. Todas as combinações valem para todas as classes.</small>
+    <div class="row-btns"><button class="btn small" data-act="auto-alma">Usar a sugestão</button><label class="check"><input type="checkbox" data-set="autoAlma" ${S.settings.autoAlma ? 'checked' : ''}> Remontar sozinho com a sugestão</label></div></div>`;
 }
 
 // ---------- missão semanal (dá pedras da Alma) ----------

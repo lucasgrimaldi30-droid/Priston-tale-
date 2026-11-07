@@ -71,7 +71,10 @@ Regra do dono: **cada personagem reforça o que falta**. Quem já bate muito bus
 - `buildWeights()` ajusta pelos pontos do herói: parte em vitalidade acima de 40% puxa para ataque; abaixo puxa para defesa (×0,6 a ×1,6).
 - `autoSoul()` monta linhas inteiras do mesmo tipo para as prioridades (centro primeiro), usa Harmonia quando não dá linha igual e respeita
   os espaços abertos. `autoArts()` põe no centro a peça ligada à prioridade (`T2SLOT`: ataque = luvas, crítico = arma, defesa = armadura,
-  vida = elmo, resistência = anel) e nos lados os que mais ampliam. Com `S.settings.autoAlma` (ligado por padrão) remonta ao cair pedra ou artefato.
+  vida = elmo, resistência = anel) e nos lados os que mais ampliam. Com `S.settings.autoAlma` remonta ao cair pedra ou artefato.
+- **A sugestão é opcional (pedido do dono):** o jogador monta como quiser — qualquer pedra em qualquer espaço, qualquer artefato em qualquer
+  posição, e todas as combinações valem para todas as classes. `autoAlma` vem **desligado**; montar à mão (`manualAlma`) desliga sozinho.
+  Nunca prenda um bônus a uma classe nem desfaça a montagem do jogador sem ele pedir.
 - Ao mexer em números de classe, confira se a prioridade continua fazendo sentido e rode `balance.cjs`.
 
 ## Mapas escondidos (desvios)
