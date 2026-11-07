@@ -92,6 +92,21 @@ const startServer = require('./server.cjs');
     S.visited = { b1: 1, b2: 1, b3: 1, b4: 1 }; checkAch(); ok('Conquista Desbravador', !!S.ach.exp4);
     S.settings.auto = true; S.lvl = 35; R.travelT = 0; for (let i = 0; i < 600 && S.zone === 'b2'; i++) { R.mons = []; tick(); }
     ok('Auto sai do desvio quando fica fácil', S.zone === 'z4' || S.zone === 'z5', S.zone);
+    // alma, artefatos e missão semanal
+    novo('gladiador', 100, { tut: 99 }); S.settings.auto = false;
+    const atk0b = derived().atkMin, crit0 = derived().crit;
+    soulState(); S.soul.bag.atk[0] = 5; R.soulSel = { t: 'atk', l: 1 }; for (const i of [10, 11, 12, 13, 14]) soulPlace(i);
+    ok('Alma: linha de 5 iguais vira combinação', soulLines().length === 1 && soulLines()[0].kind === 'same' && derived().atkMin > atk0b);
+    for (const t of Object.keys(SOUL)) S.soul.bag[t][0] += 3; soulCombine('crit', 0); ok('Alma: juntar 3 pedras', S.soul.bag.crit[1] === 1);
+    const ar = genItem(90, 5, 'arma'); ar.refine = 10; ar.rarity = 'lendario'; S.inv.push(ar);
+    consecrate(ar.uid); document.getElementById('dlg-ok').click(); await new Promise((r) => setTimeout(r, 50));
+    ok('Consagrar item +10 vira artefato', S.arts.length === 1 && !S.inv.includes(ar) && R.win === 'alma');
+    R.artSel = S.arts[0].uid; artPlace('c'); ok('Artefato no centro dá crítico', derived().crit > crit0 && artTotal().k === 'crit');
+    for (let k = 0; k < 4; k++) { S.arts.push({ uid: 'a' + k, name: 'X', slot: 'arma', rarity: 'lendario', ilvl: 100 }); R.artSel = 'a' + k; artPlace(ART_SPOTS[k + 1]); }
+    ok('Os 4 de volta ampliam (com ressonância)', artTotal().amp > 2.5, 'x' + artTotal().amp.toFixed(2));
+    ok('Janela Alma abre', (R.almaTab = 'grade', tabAlma().includes('soul-grid')) && (R.almaTab = 'art', tabAlma().includes('art-cross')));
+    const W = weeklyState(); dailyProgress('bosses', 12); ok('Missão semanal avança e paga', W.prog[1] === 12 && (claimWeekly(1), W.claimed[1]));
+    const sb = JSON.stringify(soulState().bag); for (let i = 0; i < 20; i++) dropSoul(1, 100); ok('Pedras da Alma caem', JSON.stringify(soulState().bag) !== sb);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

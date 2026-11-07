@@ -348,6 +348,9 @@ function derived() {
   const SB = {}; setBonus(SB);
   const SP = (specOf() || {}).b || {};
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SP[k]) SB[k] = (SB[k] || 0) + SP[k];
+  // alma e artefato
+  const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
+  for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
   bonus.xpb += (SB.xpb || 0) + rb * 10; bonus.gold += rb * 10; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * 10;
@@ -376,7 +379,7 @@ function derived() {
     aps: c.speed * (1 + A.agi / 400) * (1 + buff('spd')),
     evade: clamp(A.agi * 0.0012 + buff('evade') + bonus.evadep / 100, 0, 0.55),
     block: clamp((S.equip.escudo ? 0.08 : 0) + buff('block'), 0, 0.6),
-    absorb: clamp(buff('absorb'), 0, 0.6),
+    absorb: clamp(buff('absorb') + (SO.absorb || 0), 0, 0.6),
     reflect: buff('reflect'),
     mshield: clamp(buff('mshield') + (SP.mshield || 0), 0, 0.8),
     undead: buff('undead') + (SP.undead || 0),
@@ -699,7 +702,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20); dailyProgress('dungeons');
+  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons');
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -760,7 +763,7 @@ function towerClear() {
   let msg = `✅ Andar ${f} vencido! +${fmt(gold)} ouro`;
   if (first) {
     S.towerBest = f;
-    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
+    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
     msg += ' (novo recorde!)';
   }
   log(msg + '. Subindo...', 'lvl');
@@ -912,7 +915,7 @@ function killMonster(m) {
     if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
     S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
-    S.stones += rint(1, 3); dropGem(1, m.lvl);
+    S.stones += rint(1, 3); dropGem(1, m.lvl); dropSoul(0.6, m.lvl, m.wboss ? 3 : 1);
     log(`👑 Chefe derrotado! Você recebeu Pedras de Refino.`, 'boss');
   } else if (m.roamer) {
     S.stats.elites = (S.stats.elites || 0) + 1; S.stats.roamers = (S.stats.roamers || 0) + 1;
@@ -923,11 +926,11 @@ function killMonster(m) {
     log(`⭐ Monstro elite derrotado!`, 'boss');
     if (Math.random() < 0.6) dropItem(genItem(m.lvl, 3));
     if (Math.random() < 0.3) { S.stones++; log('💎 O elite deixou uma Pedra de Refino!', 'loot'); }
-    dropGem(0.35, m.lvl);
+    dropGem(0.35, m.lvl); dropSoul(0.06, m.lvl);
     if (Math.random() < 0.25) { addMat('essencia', 1); log('✨ O elite deixou uma Essência!', 'loot'); }
   } else {
     if (Math.random() < 0.09) dropItem(genItem(m.lvl));
-    dropGem(0.025, m.lvl);
+    dropGem(0.025, m.lvl); dropSoul(0.004, m.lvl);
     if (Math.random() < 0.012) { S.stones++; log('💎 Você encontrou uma Pedra de Refino!', 'loot'); }
   }
   gainXp(xp);
@@ -1403,6 +1406,10 @@ function makeFullChar(name, cls, wtype) {
   const gemOrder = ['rubi', 'ametista', 'esmeralda', 'safira'];
   for (const sl of SLOT_ORDER) if (S.equip[sl]) S.equip[sl].gems = gemOrder.slice(0, sockets(S.equip[sl])).map((t) => ({ t, l: 5 }));
   S.owned = { mount2: true, pet2: true }; S.mount = 'mount2'; S.companion = 'pet2'; S.petXp = { pet2: 6000 };
+  // artefatos (cruz completa com ressonância) e alma completa (quadrado latino: toda linha e coluna em Harmonia)
+  S.arts = []; S.artCross = {};
+  ['luvas', 'luvas', 'arma', 'armadura', 'luvas'].forEach((sl, k) => { const a = { uid: uid(), name: (sl === 'arma' ? 'Relíquia' : ARMOR_SLOTS[sl].names[5]) + ' Consagrada', slot: sl, rarity: 'lendario', ilvl: 100, set: null, wtype: null }; S.arts.push(a); S.artCross[ART_SPOTS[k]] = a.uid; });
+  { const ts = Object.keys(SOUL); S.soul = { grid: Array.from({ length: 25 }, (_, i) => ({ t: ts[(Math.floor(i / 5) + i % 5) % 5], l: 5 })), bag: {} }; soulState(); for (const t of ts) S.soul.bag[t] = [6, 3, 1, 0, 0]; }
   S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
   S.zoneKills = { z10: 25 };
@@ -1798,7 +1805,7 @@ function renderChar() {
 }
 
 function itemIcon(it) {
-  if (it.slot === 'arma') return CLASSES[Object.keys(CLASSES).find((k) => CLASSES[k].weapon === it.wtype)].icon;
+  if (it.slot === 'arma') { const k = Object.keys(CLASSES).find((c) => CLASSES[c].weapon === it.wtype); return k ? CLASSES[k].icon : '⚔️'; }
   return ARMOR_SLOTS[it.slot].icon;
 }
 function itemTitle(it) { return `${esc(it.name)}${it.refine ? ' +' + it.refine : ''}`; }
@@ -1947,6 +1954,165 @@ function chatCommand(txt) {
   R.dirty.log = true; renderLog();
 }
 
+// ---------- 🏺 Artefatos: itens +10 consagrados; cruz de 5 (o centro dá o poder, os 4 de volta ampliam) ----------
+const ART_POWER = { // poder de cada tipo de peça (valor por unidade de força)
+  arma:     { k: 'crit',    label: 'de crítico',            per: 0.4,   fmt: (v) => v.toFixed(1) + '%' },
+  armadura: { k: 'defp',    label: 'de defesa',             per: 1.2,   fmt: (v) => v.toFixed(0) + '%' },
+  botas:    { k: 'spd',     label: 'de velocidade de ataque',    per: 0.008, fmt: (v) => '+' + (v * 100).toFixed(0) + '%' },
+  elmo:     { k: 'hpp',     label: 'de vida',               per: 1.5,   fmt: (v) => v.toFixed(0) + '%' },
+  luvas:    { k: 'atkp',    label: 'de ataque',             per: 1.2,   fmt: (v) => v.toFixed(0) + '%' },
+  escudo:   { k: 'block',   label: 'de bloqueio',      per: 0.004, fmt: (v) => '+' + (v * 100).toFixed(1) + '%' },
+  amuleto:  { k: 'critdmg', label: 'de dano crítico',            per: 0.02,  fmt: (v) => '+' + (v * 100).toFixed(0) + '%' },
+  anel:     { k: 'absorb',  label: 'de dano recebido (resistência)', per: 0.003, fmt: (v) => '-' + (v * 100).toFixed(1) + '%' },
+};
+const ART_SPOTS = ['c', 'n', 'l', 'o', 's'], ART_MAX = 24;
+function artForce(a) { return (1 + RARITIES.findIndex((r) => r.id === a.rarity) * 0.5) * (1 + a.ilvl / 50); }
+function artAmp(a, c) { // quanto um artefato do lado amplia o centro
+  let v = 0.1 + 0.04 * RARITIES.findIndex((r) => r.id === a.rarity);
+  if (c && (a.slot === c.slot || (a.set && a.set === c.set))) v *= 1.5; // ressonância
+  return v;
+}
+function artState() { S.arts = S.arts || []; S.artCross = S.artCross || {}; return S; }
+function artAt(spot) { artState(); return S.arts.find((a) => a.uid === S.artCross[spot]) || null; }
+function artTotal() { // { k, v, amp } do centro já ampliado
+  const c = artAt('c'); if (!c) return null;
+  let amp = 1; for (const sp of ART_SPOTS.slice(1)) { const a = artAt(sp); if (a) amp += artAmp(a, c); }
+  const P = ART_POWER[c.slot]; return { k: P.k, v: artForce(c) * P.per * amp, amp, P };
+}
+function consecrate(uidv) {
+  artState();
+  const eqSlot = SLOT_ORDER.find((sl) => S.equip[sl] && S.equip[sl].uid === uidv);
+  const it = eqSlot ? S.equip[eqSlot] : S.inv.find((i) => i.uid === uidv);
+  if (!it || (it.refine || 0) < 10) { toast('Só itens +10 podem virar artefato.', 'bad'); return; }
+  if (S.arts.length >= ART_MAX) { toast(`Limite de ${ART_MAX} artefatos.`, 'bad'); return; }
+  uiConfirm('Consagrar item', `${it.name} +10 vai se transformar em artefato e sair da mochila. Continuar?`, 'Consagrar').then((y) => {
+    if (!y) return;
+    if (eqSlot) S.equip[eqSlot] = null; else S.inv = S.inv.filter((i) => i !== it);
+    const slot = it.slot || 'arma';
+    S.arts.push({ uid: uid(), name: it.name, slot, rarity: it.rarity, ilvl: it.ilvl, set: it.set || null, wtype: it.wtype || null });
+    S.stats.arts = (S.stats.arts || 0) + 1;
+    log(`🏺 <b>${esc(it.name)}</b> virou artefato! Coloque na cruz da janela Alma.`, 'lvl'); Sfx.play('levelup'); toast('Artefato criado!', 'good');
+    R.sel = null; R.refSel = null; R.dirty.all = true; R.win = null; R.almaTab = 'art'; openWin('alma');
+  });
+}
+function artPlace(spot) {
+  artState();
+  if (!R.artSel) { if (S.artCross[spot]) { delete S.artCross[spot]; renderTab(); } return; }
+  for (const k of ART_SPOTS) if (S.artCross[k] === R.artSel) delete S.artCross[k];
+  S.artCross[spot] = R.artSel; R.artSel = null; Sfx.play('click'); renderTab(); R.dirty.all = true;
+}
+
+// ---------- 🔮 Alma: grade 5×5 de pedras; linhas e colunas formam combinações ----------
+const SOUL = {
+  atk:  { name: 'Ataque',      icon: '⚔️', color: '#ff7050', k: 'atkp',   per: 1.5,   fmt: (v) => '+' + v.toFixed(1) + '% ataque' },
+  crit: { name: 'Crítico',     icon: '💥', color: '#ffd040', k: 'crit',   per: 0.5,   fmt: (v) => '+' + v.toFixed(1) + '% crítico' },
+  vit:  { name: 'Vitalidade',  icon: '❤️', color: '#ff5080', k: 'hpp',    per: 2,     fmt: (v) => '+' + v.toFixed(1) + '% vida' },
+  def:  { name: 'Defesa',      icon: '🛡️', color: '#60a0ff', k: 'defp',   per: 2,     fmt: (v) => '+' + v.toFixed(1) + '% defesa' },
+  res:  { name: 'Resistência', icon: '🌀', color: '#a070ff', k: 'absorb', per: 0.005, fmt: (v) => '-' + (v * 100).toFixed(1) + '% dano recebido' },
+};
+const SOUL_ORDER = [12, 7, 11, 13, 17, 6, 8, 16, 18, 2, 10, 14, 22, 1, 3, 5, 9, 15, 19, 21, 23, 0, 4, 20, 24]; // do centro para fora
+function soulState() { S.soul = S.soul || { grid: Array(25).fill(null), bag: {} }; for (const t in SOUL) S.soul.bag[t] = S.soul.bag[t] || [0, 0, 0, 0, 0]; return S.soul; }
+function soulOpen() { return Math.min(25, 9 + Math.floor(Math.max(0, S.lvl - 20) / 5)); }
+const soulCellOpen = (i) => SOUL_ORDER.indexOf(i) < soulOpen();
+function soulLines() { // 5 linhas + 5 colunas com o que formam
+  const g = soulState().grid, out = [];
+  for (let k = 0; k < 5; k++) for (const dir of ['row', 'col']) {
+    const cells = [0, 1, 2, 3, 4].map((j) => g[dir === 'row' ? k * 5 + j : j * 5 + k]);
+    if (cells.some((c) => !c)) continue;
+    const types = new Set(cells.map((c) => c.t)), minL = Math.min(...cells.map((c) => c.l));
+    if (types.size === 1) out.push({ dir, k, kind: 'same', t: cells[0].t, lvl: minL });
+    else if (types.size === 5) out.push({ dir, k, kind: 'harm', lvl: minL });
+  }
+  return out;
+}
+function soulBonus() { // soma em chaves: atkp, crit, hpp, defp, absorb
+  const B = {}, add = (k, v) => { B[k] = (B[k] || 0) + v; }, g = soulState().grid;
+  for (const c of g) if (c) add(SOUL[c.t].k, SOUL[c.t].per * c.l);
+  for (const L of soulLines()) {
+    if (L.kind === 'same') add(SOUL[L.t].k, SOUL[L.t].per * 5 * L.lvl * 0.6); // linha igual: +60% da linha
+    else for (const t in SOUL) add(SOUL[t].k, SOUL[t].per * L.lvl * 0.4); // harmonia: um pouco de tudo
+  }
+  if (g.every(Boolean)) for (const t in SOUL) add(SOUL[t].k, SOUL[t].per * 3); // grade completa
+  return B;
+}
+function dropSoul(chance, lvl, n = 1) {
+  if (Math.random() >= chance) return;
+  const b = soulState().bag, ts = Object.keys(SOUL);
+  for (let i = 0; i < n; i++) {
+    const t = ts[rint(0, ts.length - 1)], l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 45)));
+    b[t][l]++;
+    log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível ${l + 1}!`, 'loot');
+  }
+  Sfx.play('loot', { rarity: 3, gap: 100 }); R.dirty.inv = true;
+}
+function soulPlace(i) {
+  const so = soulState();
+  if (!soulCellOpen(i)) { toast(`Abre com mais nível (até o nível 100 todas abrem).`); return; }
+  const cur = so.grid[i];
+  if (cur) { so.bag[cur.t][cur.l - 1]++; so.grid[i] = null; }
+  if (R.soulSel && !(cur && cur.t === R.soulSel.t && cur.l === R.soulSel.l)) {
+    const { t, l } = R.soulSel;
+    if (so.bag[t][l - 1] > 0) { so.bag[t][l - 1]--; so.grid[i] = { t, l }; if (!so.bag[t][l - 1]) R.soulSel = null; }
+  }
+  Sfx.play('click'); renderTab(); R.dirty.all = true;
+}
+function soulCombine(t, l) {
+  const b = soulState().bag[t];
+  if (l >= 4 || b[l] < 3) return;
+  b[l] -= 3; b[l + 1]++; log(`🔮 3 ${SOUL[t].name} nv ${l + 1} viraram 1 nv ${l + 2}!`, 'lvl'); Sfx.play('refineOk'); renderTab();
+}
+function tabAlma() {
+  const t = R.almaTab || 'grade';
+  const tabs = `<div class="sub-tabs"><button class="btn small ${t === 'grade' ? 'primary' : ''}" data-alab="grade">🔮 Alma</button><button class="btn small ${t === 'art' ? 'primary' : ''}" data-alab="art">🏺 Artefatos</button></div>`;
+  return tabs + (t === 'art' ? tabArts() : tabSoul());
+}
+function tabSoul() {
+  const so = soulState(), lines = soulLines(), B = soulBonus();
+  const lineSet = new Set(); for (const L of lines) for (let j = 0; j < 5; j++) lineSet.add(L.dir === 'row' ? L.k * 5 + j : j * 5 + L.k);
+  const cells = so.grid.map((c, i) => { const open = soulCellOpen(i);
+    return `<button class="soul-cell ${open ? '' : 'locked'} ${lineSet.has(i) ? 'combo' : ''}" data-soul="${i}" ${c ? `style="--sc:${SOUL[c.t].color}"` : ''}>${c ? `${SOUL[c.t].icon}<i>${c.l}</i>` : open ? '' : '🔒'}</button>`; }).join('');
+  const bag = Object.entries(SOUL).map(([k, v]) => `<div class="soul-bag-row"><span>${v.icon} ${v.name}</span>${so.bag[k].map((n, l) => `<button class="soul-stone ${R.soulSel && R.soulSel.t === k && R.soulSel.l === l + 1 ? 'sel' : ''}" data-ssel="${k}:${l + 1}" ${n ? '' : 'disabled'}>nv${l + 1}<b>${n}</b></button>`).join('')}${so.bag[k].some((n, l) => n >= 3 && l < 4) ? `<button class="btn small" data-scomb="${k}:${so.bag[k].findIndex((n, l) => n >= 3 && l < 4)}">Juntar 3</button>` : ''}</div>`).join('');
+  const bonus = Object.entries(SOUL).map(([k, v]) => B[v.k] ? `<span>${v.fmt(B[v.k])}</span>` : '').join('');
+  return `<p class="muted">Escolha uma pedra embaixo e toque num espaço. Linha ou coluna com 5 pedras <b>iguais</b> dá bônus forte; com os <b>5 tipos diferentes</b> dá <b>Harmonia</b> (um pouco de tudo). Abertos: ${soulOpen()}/25 (abre mais a cada 5 níveis depois do 20).</p>
+    <div class="soul-wrap"><div class="soul-grid">${cells}</div>
+    <div class="soul-side"><h4>Bônus da Alma</h4><div class="soul-bonus">${bonus || '<span class="muted">Nenhum ainda.</span>'}</div>
+    <h4>Combinações (${lines.length})</h4>${lines.map((L) => `<div class="muted small-note">${L.dir === 'row' ? 'Linha' : 'Coluna'} ${L.k + 1}: ${L.kind === 'same' ? SOUL[L.t].icon + ' ' + SOUL[L.t].name + ' ×5' : '✨ Harmonia'} (nv ${L.lvl})</div>`).join('') || '<div class="muted small-note">Complete uma linha ou coluna.</div>'}</div></div>
+    <h4>Suas pedras</h4><div class="soul-bag">${bag}</div>
+    <p class="muted small-note">Pedras caem de qualquer monstro (raro), de elites, chefes, masmorras, guardiões da torre e da missão semanal.</p>`;
+}
+function tabArts() {
+  artState();
+  const tot = artTotal(), c = artAt('c');
+  const spot = (sp) => { const a = artAt(sp); return `<button class="art-spot ${sp === 'c' ? 'center' : ''}" data-aspot="${sp}">${a ? `<span>${itemIcon({ slot: a.slot, wtype: a.wtype })}</span><small style="color:${rarityOf(a).color}">${esc(a.name)}</small>${sp !== 'c' && c ? `<em>+${Math.round(artAmp(a, c) * 100)}%</em>` : ''}` : `<small class="muted">${sp === 'c' ? 'Principal' : 'Amplia'}</small>`}</button>`; };
+  const list = S.arts.map((a) => { const on = Object.values(S.artCross).includes(a.uid);
+    return `<button class="art-item ${R.artSel === a.uid ? 'sel' : ''} ${on ? 'on' : ''}" data-asel="${a.uid}"><b style="color:${rarityOf(a).color}">${esc(a.name)}</b><small>${ART_POWER[a.slot].label.replace(/^de /, '')} · força ${artForce(a).toFixed(1)}${on ? ' · na cruz' : ''}</small></button>`; }).join('');
+  return `<p class="muted">Itens <b>+10</b> podem ser consagrados (na janela do item ou do refino) e viram artefatos. O do <b>centro</b> dá o poder do tipo da peça; os 4 de volta <b>ampliam</b> esse poder. Mesmo tipo ou mesmo conjunto do centro = <b>ressonância</b> (amplia 50% mais).</p>
+    <div class="art-wrap"><div class="art-cross"><i></i>${spot('n')}<i></i>${spot('o')}${spot('c')}${spot('l')}<i></i>${spot('s')}<i></i></div>
+    <div class="art-info">${tot ? `<h4>Poder ativo</h4><p><b>${tot.P.fmt(tot.v)}</b> ${tot.P.label}</p><p class="muted">Ampliação total ×${tot.amp.toFixed(2)}</p>` : '<p class="muted">Coloque um artefato no centro.</p>'}
+    <h4>Poder de cada peça</h4>${Object.entries(ART_POWER).map(([k, v]) => `<div class="muted small-note">${k === 'arma' ? '⚔️ Arma' : ARMOR_SLOTS[k].icon + ' ' + ARMOR_SLOTS[k].label}: ${v.label.replace(/^de /, '')}</div>`).join('')}</div></div>
+    <h4>Seus artefatos (${S.arts.length}/${ART_MAX})</h4><p class="muted small-note">Toque num artefato e depois num espaço da cruz. Toque num espaço sem escolher nada para tirar.</p><div class="art-list">${list || '<p class="muted">Nenhum ainda. Refine um item até +10 e consagre.</p>'}</div>`;
+}
+
+// ---------- missão semanal (dá pedras da Alma) ----------
+const weekId = () => { const d = new Date(); const t = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); return Math.floor((t / 864e5 + 3) / 7); }; // muda toda segunda
+const WEEKLY = [{ k: 'kills', t: 'Derrote 2.000 monstros', need: 2000 }, { k: 'bosses', t: 'Derrote 12 chefes', need: 12 }, { k: 'dungeons', t: 'Conclua 5 masmorras ou torres', need: 5 }];
+function weeklyState() { if (!S.weekly || S.weekly.week !== weekId()) S.weekly = { week: weekId(), prog: [0, 0, 0], claimed: [false, false, false] }; return S.weekly; }
+function weeklyProgress(k, n = 1) { const W = weeklyState(); WEEKLY.forEach((w, i) => { if (w.k === k && W.prog[i] < w.need) { W.prog[i] = Math.min(w.need, W.prog[i] + n); if (W.prog[i] >= w.need) log(`🗓️ Missão semanal pronta: ${w.t}! Pegue o prêmio em Missões.`, 'lvl'); } }); }
+function claimWeekly(i) {
+  const W = weeklyState(); if (W.claimed[i] || W.prog[i] < WEEKLY[i].need) return;
+  W.claimed[i] = true; dropSoul(1, S.lvl + 30, 3); S.stones += 5;
+  if (W.claimed.every(Boolean)) { dropSoul(1, S.lvl + 90, 3); log('🗓️ Todas as semanais feitas: +3 pedras da Alma de nível alto!', 'lvl'); }
+  toast('Prêmio semanal recebido!', 'good'); renderTab();
+}
+function tabWeekly() {
+  const W = weeklyState();
+  return `<div class="q-sec">🗓️ Missões semanais <small class="muted">(renovam toda segunda)</small></div>
+  ${WEEKLY.map((w, i) => `<div class="q-card ${W.prog[i] >= w.need ? 'ok' : ''}"><h4><span>${w.t}</span><small class="q-rew">3 🔮 · 5 💎</small></h4>
+    <div class="q-prog"><i style="width:${W.prog[i] / w.need * 100}%"></i></div><small>${fmt(W.prog[i])}/${fmt(w.need)}</small>
+    ${W.prog[i] >= w.need && !W.claimed[i] ? `<div class="item-actions"><button class="btn primary small" data-wclaim="${i}">Pegar prêmio</button></div>` : W.claimed[i] ? '<small class="good"> ✔ recebido</small>' : ''}</div>`).join('')}
+  <p class="muted">Faça as 3 para ganhar mais 3 pedras da Alma de nível alto.</p>`;
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -1971,6 +2137,7 @@ function dailyState() {
 }
 function dailyProgress(k, n = 1) {
   if (!S) return;
+  if (k === 'kills' || k === 'bosses' || k === 'dungeons') weeklyProgress(k, n);
   const D = dailyState();
   for (const m of D.list) if (m.k === k && !m.done) { m.prog = Math.min(m.need, m.prog + n); if (m.prog >= m.need) { m.done = true; toast('Missão diária pronta!', 'good'); log(`📅 Missão diária concluída: ${DAILY_TYPES.find((x) => x.k === k).t(m.need)}. Pegue o prêmio em Missões!`, 'lvl'); } }
 }
@@ -2064,6 +2231,8 @@ const ACH = [
   { id: 't30', name: 'Mestre da Torre', desc: 'Chegue ao andar 30 da Torre Infinita', ok: () => (S.towerBest || 0) >= 30, stones: 20, title: 'Mestre da Torre' },
   { id: 'wb1', name: 'Caçador de Avatares', desc: 'Derrote um Chefe Mundial', ok: () => (S.stats.wbosses || 0) >= 1, stones: 8, title: 'Caçador de Avatares' },
   { id: 'exp4', name: 'Desbravador', desc: 'Descubra os 4 mapas escondidos andando pelas saídas', ok: () => Object.keys(S.visited || {}).length >= 4, stones: 10, title: 'Desbravador' },
+  { id: 'art1', name: 'Consagrado', desc: 'Transforme um item +10 em artefato', ok: () => (S.stats.arts || 0) >= 1, stones: 10, title: 'Consagrado' },
+  { id: 'soul5', name: 'Alma em Harmonia', desc: 'Forme uma combinação na grade da Alma', ok: () => S.soul && soulLines().length >= 1, stones: 10, title: 'Alma em Harmonia' },
   { id: 'ro1', name: 'Rastreador', desc: 'Derrote um monstro Errante', ok: () => (S.stats.roamers || 0) >= 1, stones: 5, title: 'Rastreador' },
   { id: 'cr10', name: 'Mãos de Artesão', desc: 'Crie 10 itens com materiais coletados', ok: () => (S.stats.crafts || 0) >= 10, stones: 5 },
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
@@ -2186,7 +2355,7 @@ function tabDaily() {
   <p class="muted">Faça as 3 para ganhar uma gema e +50% de experiência por 30 minutos.</p>`;
 }
 function tabQuests() {
-  return tabDaily() + tabQuestsMain();
+  return tabDaily() + tabWeekly() + tabQuestsMain();
 }
 function tabQuestsMain() {
   const q = questState(), defs = questDefs();
@@ -2252,7 +2421,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -2272,7 +2441,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -2313,7 +2482,7 @@ function tabInv() {
       (isEq ? `<button class="btn" data-act="unequip">Desequipar</button>`
             : `<button class="btn primary" data-act="equip" ${canEquip(sel) ? '' : 'disabled'}>Equipar</button>
                <button class="btn danger" data-act="sell">Vender (${fmt(itemValue(sel))})</button>`) +
-      `<button class="btn" data-act="to-refine">Refinar</button></div>`;
+      `<button class="btn" data-act="to-refine">Refinar</button>${(sel.refine || 0) >= 10 ? '<button class="btn primary" data-act="consagrar">🏺 Consagrar</button>' : ''}</div>`;
   } else html += `<p class="muted center">Clique em um item para ver detalhes. ▲ indica melhoria.</p>`;
   return html;
 }
@@ -2433,7 +2602,7 @@ function tabRefineItems() {
   if (sel) {
     const r = refineInfo(sel);
     html += itemDetail(sel, false);
-    if (sel.refine >= 10) html += `<p class="good center">Item no refino máximo!</p>`;
+    if (sel.refine >= 10) html += `<p class="good center">Item no refino máximo! <button class="btn primary small" data-act="consagrar">🏺 Consagrar como artefato</button></p>`;
     else html += `<div class="refine-box">
       <div>+${sel.refine} → <b>+${sel.refine + 1}</b></div>
       <div>Chance de sucesso: <b>${r.chance}%</b></div>
@@ -2557,7 +2726,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2601,6 +2770,13 @@ document.addEventListener('click', (e) => {
   if (ds.craft) { craft(ds.craft); return; }
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
+  if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.soul) { soulPlace(+ds.soul); return; }
+  if (ds.ssel) { const [t2, l2] = ds.ssel.split(':'); R.soulSel = R.soulSel && R.soulSel.t === t2 && R.soulSel.l === +l2 ? null : { t: t2, l: +l2 }; return renderTab(); }
+  if (ds.scomb) { const [t2, l2] = ds.scomb.split(':'); soulCombine(t2, +l2); return; }
+  if (ds.asel) { R.artSel = R.artSel === ds.asel ? null : ds.asel; return renderTab(); }
+  if (ds.aspot) { artPlace(ds.aspot); return; }
+  if (ds.wclaim !== undefined) { claimWeekly(+ds.wclaim); return; }
   if (ds.tinv) { Net.soc('tinvite', { name: ds.tinv }); return; }
   if (ds.toff) { if (R.tradeSel.size >= 8) return toast('Até 8 itens por troca.', 'bad'); R.tradeSel.add(ds.toff); tradeSend(); return; }
   if (ds.trem) { R.tradeSel.delete(ds.trem); tradeSend(); return; }
@@ -2657,6 +2833,7 @@ document.addEventListener('click', (e) => {
       renderTab(); break;
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
+    case 'consagrar': consecrate(R.win === 'refino' ? R.refSel : (R.sel || (R.selEq && S.equip[R.selEq] && S.equip[R.selEq].uid))); break;
     case 'equip-best': equipBest(); break;
     case 'meter-reset': R.meter = null; renderTab(); break;
     case 'acct-login': accountAction('login'); break;
@@ -2729,7 +2906,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   const k = e.key.toLowerCase();
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
-  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats', g: 'social' };
+  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats', g: 'social', h: 'alma' };
   if (wins[k]) { openWin(wins[k]); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');

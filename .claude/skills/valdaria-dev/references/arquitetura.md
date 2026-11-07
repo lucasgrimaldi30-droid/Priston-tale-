@@ -123,6 +123,18 @@ Atalhos no `keydown` do fim de `game.js`.
   `ZONES.indexOf` para mapas que podem ser desvio. Só aparecem na janela de mapas depois de visitados a pé (`S.visited`). Novos props `palm` e `mushroom`.
 - **Monstros variados:** `spawnSource()` — 16% vêm do mapa vizinho e nascem perto da saída dele (`m.border`); 1,5% viram **Errante** (`m.roamer`,
   elite forte que cruza o mapa inteiro, nome "<monstro> Errante", `m.skin` para o modelo) com prêmio raro.
+- **Artefatos:** item com refino +10 pode ser consagrado (`consecrate`, botão no item e no refino) e vira artefato em `S.arts` (até 24;
+  o item some). Cruz `S.artCross` com os espaços `c` (centro), `n`, `l`, `o`, `s`. Só o centro dá poder, conforme o tipo da peça (`ART_POWER`:
+  arma = crítico, armadura = defesa, botas = velocidade, elmo = vida, luvas = ataque, escudo = bloqueio, amuleto = dano crítico,
+  anel = resistência). Os 4 de volta ampliam (`artAmp`: 10% + 4% por raridade, ×1,5 de ressonância se for do mesmo tipo ou conjunto).
+  `artTotal()` entra no `derived()`. Cruz completa dá a aura `artfull`.
+- **Alma:** grade 5×5 em `S.soul.grid` com pedras `{t, l}` (`SOUL`: atk, crit, vit, def, res; níveis 1–5, 3 iguais viram 1 melhor em
+  `soulCombine`). Espaços abrem do centro para fora (`SOUL_ORDER`, `soulOpen()`: 9 no começo, +1 a cada 5 níveis depois do 20, 25 no nível 100).
+  `soulLines()`: linha ou coluna com 5 iguais = bônus forte; com os 5 tipos diferentes = Harmonia. Grade cheia dá bônus extra e a aura `soulfull`.
+  `soulBonus()` entra no `derived()` (`absorb` = resistência). As pedras caem em `dropSoul`: 0,4% dos monstros comuns, 6% dos elites, 60% dos chefes
+  (3 do Chefe Mundial), 1 por masmorra e por guardião da torre. Janela `alma` (tecla H, botão 🔮).
+- **Missão semanal:** `WEEKLY` (2.000 abates, 12 chefes, 5 masmorras ou torres), `weeklyState()` muda toda segunda (`weekId`), avança junto com
+  `dailyProgress`; cada uma dá 3 pedras da Alma e 5 pedras de refino, e as 3 juntas dão mais 3 pedras de nível alto. Aparece na janela de missões.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

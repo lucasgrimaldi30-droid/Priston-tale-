@@ -2193,6 +2193,8 @@ const Scene3D = (() => {
     h.bv = h.bv || {};
     const on = new Set((R.inTown ? [] : R.buffs || []).map((b) => b.id));
     // aura do conjunto (2 peças: brilho; 4 peças: anel no chão também)
+    if (typeof artAt === 'function' && S.arts && ['c', 'n', 'l', 'o', 's'].every((k) => artAt(k))) { BUFF_VIS.artfull = BUFF_VIS.artfull || ['setfull', '#ffd060']; on.add('artfull'); }
+    if (S.soul && S.soul.grid && S.soul.grid.every(Boolean)) { BUFF_VIS.soulfull = BUFF_VIS.soulfull || ['setfull', '#b080ff']; on.add('soulfull'); }
     if (typeof setCounts === 'function') for (const [sid, n] of Object.entries(setCounts())) if (n >= 2) { const key = 'set_' + sid; BUFF_VIS[key] = BUFF_VIS[key] || [n >= 4 ? 'setfull' : 'holy', SETS[sid].color]; BUFF_VIS[key][0] = n >= 4 ? 'setfull' : 'holy'; on.add(key); }
     const hp = h.root.position;
     for (const id in h.bv) if (!on.has(id)) { scene.remove(h.bv[id].obj); disposeObj(h.bv[id].obj); delete h.bv[id]; }
