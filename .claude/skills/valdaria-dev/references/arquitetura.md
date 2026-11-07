@@ -148,3 +148,12 @@ Atalhos no `keydown` do fim de `game.js`.
   `renderPartyHud` (barras dos colegas), `socialXp()` (+10% por colega no mesmo mapa × guilda +2% por membro online até 10%),
   abates mandam 15% do XP e 10% do ouro ao grupo. Chat: `/p`, `/g`, `/convidar Nome`, `/convidarguilda Nome`, `/sairgrupo`.
   Fundar guilda custa `GUILD_COST` (50.000) cobrado quando o servidor confirma (`gcreated`).
+- **Masmorra em grupo:** só o líder do grupo abre (`canCoop`, botão "👥 Em grupo" na janela de mapas → `startCoop`). O líder simula tudo
+  (`R.coop.lead`, monstros com vida × `coopScale()`), manda `crelay` `sync` 5×/s; colegas entram com `joinCoop` (convite `start`), não rodam
+  `monstersAI`/`dungeonTick` (`isMember()`), espelham os monstros (`coopApplySync`), são atacados pelos que estão perto (`coopMemberTick`) e
+  mandam o dano junto a cada 0,2 s (`hit`). O líder aplica, mata e manda `kill` — cada colega ganha o prêmio completo (`killMonster` com `coopKill`).
+  `exitDungeon` manda `end` (líder, com `done` → colegas recebem `dungeonReward`) ou `leave`. No servidor, a sala da masmorra é `coop_<grupo>`
+  para os jogadores se verem lá dentro. Sem notícia do líder por 8 s o colega sai.
+- **Trocas:** `tinvite`/`taccept` abrem a sessão no servidor (`trades`), `toffer` (até 8 itens + ouro; mudar destrava os dois), `tlock`, `tconfirm`;
+  com os dois confirmados o servidor manda `tdone` a cada lado (`tradeDone` tira o que deu e põe o que recebeu com uid novo). Janela `troca`,
+  botão 🤝 na janela Social e `/trocar Nome`. Sair do jogo cancela a troca.

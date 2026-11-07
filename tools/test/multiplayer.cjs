@@ -53,7 +53,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   await until(A, () => Net.st.party && Net.st.party.members.length === 2);
   const pa2 = await A.evaluate(() => Net.st.party && Net.st.party.members.map((m) => m.name).join(','));
   ok('Grupo formado', !!pa2 && pa2.includes('Lumen') && pa2.includes('Brutus'), pa2);
-  ok('Bônus de XP do grupo no mesmo mapa', await A.evaluate(() => socialXp() > 1.05 && !!document.getElementById('party-hud')));
+  ok('Bônus de XP do grupo no mesmo mapa', await until(A, () => socialXp() > 1.05 && !!document.getElementById('party-hud')));
   const xpB0 = await B.evaluate(() => S.xp + S.lvl * 1e9);
   await A.evaluate(() => { const m = makeMonster('Lobo Filhote', '🐺', 3, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); });
   let shared = false; for (let i = 0; i < 12 && !shared; i++) { await B.waitForTimeout(500); shared = await B.evaluate((x0) => S.xp + S.lvl * 1e9 > x0, xpB0); }
@@ -84,6 +84,42 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   ok('Guilda aparece no ranking', !!rk && rk.guild === 'Lobos de Ferro');
   await A.evaluate(() => { const k = Net.st.guild.members.find((m) => m.name === 'Lumen').key; Net.soc('gkick', { user: k }); });
   ok('Líder expulsa membro', await until(B, () => Net.st.guild === null));
+  // masmorra em grupo (Alfa é o líder do grupo)
+  await B.evaluate(() => { const o = Net.onSocial; Net.onSocial = (m) => { if (m.t === 'coop' && m.k === 'start') window._coop = m; else if (m.t === 'tinvite') window._tinv = m; else o(m); }; });
+  await A.evaluate(() => { S.lvl = 30; S.dunCd = {}; S.gold += 1e6; setTown(false); });
+  await B.evaluate(() => { S.lvl = 30; S.hp = derived().maxHp; setTown(false); });
+  await A.waitForTimeout(500);
+  ok('Botão de masmorra em grupo para o líder', await A.evaluate(() => canCoop() && tabMaps().includes('data-codun')));
+  await A.evaluate(() => { S.settings.auto = false; startCoop('z2'); for (const m of R.mons) { m.atk = 0; m.aggro = false; } });
+  ok('Convite da masmorra chega ao colega', await until(B, () => !!window._coop));
+  await B.evaluate(() => { joinCoop(window._coop.d.zone, window._coop.from); S.settings.auto = false; });
+  ok('Colega vê os mesmos monstros do líder', await until(B, () => R.dungeon && R.dungeon.coop && R.mons.length > 0 && R.mons.every((m) => m.sid))
+    && await A.evaluate((sid) => aliveMons().some((m) => m.sid === sid), await B.evaluate(() => R.mons[0].sid)));
+  const xpB1 = await B.evaluate(() => S.xp + S.lvl * 1e9);
+  const sid0 = await B.evaluate(() => { const m = aliveMons()[0]; if (!m) return 'nenhum:' + R.mons.length + ':' + !!R.dungeon; hitMonster(m, 9999, null, derived()); if (m.hp <= 0) killMonster(m); return m.sid; });
+  ok('Golpe do colega tira vida no líder', await until(A, (sid) => !aliveMons().some((m) => m.sid === sid), sid0), sid0);
+  ok('Colega ganha o XP do abate', await until(B, (x0) => S.xp + S.lvl * 1e9 > x0, xpB1));
+  ok('Os dois se veem dentro da masmorra', await until(A, () => [...Net.st.others.values()].some((o) => o.name === 'Lumen'), null, 6000));
+  await A.evaluate(() => { for (let f = 0; f < 3; f++) { for (const m of aliveMons()) { m.hp = 0; killMonster(m); } for (let i = 0; i < 30; i++) tick(); } });
+  ok('Fim da masmorra leva o colega junto (com prêmio)', await until(B, () => !R.dungeon && (S.stats.dungeons || 0) >= 1, null, 6000));
+  // troca
+  await B.evaluate(() => { S.inv = []; const it = genItem(30, 3, 'arma'); it.uid = 'lumen-item'; it.name = 'Lâmina de Teste da Troca'; window._itName = it.name; S.inv.push(it); S.gold = 5000; });
+  await A.evaluate(() => { S.inv = S.inv.slice(0, 5); S.gold = 100000; });
+  await A.evaluate(() => chatCommand('/trocar Lumen'));
+  ok('Pedido de troca chega', await until(B, () => !!window._tinv));
+  await B.evaluate(() => Net.soc('taccept', { fid: window._tinv.fid }));
+  ok('Janela de troca abre nos dois', await until(A, () => R.win === 'troca' && !!Net.st.trade) && await until(B, () => R.win === 'troca'));
+  await B.evaluate(() => { R.tradeSel.add('lumen-item'); tradeSend(); });
+  await A.evaluate(() => { R.tradeGold = 30000; tradeSend(); });
+  await A.waitForTimeout(600);
+  await A.evaluate(() => renderTab()); await A.screenshot({ path: path.join(OUT, 'troca.png') });
+  for (const P of [A, B]) await P.evaluate(() => tradeAction('lock'));
+  await until(A, () => Net.st.trade && Net.st.trade.lockMe && Net.st.trade.lockThem);
+  for (const P of [A, B]) await P.evaluate(() => tradeAction('confirm'));
+  const gotItem = await until(A, () => S.inv.some((i) => i.name && R.win !== 'troca') && (S.stats.trades || 0) === 1);
+  const sides = await A.evaluate(() => S.gold) + ' / ' + await B.evaluate(() => S.gold + ' itens ' + S.inv.length);
+  const itName = await B.evaluate(() => window._itName);
+  ok('Troca concluída: item por ouro', gotItem && (await A.evaluate((n) => S.inv.some((i) => i.name === n), itName)) && (await B.evaluate(() => S.gold >= 35000 && !S.inv.some((i) => i.uid === 'lumen-item'))), sides);
   await B.evaluate(() => Net.soc('pleave'));
   ok('Sair do grupo desfaz grupo de 2', await until(A, () => Net.st.party === null));
   await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });

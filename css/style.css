@@ -525,3 +525,13 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .guild-head { margin-bottom: 6px; }
 .guild-head small { display: block; color: #aab; }
 #guild-name { flex: 1; min-width: 120px; padding: 6px 8px; border-radius: 6px; border: 1px solid #445; background: #12151c; color: #eee; }
+
+/* trocas */
+.tr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.tr-cols > div { background: rgba(255, 255, 255, .04); border-radius: 8px; padding: 8px; }
+.tr-cols h4, .gwin h4 { margin: 4px 0 6px; font-size: 13px; color: #f0c860; }
+.tr-item { display: block; width: 100%; text-align: left; background: rgba(0, 0, 0, .25); border: 1px solid #3a4258; border-radius: 6px; padding: 4px 6px; margin-bottom: 3px; color: #ddd; font-size: 12px; cursor: pointer; }
+.tr-item small { color: #99a; }
+.tr-inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; max-height: 220px; overflow: auto; }
+#tr-gold { width: 110px; padding: 5px; border-radius: 6px; border: 1px solid #445; background: #12151c; color: #eee; }
+@media (max-width: 600px) { .tr-cols { grid-template-columns: 1fr; } }

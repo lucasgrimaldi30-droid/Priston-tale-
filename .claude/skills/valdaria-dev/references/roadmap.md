@@ -9,14 +9,14 @@
 - **Fase 1:** mundo aberto isométrico, tocar para andar/atacar, monstros com IA, modo Auto.
 - **Fase 3:** interface de MMO em tela cheia, minimapa, chat com comandos, barra de habilidades manual, atalhos, 40 missões (Comandante Varek).
 - **Fase 5 (multiplayer):** servidor Node.js com contas, saves na nuvem, presença em tempo real por mapa, chat global e do mapa, ranking,
-  Docker + Caddy (HTTPS) e guia `DEPLOY.md`. Grupos (até 4, XP dividido e bônus) e guildas (salvas no servidor, chat, bônus de XP). Falta: anti-trapaça (servidor calcular combate), PostgreSQL, trocas, PvP, banco da guilda.
+  Docker + Caddy (HTTPS) e guia `DEPLOY.md`. Grupos (até 4, XP dividido e bônus) e guildas (salvas no servidor, chat, bônus de XP). Masmorra em grupo e trocas entre jogadores. Falta: anti-trapaça (servidor calcular combate), PostgreSQL, PvP, banco da guilda.
 - **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
   renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA), especialização no nível 50, mascotes que evoluem,
   bestiário com bônus, medidor de dano e estatísticas, efeito das habilidades crescendo com o nível, Torre Infinita, eventos e chefe mundial,
   dia/noite e chuva, coleta e artesanato, mapas ligados (andar entre eles), 4 mapas escondidos, monstros vizinhos e errantes.
 
 ## Ideias sugeridas e ainda não feitas
-Mais mapas escondidos · masmorra em grupo · trocas entre jogadores · eventos no servidor (hoje o relógio é do navegador).
+Mais mapas escondidos · torre em grupo · PvP · trocas entre jogadores · eventos no servidor (hoje o relógio é do navegador).
 
 ## Pendente com o dono
 - Revisão **golpe por golpe** das 8 classes (ele vai jogar e mandar os ajustes, um por vez).

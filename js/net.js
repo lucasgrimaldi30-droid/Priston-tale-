@@ -68,9 +68,10 @@ const Net = (() => {
       else if (m.t === 'sys' && api.onSys) api.onSys(m.text);
       else if (m.t === 'party') { st.party = m.party; if (api.onSocial) api.onSocial(m); }
       else if (m.t === 'guild') { st.guild = m.guild; if (api.onSocial) api.onSocial(m); }
-      else if ((m.t === 'pinvite' || m.t === 'ginvite' || m.t === 'pshare' || m.t === 'gcreated') && api.onSocial) api.onSocial(m);
+      else if (m.t === 'trade') { st.trade = m.trade; if (api.onSocial) api.onSocial(m); }
+      else if (['pinvite', 'ginvite', 'pshare', 'gcreated', 'coop', 'tinvite', 'tdone'].includes(m.t) && api.onSocial) api.onSocial(m);
     };
-    ws.onclose = () => { st.ws = null; st.others.clear(); st.party = null; if (st.wantWs && st.token) setTimeout(connect, 3000); };
+    ws.onclose = () => { st.ws = null; st.others.clear(); st.party = null; st.trade = null; if (api.onSocial) api.onSocial({ t: 'closed' }); if (st.wantWs && st.token) setTimeout(connect, 3000); };
   }
   function disconnect() { st.wantWs = false; if (st.ws) st.ws.close(); st.ws = null; st.others.clear(); }
   const open = () => st.ws && st.ws.readyState === 1;

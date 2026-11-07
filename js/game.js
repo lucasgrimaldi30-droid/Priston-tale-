@@ -681,6 +681,7 @@ function dungeonFloor() {
     R.mons.push(b);
     log(`👑 Andar final: <b>${esc(b.name)}</b> te espera!`, 'boss'); Sfx.play('boss');
   } else log(`🕳️ Andar ${D.floor}/${D.floors}: derrote todos os monstros.`, 'boss');
+  if (R.coop && R.coop.lead && D.floor > 1) for (const m of R.mons) { m.maxHp = m.hp = Math.round(m.maxHp * coopScale()); }
   if (S.settings.auto) R.mon = R.mons[0];
 }
 function dungeonTick(dt) {
@@ -694,7 +695,7 @@ function dungeonTick(dt) {
   }
 }
 function dungeonReward() {
-  const z = zoneById(R.dungeon.zone), tier = zoneTier(z);
+  const z = zoneById(R.dungeon.zone), tier = zoneTier(z); R.dungeon.done = true;
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
@@ -704,6 +705,7 @@ function dungeonReward() {
 }
 function exitDungeon(failed) {
   if (!R.dungeon) return;
+  if (R.coop) { Net.soc('crelay', { k: R.coop.lead ? 'end' : 'leave', d: { done: !!R.dungeon.done } }); R.coop = null; }
   if (R.dungeon.tower) { log(`🗼 Você saiu da Torre no andar ${R.dungeon.floor}. Recorde: andar ${S.towerBest || 0}.`, 'boss'); if ((R.dungeon.cleared || 0) >= 3) dailyProgress('dungeons'); }
   R.dungeon = null; R.worldZone = null; R.mons = []; R.mon = null; R.tele = [];
   if (failed) log('💀 Você foi expulso da masmorra.', 'death');
@@ -829,6 +831,7 @@ function hitMonster(m, mult, sk, d, forceCrit, src) {
   if (sk && sk.type === 'aoe') dmg *= 1 + d.aoeMult; else if (sk && sk.type === 'dmg') dmg *= 1 + d.singleMult;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
   m.hp -= dmg; m.aggro = true;
+  if (isMember()) R.coop.hits.set(m.sid, (R.coop.hits.get(m.sid) || 0) + dmg);
   meterHit(dmg, src || (sk ? sk.name : 'Ataque básico'));
   if (sk && sk.stun) m.stun = Math.max(m.stun, sk.stun * (m.boss ? 0.4 : 1));
   if (sk && sk.slow) m.slow = Math.max(m.slow, sk.slow);
@@ -884,7 +887,10 @@ function monsterHit(m) {
 
 function killMonster(m) {
   if (!m || m.dead) return;
+  if (isMember() && !m.coopKill) { m.dead = true; m.hp = 0; R.mons = (R.mons || []).filter((x) => x.hp > 0); retarget(); return; } // o prêmio vem do líder
   m.dead = true; m.hp = 0;
+  if (R.coop && R.coop.lead) Net.soc('crelay', { k: 'kill', d: { sid: m.sid, name: m.name, icon: m.icon, lvl: m.lvl, type: m.type, xp: m.xp, gold: m.gold, boss: m.boss, elite: m.elite } });
+  if (m.coopKill) R.mons = (R.mons || []).filter((x) => x.sid !== m.sid);
   const d = derived();
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
@@ -895,7 +901,7 @@ function killMonster(m) {
   if (S.companion) { S.petXp = S.petXp || {}; const pl = petLevel(S.companion); S.petXp[S.companion] = (S.petXp[S.companion] || 0) + 1; if (petLevel(S.companion) > pl) log(`🐾 Seu mascote evoluiu para o nível ${petLevel(S.companion)}!`, 'lvl'); }
   { const M = meter(); M.kills++; M.xp += xp; }
   const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1));
-  if (online() && Net.st.party) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
+  if (online() && Net.st.party && !R.coop) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
@@ -1098,14 +1104,15 @@ function tick() {
     if (R.dead <= 0) { S.hp = d.maxHp; S.mp = d.maxMp; R.pos = { ...WORLD.entry }; log('Você renasceu na entrada do mapa.', 'muted'); }
     return;
   }
-  if (R.dungeon) dungeonTick(dt);
+  if (R.coop && R.coop.lead && R.dungeon) coopLeaderTick(dt);
+  if (R.dungeon) { if (!isMember()) dungeonTick(dt); }
   // população do mapa
   else if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
   if (!R.dungeon && (R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25 && S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1 && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
   usePotions(d);
   if (S.hp <= 0) return;
-  monstersAI(dt);
-  resolveTelegraphs(dt);
+  if (isMember()) coopMemberTick(dt);
+  else { monstersAI(dt); resolveTelegraphs(dt); }
   if (R.dead > 0 || S.hp <= 0) return;
   // invocação
   if (R.pet) {
@@ -1439,7 +1446,7 @@ function startGame(i) {
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
   S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, ...S.settings };
-  R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, dirty: { all: true } };
+  R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, tradeSel: new Set(), tradeGold: 0, coop: null, dirty: { all: true } };
   const off = offlineProgress();
   const d = derived();
   S.hp = d.maxHp; S.mp = d.maxMp;
@@ -1461,8 +1468,101 @@ function netState() {
   const look = {};
   for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (it) look[sl] = { slot: sl, wtype: it.wtype, ilvl: it.ilvl, rarity: it.rarity, refine: it.refine || 0, set: it.set || null, req: 1 }; }
   Net.sendState({ name: S.name, cls: S.cls, lvl: S.lvl, rb: S.rebirths || 0, title: S.title || '', zone: S.zone, town: !!R.inTown, dun: !!R.dungeon,
-    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp });
+    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp, coop: !!R.coop });
   renderPartyHud();
+}
+
+// ---------- masmorra em grupo: o líder simula os monstros; os colegas veem o mesmo andar e mandam os golpes ----------
+const isMember = () => !!(R && R.coop && !R.coop.lead);
+function canCoop() { const pt = online() && Net.st.party; return !!(pt && pt.leader === S.name && pt.members.length > 1); }
+function coopScale() { const pt = online() && Net.st.party; return 1 + 0.6 * Math.max(0, (pt ? pt.members.length : 1) - 1); }
+function startCoop(zid) {
+  enterDungeon(zid); if (!R.dungeon) return;
+  R.coop = { lead: true, syncT: 0 }; R.dungeon.coop = true;
+  for (const m of R.mons) { m.maxHp = m.hp = Math.round(m.maxHp * coopScale()); }
+  Net.soc('crelay', { k: 'start', d: { zone: zid } });
+  log('👥 <b>Masmorra em grupo!</b> Seus colegas foram chamados. Os monstros ficam mais fortes com mais gente.', 'boss');
+}
+function joinCoop(zone, leader) {
+  if (R.dead > 0 || R.dungeon) return;
+  const z = zoneById(zone); if (!z) return;
+  if (S.lvl < z.min - 5) { toast('Nível baixo demais para essa masmorra.', 'bad'); return; }
+  if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
+  closeWin && closeWin();
+  R.inTown = false; S.zone = zone; R.dungeon = { zone, floor: 1, floors: 3, next: 0, coop: true }; R.worldZone = 'dun';
+  R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 1.5, z: 11 }; R.playerTimer = 0.3;
+  R.coop = { lead: false, leader, seen: Date.now(), hits: new Map(), hitT: 0 };
+  Sfx.play('portal'); log(`👥 Você entrou na masmorra em grupo de <b>${esc(leader)}</b> (${esc(z.name)}).`, 'boss');
+  R.dirty.all = true;
+}
+function coopLeaderTick(dt) {
+  R.coop.syncT -= dt; if (R.coop.syncT > 0) return; R.coop.syncT = 0.2;
+  const r2 = (v) => Math.round((v || 0) * 100) / 100;
+  Net.soc('crelay', { k: 'sync', d: { f: R.dungeon.floor, m: aliveMons().slice(0, 24).map((m) => ({ sid: m.sid, name: m.name, icon: m.icon, lvl: m.lvl, type: m.type, x: r2(m.x), z: r2(m.z), hp: m.hp, maxHp: m.maxHp, atk: m.atk, def: m.def,
+    boss: m.boss ? 1 : 0, elite: m.elite ? 1 : 0, face: r2(m.face), mv: m.moving ? 1 : 0, ag: m.aggro ? 1 : 0, en: m.enraged ? 1 : 0 })) } });
+}
+function coopApplySync(d) {
+  if (!isMember() || !R.dungeon) return;
+  R.coop.seen = Date.now();
+  if (d.f !== R.dungeon.floor) { R.dungeon.floor = d.f; R.pos = { x: 1.5, z: 11 }; R.mon = null; R.dirty.all = true; log(`🕳️ Andar ${d.f}/3.`, 'boss'); }
+  const old = new Map(R.mons.map((m) => [m.sid, m])), out = [];
+  for (const x of d.m || []) {
+    const m = old.get(x.sid) || { sid: x.sid, name: x.name, icon: x.icon, lvl: x.lvl, type: x.type, timer: 1 + Math.random(), stun: 0, slow: 0, dun: true, xp: 0, gold: 0 };
+    Object.assign(m, { x: x.x, z: x.z, hp: x.hp, maxHp: x.maxHp, atk: x.atk, def: x.def, boss: !!x.boss, elite: !!x.elite, face: x.face, moving: !!x.mv, aggro: !!x.ag, enraged: !!x.en, home: { x: x.x, z: x.z } });
+    out.push(m);
+  }
+  R.mons = out; if (R.mon && !out.includes(R.mon)) R.mon = null;
+}
+function coopMemberTick(dt) {
+  if (Date.now() - R.coop.seen > 8000) { log('👥 Sem contato com o líder do grupo.', 'muted'); exitDungeon(false); return; }
+  R.coop.hitT -= dt;
+  if (R.coop.hitT <= 0 && R.coop.hits.size) { R.coop.hitT = 0.2; Net.soc('crelay', { k: 'hit', d: { h: [...R.coop.hits] } }); R.coop.hits.clear(); }
+  for (const m of aliveMons()) { // monstros perto de você também atacam você
+    if (m.stun > 0) { m.stun -= dt; continue; }
+    if (dist2(m, R.pos) > (m.boss ? 2.4 : 1.7)) continue;
+    m.timer -= dt; if (m.timer <= 0) { m.timer = (m.boss ? 1.1 : 1.3) + Math.random() * 0.3; monsterHit(m); if (R.dead > 0 || S.hp <= 0) return; }
+  }
+}
+function onCoop(m) {
+  const d = m.d || {};
+  if (m.k === 'start') { if (!R.dungeon && !(R.dead > 0)) uiConfirm('Masmorra em grupo', `${m.from} abriu a masmorra de ${(zoneById(d.zone) || {}).name || ''}. Entrar junto?`, 'Entrar').then((y) => { if (y) joinCoop(d.zone, m.from); }); }
+  else if (m.k === 'sync') coopApplySync(d);
+  else if (m.k === 'hit' && R.coop && R.coop.lead) {
+    for (const [sid, dmg] of (d.h || []).slice(0, 60)) { const mo = aliveMons().find((x) => x.sid === sid); if (mo) { mo.hp -= Math.max(0, Math.min(+dmg || 0, 1e9)); mo.aggro = true; if (mo.hp <= 0) killMonster(mo); } }
+  } else if (m.k === 'kill' && isMember()) killMonster(Object.assign({}, d, { coopKill: true, hp: 0, dun: true }));
+  else if (m.k === 'end' && isMember()) { if (d.done) dungeonReward(); R.coop = null; exitDungeon(false); }
+  else if (m.k === 'leave' && R.coop && R.coop.lead) log(`👥 ${esc(m.from)} saiu da masmorra.`, 'muted');
+}
+
+// ---------- trocas entre jogadores ----------
+function tradeSend() { const it = S.inv.filter((i) => R.tradeSel.has(i.uid)); Net.soc('toffer', { items: it, gold: Math.min(S.gold, R.tradeGold || 0) }); }
+function tabTrade() {
+  const tr = online() && Net.st.trade;
+  if (!tr) return '<p class="muted">Nenhuma troca aberta. Peça uma troca na janela Social ou com /trocar Nome.</p>';
+  const row = (i, act) => `<button class="tr-item" ${act}><span style="color:${rarityOf(i).color}">${esc(i.name)}</span> <small>Nv.${i.req || i.ilvl}${i.refine ? ' +' + i.refine : ''}</small></button>`;
+  const offer = (o) => `${o.items.length ? o.items.map((i) => row(i, '')).join('') : '<p class="muted">Nada ainda.</p>'}<p>💰 ${fmt(o.gold)} ouro</p>`;
+  const free = S.inv.filter((i) => !R.tradeSel.has(i.uid));
+  return `<p>Trocando com <b>${esc(tr.with)}</b>. Mudou algo? Os dois precisam travar de novo.</p>
+    <div class="tr-cols"><div><h4>Você dá ${tr.lockMe ? '🔒' : ''}${tr.okMe ? ' ✅' : ''}</h4>${tr.mine.items.map((i) => row(i, `data-trem="${i.uid}"`)).join('') || '<p class="muted">Toque nos itens abaixo para oferecer.</p>'}
+      <p>💰 ${fmt(tr.mine.gold)} ouro oferecido</p><div class="row-btns"><input id="tr-gold" type="number" min="0" value="${R.tradeGold || 0}"><button class="btn small" data-tact="gold">Ouro</button></div></div>
+      <div><h4>Você recebe ${tr.lockThem ? '🔒' : ''}${tr.okThem ? ' ✅' : ''}</h4>${offer(tr.theirs)}</div></div>
+    <div class="row-btns"><button class="btn small" data-tact="cancel">Cancelar</button><button class="btn small" data-tact="lock" ${tr.lockMe ? 'disabled' : ''}>🔒 Travar</button><button class="btn small primary" data-tact="confirm" ${!(tr.lockMe && tr.lockThem) || tr.okMe ? 'disabled' : ''}>✅ Confirmar troca</button></div>
+    <h4>Sua mochila</h4><div class="tr-inv">${free.map((i) => row(i, `data-toff="${i.uid}"`)).join('') || '<p class="muted">Mochila vazia.</p>'}</div>`;
+}
+function tradeAction(a) {
+  if (a === 'cancel') Net.soc('tcancel');
+  else if (a === 'lock') Net.soc('tlock');
+  else if (a === 'confirm') Net.soc('tconfirm');
+  else if (a === 'gold') { R.tradeGold = Math.max(0, Math.min(S.gold, Math.floor(+($('#tr-gold') || {}).value || 0))); tradeSend(); }
+}
+function tradeDone(m) {
+  const giveIds = new Set(m.give.items.map((i) => i.uid));
+  S.inv = S.inv.filter((i) => !giveIds.has(i.uid));
+  S.gold = Math.max(0, S.gold - m.give.gold) + m.get.gold;
+  for (const it of m.get.items) { const n = { ...it, uid: uid() }; if (S.inv.length < 40) S.inv.push(n); else S.gold += itemValue(n); }
+  R.tradeSel = new Set(); R.tradeGold = 0; S.stats.trades = (S.stats.trades || 0) + 1;
+  log(`🤝 Troca com <b>${esc(m.with)}</b> concluída: você recebeu ${m.get.items.length} item(ns) e ${fmt(m.get.gold)} ouro.`, 'loot'); toast('Troca concluída!', 'good');
+  save(); R.dirty.inv = true; if (R.win === 'troca') closeWin();
 }
 
 // ---------- grupo e guilda (precisam do servidor) ----------
@@ -1483,7 +1583,7 @@ function renderPartyHud() {
 function tabSocial() {
   if (!online()) return '<p class="muted">Grupos e guildas precisam do servidor. Entre com sua conta na tela de heróis (no servidor próprio do jogo).</p>';
   const pt = Net.st.party, g = Net.st.guild, others = [...Net.st.others.values()];
-  const near = others.length ? others.map((o) => `<div class="soc-row"><b>${esc(o.name)}</b> <small>Nv.${o.lvl} ${esc(CLASSES[o.cls] ? CLASSES[o.cls].name : '')}</small><span><button class="btn small" data-pinv="${esc(o.name)}">+ Grupo</button>${g ? `<button class="btn small" data-ginv="${esc(o.name)}">+ Guilda</button>` : ''}</span></div>`).join('') : '<p class="muted">Ninguém neste mapa agora.</p>';
+  const near = others.length ? others.map((o) => `<div class="soc-row"><b>${esc(o.name)}</b> <small>Nv.${o.lvl} ${esc(CLASSES[o.cls] ? CLASSES[o.cls].name : '')}</small><span><button class="btn small" data-pinv="${esc(o.name)}">+ Grupo</button><button class="btn small" data-tinv="${esc(o.name)}">🤝 Trocar</button>${g ? `<button class="btn small" data-ginv="${esc(o.name)}">+ Guilda</button>` : ''}</span></div>`).join('') : '<p class="muted">Ninguém neste mapa agora.</p>';
   const party = pt ? `<div class="soc-list">${pt.members.map((m) => `<div class="soc-row"><b>${esc(m.name)}${m.name === pt.leader ? ' 👑' : ''}</b> <small>Nv.${m.lvl} · ${m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')}</small></div>`).join('')}</div>
     <p class="muted">+10% de XP por colega no mesmo mapa. Quem está junto ganha 15% do XP e 10% do ouro dos seus abates.</p><button class="btn small" data-soc="pleave">Sair do grupo</button>`
     : '<p class="muted">Você não está em grupo. Convide alguém abaixo ou pelo chat: /convidar Nome</p>';
@@ -1826,13 +1926,14 @@ function chatCommand(txt) {
   if (!t.startsWith('/')) { if (!(online() && Net.chat(t, 'global'))) log(`<b style="color:#9ad0ff">[${esc(S.name)}]</b> ${esc(t)}`, 'chat'); return; }
   if (/^\/(p|grupo)\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'party'))) log('Sem conexão com o servidor.', 'chat'); return; }
   if (/^\/(g|guilda)\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'guild'))) log('Sem conexão com o servidor.', 'chat'); return; }
+  if (/^\/trocar\s/i.test(t)) { if (!online()) { log('Sem conexão com o servidor.', 'chat'); return; } Net.soc('tinvite', { name: t.replace(/^\/\S+\s/, '').trim() }); return; }
   if (/^\/(convidar|ginvite|convidarguilda)\s/i.test(t)) { const [c0, ...nm] = t.slice(1).split(/\s+/); if (!online()) { log('Sem conexão com o servidor.', 'chat'); return; } Net.soc(/guilda|ginvite/i.test(c0) ? 'ginvite' : 'pinvite', { name: nm.join(' ') }); return; }
   if (/^\/z(ona)?\s/i.test(t)) { const msg = t.replace(/^\/\S+\s/, ''); if (!(online() && Net.chat(msg, 'zone'))) log('Sem conexão com o servidor.', 'chat'); return; }
   const [cmd, ...args] = t.slice(1).toLowerCase().split(/\s+/);
   const arg = args.join(' ');
   switch (cmd) {
     case 'sairgrupo': if (online()) Net.soc('pleave'); break;
-    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /sairgrupo, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
+    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /trocar Nome, /sairgrupo, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
     case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;
     case 'auto': S.settings.auto = !S.settings.auto; log(`Modo automático ${S.settings.auto ? 'ligado' : 'desligado'}.`, 'chat'); break;
     case 'cidade': setTown(true); break;
@@ -2151,7 +2252,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -2171,7 +2272,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -2187,7 +2288,7 @@ function tabMaps() {
       <small class="muted">${z.monsters.map((m) => m[1] + ' ' + m[0]).join(' · ')}</small>
       <small class="muted">Chefes derrotados: ${S.bosses[z.id] || 0}</small></span>
       ${locked ? `<span class="lock">🔒 Nv.${z.min - 3}</span>` : ''}
-    </button>${S.lvl >= z.min ? `<button class="btn small dun-btn" data-dun="${z.id}" ${!dunReady(z.id) || S.gold < dunCost(z) ? 'disabled' : ''}>🕳️ Masmorra · ${fmt(dunCost(z))} ouro${dunReady(z.id) ? '' : ` · ${Math.ceil((S.dunCd[z.id] - Date.now()) / 60000)} min`}</button>` : ''}`;
+    </button>${S.lvl >= z.min ? `<button class="btn small dun-btn" data-dun="${z.id}" ${!dunReady(z.id) || S.gold < dunCost(z) ? 'disabled' : ''}>🕳️ Masmorra · ${fmt(dunCost(z))} ouro${dunReady(z.id) ? '' : ` · ${Math.ceil((S.dunCd[z.id] - Date.now()) / 60000)} min`}</button>${canCoop() ? `<button class="btn small dun-btn primary" data-codun="${z.id}" ${!dunReady(z.id) || S.gold < dunCost(z) ? 'disabled' : ''}>👥 Em grupo</button>` : ''}` : ''}`;
   };
   return tabTower() + `<p class="muted map-tip">🚶 Os mapas são ligados: ande até as saídas nas bordas (◀ ▶ ▼ no minimapa) para ir ao vizinho, ou toque num mapa abaixo para teleportar. Alguns mapas são escondidos e só aparecem depois que você chega neles a pé.</p><div class="zone-list">${ZONES.map((z) => entry(z) + BRANCHES.filter((b) => b.parent === z.id).map(entry).join('')).join('')}</div>`;
 }
@@ -2456,7 +2557,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2499,6 +2600,11 @@ document.addEventListener('click', (e) => {
   if (ds.tower) { enterTower(ds.tower); return; }
   if (ds.craft) { craft(ds.craft); return; }
   if (ds.soc) { socialAction(ds.soc); return; }
+  if (ds.codun) { startCoop(ds.codun); return; }
+  if (ds.tinv) { Net.soc('tinvite', { name: ds.tinv }); return; }
+  if (ds.toff) { if (R.tradeSel.size >= 8) return toast('Até 8 itens por troca.', 'bad'); R.tradeSel.add(ds.toff); tradeSend(); return; }
+  if (ds.trem) { R.tradeSel.delete(ds.trem); tradeSend(); return; }
+  if (ds.tact) { tradeAction(ds.tact); return; }
   if (ds.pinv) { Net.soc('pinvite', { name: ds.pinv }); return; }
   if (ds.ginv) { Net.soc('ginvite', { name: ds.ginv }); return; }
   if (ds.gkick) { Net.soc('gkick', { user: ds.gkick }); return; }
@@ -2647,8 +2753,13 @@ if (typeof Net !== 'undefined') {
     if (m.t === 'pinvite') uiConfirm('Convite de grupo', `${m.from} chamou você para o grupo dele.`, 'Entrar').then((y) => { if (y) Net.soc('paccept', { fid: m.fid }); });
     else if (m.t === 'ginvite') uiConfirm('Convite de guilda', `${m.from} convidou você para a guilda ${m.guild}.`, 'Entrar').then((y) => { if (y) Net.soc('gaccept'); });
     else if (m.t === 'pshare') { gainXp(m.xp); S.gold += m.gold; R.shareLog = (R.shareLog || 0) + 1; if (R.shareLog % 5 === 1) log(`👥 Grupo: +${fmt(m.xp)} XP e +${fmt(m.gold)} ouro dos abates de ${esc(m.from)}.`, 'muted'); }
+    else if (m.t === 'coop') onCoop(m);
+    else if (m.t === 'tinvite') uiConfirm('Pedido de troca', `${m.from} quer trocar itens com você.`, 'Abrir troca').then((y) => { if (y) Net.soc('taccept', { fid: m.fid }); });
+    else if (m.t === 'trade') { if (m.trade && R.win !== 'troca') { R.tradeSel = R.tradeSel || new Set(); R.win = null; openWin('troca'); } if (!m.trade) { R.tradeSel = new Set(); R.tradeGold = 0; if (R.win === 'troca') closeWin(); if (m.why) log(`🤝 ${esc(m.why)}`, 'muted'); } }
+    else if (m.t === 'tdone') tradeDone(m);
+    else if (m.t === 'closed') { if (R.coop && R.dungeon) { R.coop = null; exitDungeon(false); } }
     else if (m.t === 'gcreated') { S.gold = Math.max(0, S.gold - GUILD_COST); log(`🛡️ Guilda <b>${esc(m.name)}</b> fundada! (-${fmt(GUILD_COST)} ouro)`, 'lvl'); toast('Guilda fundada!', 'good'); S.stats.guild = 1; }
-    if (R.win === 'social') renderTab();
+    if (R.win === 'social' || R.win === 'troca') renderTab();
     renderPartyHud();
   };
   Net.probe().then((ok) => { if (!ok) return; Net.resume().finally(() => { if (!S || document.getElementById('screen-select').offsetParent) renderSelect(); }); });

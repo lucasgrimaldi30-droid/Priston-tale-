@@ -146,7 +146,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 const clients = new Map(); // ws -> estado do jogador
 let nextId = 1;
 const clean = (t, n) => String(t || '').replace(/[<>]/g, '').slice(0, n).trim();
-function roomOf(p) { return p.dun ? null : p.town ? 'town_' + FACTION[p.cls] : p.zone; }
+function roomOf(p) { return p.dun ? (p.coop && p.party ? 'coop_' + p.party : null) : p.town ? 'town_' + FACTION[p.cls] : p.zone; }
 const sendTo = (ws, obj) => { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); };
 const byName = (name) => { const n = String(name || '').toLowerCase(); for (const [ws, o] of clients) if (o.ready && o.name && o.name.toLowerCase() === n) return [ws, o]; return [null, null]; };
 
@@ -197,7 +197,7 @@ wss.on('connection', (ws, req) => {
       Object.assign(p, {
         name: clean(m.name, 16), cls: m.cls, lvl: Math.max(1, Math.min(100, m.lvl | 0)), rb: Math.max(0, m.rb | 0), title: clean(m.title, 30),
         zone: clean(m.zone, 4), town: !!m.town, dun: !!m.dun, x: +m.x || 0, z: +m.z || 0, face: +m.face || 0, moving: !!m.moving, atk: !!m.atk,
-        look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
+        coop: !!m.coop, look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
       });
       if (U.lastName !== p.name || U.lastLvl !== p.lvl) { U.lastName = p.name; U.lastLvl = p.lvl; U.lastCls = p.cls; persist(); }
       if (!p.ready) {
@@ -212,17 +212,70 @@ wss.on('connection', (ws, req) => {
       if (ch === 'party' && !pt) return sendTo(ws, { t: 'sys', text: 'Você não está em um grupo.' });
       if (ch === 'guild' && !U.guild) return sendTo(ws, { t: 'sys', text: 'Você não está em uma guilda.' });
       broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || (ch === 'zone' && roomOf(o) === room) || (ch === 'party' && pt && pt.members.has(o)) || (ch === 'guild' && db.users[o.key] && db.users[o.key].guild === U.guild));
-    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick)$/.test(m.t)) {
-      if (!p.ready || limited((m.t === 'pshare' ? 'sh:' : 'soc:') + p.key, m.t === 'pshare' ? 30 : 20, 10e3)) return;
+    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel)$/.test(m.t)) {
+      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : ['soc:', 20];
+      if (!p.ready || limited(lk[0] + p.key, lk[1], 10e3)) return;
       social(ws, p, U, m);
     }
   });
-  ws.on('close', () => { leaveParty(p); if (U.guild) setTimeout(() => pushGuild(U.guild), 50); if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
+  ws.on('close', () => { endTrade(p, 'O outro jogador saiu.'); leaveParty(p); if (U.guild) setTimeout(() => pushGuild(U.guild), 50); if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
 });
 
-// convites, grupo e guilda
+// ---------- trocas entre jogadores (o servidor guarda as ofertas e só fecha quando os dois confirmam) ----------
+const trades = new Map(); let nextTrade = 1;
+const tradeOf = (p) => (p.trade ? trades.get(p.trade) : null);
+function tradeView(tr, p) { const me = tr.a === p ? 'a' : 'b', ot = me === 'a' ? 'b' : 'a'; return { with: tr[ot].name, mine: tr.off[me], theirs: tr.off[ot], lockMe: tr.lock[me], lockThem: tr.lock[ot], okMe: tr.ok[me], okThem: tr.ok[ot] }; }
+function pushTrade(tr) { for (const x of [tr.a, tr.b]) sendTo(x.ws, { t: 'trade', trade: tradeView(tr, x) }); }
+function endTrade(p, why) { const tr = tradeOf(p); if (!tr) return; trades.delete(tr.id); for (const x of [tr.a, tr.b]) { x.trade = null; sendTo(x.ws, { t: 'trade', trade: null, why }); } }
+function cleanItem(it) {
+  if (!it || typeof it !== 'object' || typeof it.uid !== 'string' || typeof it.name !== 'string') return null;
+  const j = JSON.stringify(it); if (j.length > 3000) return null;
+  return JSON.parse(j);
+}
+
+// convites, grupo, guilda, masmorra em grupo e trocas
 function social(ws, p, U, m) {
   const err = (text) => sendTo(ws, { t: 'sys', text });
+  if (m.t === 'crelay') { // masmorra em grupo: o líder simula os monstros e os outros mandam os golpes
+    const pt = partyOf(p); if (!pt || !['start', 'sync', 'hit', 'kill', 'end', 'leave'].includes(m.k)) return;
+    const raw = JSON.stringify(m.d || {}); if (raw.length > 12000) return;
+    for (const o of pt.members) if (o !== p && (m.k === 'start' || m.k === 'hit' ? true : o.coop)) { if (m.k === 'hit' && o !== pt.leader) continue; sendTo(o.ws, { t: 'coop', k: m.k, d: m.d, from: p.name, fid: p.id }); }
+    return;
+  }
+  if (m.t === 'tinvite') {
+    const [tw, t] = byName(m.name); if (!t || t === p) return err('Jogador não encontrado online.');
+    if (p.trade || t.trade) return err('Alguém já está em uma troca.');
+    t.tinv = p.id; sendTo(tw, { t: 'tinvite', from: p.name, fid: p.id }); return err(`Pedido de troca enviado para ${t.name}.`);
+  }
+  if (m.t === 'taccept') {
+    if (!m.fid || p.tinv !== m.fid) return; p.tinv = null;
+    let a = null; for (const o of clients.values()) if (o.id === m.fid) a = o;
+    if (!a || a.trade || p.trade) return err('O pedido de troca expirou.');
+    const tr = { id: nextTrade++, a, b: p, off: { a: { items: [], gold: 0 }, b: { items: [], gold: 0 } }, lock: { a: false, b: false }, ok: { a: false, b: false } };
+    trades.set(tr.id, tr); a.trade = p.trade = tr.id; return pushTrade(tr);
+  }
+  const tr = tradeOf(p);
+  if (m.t === 'tcancel') return endTrade(p, `${p.name} cancelou a troca.`);
+  if (tr && ['toffer', 'tlock', 'tconfirm'].includes(m.t)) {
+    const me = tr.a === p ? 'a' : 'b', ot = me === 'a' ? 'b' : 'a';
+    if (m.t === 'toffer') {
+      if (tr.lock[me]) return;
+      const items = (Array.isArray(m.items) ? m.items : []).slice(0, 8).map(cleanItem).filter(Boolean);
+      tr.off[me] = { items, gold: Math.max(0, Math.min(1e12, Math.floor(+m.gold || 0))) };
+      tr.lock.a = tr.lock.b = false; tr.ok.a = tr.ok.b = false; // mudou a oferta: os dois precisam travar de novo
+    } else if (m.t === 'tlock') tr.lock[me] = true;
+    else if (m.t === 'tconfirm') {
+      if (!tr.lock.a || !tr.lock.b) return;
+      tr.ok[me] = true;
+      if (tr.ok.a && tr.ok.b) {
+        trades.delete(tr.id); tr.a.trade = tr.b.trade = null;
+        sendTo(tr.a.ws, { t: 'tdone', give: tr.off.a, get: tr.off.b, with: tr.b.name });
+        sendTo(tr.b.ws, { t: 'tdone', give: tr.off.b, get: tr.off.a, with: tr.a.name });
+        return;
+      }
+    }
+    return pushTrade(tr);
+  }
   if (m.t === 'pinvite') {
     const [tw, t] = byName(m.name); if (!t || t === p) return err('Jogador não encontrado online.');
     const pt = partyOf(p);
