@@ -1,81 +1,54 @@
 ---
 name: valdaria-dev
-description: Como desenvolver, testar, balancear e publicar o idle MMORPG "Crônicas de Valdária" deste repositório (classes, habilidades, monstros, equipamentos, cena 3D com modelos KayKit, cidades, áudio e a conta Full de demonstração). Use sempre que for mexer no jogo, adicionar conteúdo, corrigir bugs, rodar testes visuais ou subir uma nova versão.
+description: Guia para desenvolver, testar, balancear e publicar "Crônicas de Valdária", o MMORPG de navegador deste repositório (mundo aberto isométrico com modo automático, 8 classes, combate em grupo, equipamento visível por tier, cidades, missões, interface de MMO, cena 3D com Three.js e modelos KayKit). Use sempre que for mexer no jogo — adicionar classe, habilidade, monstro, mapa, item, missão ou NPC, corrigir bug, ajustar balanceamento, rodar testes, publicar uma nova versão ou planejar as próximas fases.
 ---
 
 # Crônicas de Valdária — guia de desenvolvimento
 
-Idle MMORPG de navegador, sem build: HTML + JS puro. Abra pelo servidor local (os modelos 3D precisam de HTTP).
+MMORPG de navegador em HTML + JavaScript puro, **sem etapa de build**. O jogador anda pelo mapa (tocar no chão e nos monstros) ou liga o **modo Auto**,
+que caça sozinho e mantém o progresso offline. Referência de estilo do dono do projeto: MMOs de navegador com câmera isométrica (tipo Eldevin).
 
-## Regra de conteúdo
-O jogo é **original e inspirado** no gênero dos MMORPGs clássicos. Pode copiar mecânicas (funções de classe, área, invocações, furtividade, bloqueio etc.),
-mas **não** use nomes, personagens, mapas, monstros, arte ou música de jogos existentes (ex.: tribos, cidades, classes e skills de outro MMORPG), nem renomeados.
+## Antes de começar
+1. **Converse em português do Brasil**, em passos curtos. O dono do projeto costuma estar no **celular**: explique o resultado sem jargão e ofereça o próximo passo.
+2. **Conteúdo sempre original.** Pode reproduzir *mecânicas* (funções de classe, área, invocação, furtividade, bloqueio, missões), mas nunca nomes, classes,
+   tribos, cidades, mapas, monstros, arte ou música de jogos existentes, nem renomeados. Se pedirem "uma cópia de X", explique e proponha a versão original.
+3. Leia a referência certa antes de mexer:
+   - `references/arquitetura.md` — arquivos, estado (`S`/`R`), funções principais de cada sistema.
+   - `references/conteudo.md` — como adicionar classe, habilidade, monstro, mapa, item, missão ou NPC, e as metas de balanceamento.
+   - `references/roadmap.md` — fases feitas e planejadas, decisões já tomadas, divisão do trabalho com o dono.
 
-## Arquitetura
-| Arquivo | Conteúdo |
-|---|---|
-| `js/data.js` | `FACTIONS`, `CLASSES` (atributos, habilidades), `MON_TYPES`/`MON_TYPE`, `PETS`, `CITIES`, `ZONES`, `RARITIES`, nomes de armas/armaduras, `AFFIXES`, `SHOP` |
-| `js/game.js` | Estado salvo `S` e de execução `R`, combate em grupo (`spawnMonster`, `playerHit`, `hitMonster`, `monsterHit`, `killMonster`, `trySkills`, `tick`), itens, refino, cidade/NPCs, UI, save, progresso offline, conta Full (`createFullAccount`) |
-| `js/scene3d.js` | Cena 3D (Three.js r128): cenários por mapa, cidades por facção, NPCs, câmera livre, modelos KayKit e animações, equipamento por tier (`buildWeaponT`, `buildShieldT`, `buildHelmetModel`, `attachArmor`), grupos (`st.ents`), invocações (`st.pet`), efeitos e partículas. No fim fica a fachada `Scene` que escolhe 3D ou 2D |
-| `js/scene.js` | Cena 2D (canvas), reserva para aparelhos fracos ou sem WebGL (`Scene2D`) |
-| `js/audio.js` | Efeitos e músicas procedurais (`Sfx.play`, `Sfx.music`) |
-| `assets/models/` | Modelos .glb otimizados (KayKit, CC0) + `anims.glb` (animações compartilhadas) + `skel_props.glb` |
-| `js/vendor/` | three.min.js r128, GLTFLoader, SkeletonUtils (sem CDN) |
+## Regras que já custaram bugs
+- **Nunca use `confirm()`, `prompt()` ou `alert()`.** A página publicada roda num iframe sem `allow-modals` e o navegador ignora em silêncio.
+  Use `uiDialog()` / `uiConfirm()` (em `js/game.js`).
+- O `localStorage` pode falhar no iframe: `loadSlot`/`save` já caem para `memSlots`. Não acesse `localStorage` direto sem `try/catch`.
+- Nomes de ossos dos modelos vêm **sem ponto** (`handslotr`, `upperarml`, `lowerlegl`…). O GLTFLoader remove os pontos.
+- Classes de CSS da interface já colidiram com nomes genéricos (`.skill`): use prefixos (`lg-`, `fx-`).
+- Estado novo em `S` precisa de valor padrão para saves antigos (veja a migração em `startGame`).
+- Chefes nunca devem prender o modo Auto num laço de morte: o chefe que vence some (`die`), e o Auto só ataca chefe desafiado ou que já está atacando.
 
-### Mundo aberto (Fase 1)
-Cada mapa é uma área de ~66×66 m com câmera isométrica. Lógica em `js/game.js`: `WORLD` (entrada, arena do chefe, limite de 12 monstros),
-`zoneCamps(zid)` (acampamentos fixos por semente, usados também pela cena), `spawnWorldMonster`, `spawnBoss`, `initWorld`, `playerAI` (ordem de
-movimento, alcance da arma, modo Auto), `monstersAI` (passear, aggro de 5 m, matilha, perseguir, voltar e curar ao se afastar 17 m).
-Ordens vêm da cena por `window.gameOrder({type:'move', x, z})` / `({type:'attack', sid})`. Na cena 3D: `buildWorld`, `heroFollowWorld`, `pickWorld`,
-`updateWorldUI` (anel do alvo e barrinhas de vida). `S.settings.auto` liga a caça automática. A área (aoe) atinge monstros a até 4,2 m do alvo.
-Próximas fases planejadas: 2 corpos humanos (MakeHuman + Mixamo, feito pelo usuário no PC), 3 interface de MMO, 4 equipamentos humanos, 5 multiplayer, 6 monstros novos.
-
-### Interface de MMO (Fase 3)
-Tela cheia (`#stage`) com HUD flutuante: `#player-card`, `.hud-top` (mapa, Auto, Cidade, Chefe), `.hud-right-col` (alvo, `#minimap`, `#quest-track`),
-`#chat` (abas Todos/Combate/Sistema via `LOG_CAT`, comandos em `chatCommand`), `.bottom-bar` (poções + `#skill-bar` + XP) e `.menu-btns`.
-Menus abrem em `#gwin` com `openWin(nome)` (personagem, inventario, habilidades, missoes, mapas, config). A barra de habilidades usa a skill ao tocar
-(`castSkill` → `R.forceSkill` ou `useUtility`); o ponto "A" liga ou desliga o uso automático. Teclas: 1–6 habilidades, Q/E poções, C/I/K/J/M janelas,
-Enter para o chat, Espaço para o Auto, Esc para fechar. Missões: `questDefs()` (3 caçadas + 1 chefe por mapa), `S.quests`, `questProgress` (em `killMonster`),
-`autoQuests` (quando `S.settings.autoQuest`), NPC `guarda` (Comandante Varek) na cidade.
-
-### Habilidades (`CLASSES[x].skills`)
-Tipos: `dmg` (alvo único; `hits`, `boss`, `holy`), `aoe` (todos; `targets`, `stun`, `slow`, `healPct`), `buff` (`stat` + `also`), `heal`, `summon` (`pet`: golem/falcao/fera), `stealth`, `passive` (`stat`/`val` ou `revive`).
-Stats de buff aceitos em `derived()`: atk, def, crit, critdmg, spd, evade, block, absorb, reflect, hpmax, undead, mshield.
-A IA de uso fica em `trySkills`: cura < 60% de vida, invocação, furtividade, buffs, e depois dano (área quando há 2+ monstros).
-
-### Equipamento visual
-Tier = `floor(ilvl/17)` (0–5). Cada tipo de arma tem 6 visuais em `W_BUILD` (foice, arco, espada, machado, martelo, dardo, cajado, cetro).
-Raridade dá a cor do brilho, e o refino aumenta a intensidade. Armadura, elmo, luvas, botas, escudo, amuleto e anel são presos aos ossos do modelo
-(nomes sem ponto: `handslotr`, `handslotl`, `head`, `chest`, `upperarml`, `wristr`, `lowerlegl`...). O herói é reconstruído quando `equipSig()` muda.
-
-## Testar
+## Rodar e testar
 ```bash
-python3 -m http.server 8765   # na raiz do repositório
+python3 -m http.server 8000          # jogar: http://localhost:8000 (modelos 3D precisam de HTTP)
+node tools/test/smoke.cjs            # teste completo: 8 classes, cidade, NPC, janelas, Conta Full em iframe, celular
+node tools/test/smoke.cjs --rapido   # versão curta (~1 min)
+node tools/test/balance.cjs 24       # simulação de 24 h por classe; ou: node tools/test/balance.cjs 12 lanceiro,arcanista
+node --check js/*.js                 # sintaxe
 ```
-Playwright já vem instalado no ambiente. Use `chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] })` para o WebGL.
-Para criar um herói no teste: `localStorage.clear(); slot=0; S=newCharacter('X','lanceiro'); S.lvl=50; save(); startGame(0)`.
-Para ver o equipamento de perto, defina `window.__camFocusHero = true` e role a roda do mouse no `#scene3d` (eventos `WheelEvent`).
-Uma chamada `tick()` equivale a 0,1 s de jogo, então dá para simular horas num loop (36000 ticks = 1 h).
-Alvos de balanceamento (simulação jogando sozinho com auto-equipar e mapa ideal): nível ~50–60 em 24 h e ~55–72 em 48 h, poucas mortes, nenhuma classe muito à frente.
+O teste de navegador sai com código 1 se houver erro no console e salva capturas em `build/test/`. **Olhe as capturas** antes de dizer que ficou bom.
+Para depurar à mão, no console da página: `localStorage.clear(); slot=0; S=newCharacter('X','lanceiro'); S.lvl=50; save(); startGame(0)`.
+`tick()` avança 0,1 s de jogo (36000 = 1 h). Para ver o equipamento de perto: `window.__camFocusHero = true` e zoom com a roda do mouse.
 
-**Nunca use `confirm()`, `prompt()` ou `alert()`**: a página publicada roda num iframe sem `allow-modals`, e o navegador ignora essas chamadas em silêncio. Use `uiDialog()` / `uiConfirm()` de `js/game.js`. Para reproduzir esse ambiente, carregue o jogo dentro de `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-forms">`.
-O `localStorage` pode falhar nesse ambiente; `loadSlot`/`save` caem para `memSlots` (memória).
-
-Sempre confira: `node --check js/*.js`, nenhum `pageerror` no console, capturas das 8 classes e das duas cidades, modo 2D e celular (390×844).
-
-## Modelos 3D
-Os originais são KayKit Adventurers e Skeletons (CC0). O pipeline usou `@gltf-transform`: remover as animações dos personagens, juntar 32 clipes em `anims.glb`,
-`resample` + `quantize`. Todos usam o mesmo esqueleto, então um clipe serve para qualquer modelo. O loader tenta `.glb` e, se falhar, `.json`.
-
-## Publicar (Artifact do claude.ai)
-O Artifact não serve `.glb`. Gere as cópias JSON e publique mapeando `assets/models/<Nome>.json`:
+## Publicar (link do claude.ai)
+O publicador não serve `.glb`. Gere cópias glTF em JSON (o jogo tenta `.glb` e cai para `.json`):
 ```bash
 (cd tools && npm i @gltf-transform/core@4.1.1 @gltf-transform/extensions@4.1.1) && node tools/models-to-json.mjs build/models-json
 ```
-Publique `index.html` com `files`: css/style.css, js/data.js, js/audio.js, js/scene.js, js/scene3d.js, js/game.js, js/vendor/*.js e
-`assets/models/*.json` → `build/models-json/*.json`. Link atual do jogo: https://claude.ai/artifact/WujEedKd9zmdsGRmU8Rwq6
-Num servidor próprio basta servir a pasta como arquivos estáticos (o `.glb` é usado direto).
+Publique `index.html` (Artifact, mesmo arquivo para manter o link) com `files`: `css/style.css`, `js/data.js`, `js/audio.js`, `js/scene.js`,
+`js/scene3d.js`, `js/game.js`, `js/vendor/three.min.js`, `js/vendor/GLTFLoader.js`, `js/vendor/SkeletonUtils.js` e cada
+`assets/models/<Nome>.json` → `build/models-json/<Nome>.json`. Numa atualização, basta enviar os arquivos que mudaram.
+Link atual: https://claude.ai/artifact/WujEedKd9zmdsGRmU8Rwq6. Num servidor próprio, sirva a pasta como estática (usa o `.glb` direto).
 
-## Conta Full
-O botão "⭐ Conta Full de demonstração" na seleção de personagens cria Engenheiro, Lanceiro e Arcanista no nível 100, com tudo lendário +10
-(`makeFullChar`). Para mudar as classes da conta, altere `createFullAccount` em `js/game.js`.
+## Fluxo de trabalho
+1. Mude o código. 2. `node --check js/*.js`. 3. `node tools/test/smoke.cjs` e confira as capturas. 4. Se mexeu em combate, XP ou drops,
+rode `tools/test/balance.cjs`. 5. Commit (mensagem em português) e push no branch de trabalho. 6. Publique. 7. Atualize esta skill e as referências
+quando mudar algo estrutural (nova fase, novo sistema, nova regra).

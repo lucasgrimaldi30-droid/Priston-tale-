@@ -27,7 +27,12 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - **Progresso offline** de até 8 horas e save automático no navegador (com exportar/importar).
 
 ## Desenvolvimento
-O guia completo para mexer, testar e publicar está na skill `.claude/skills/valdaria-dev/SKILL.md`.
+O guia completo para mexer, testar e publicar está na skill `.claude/skills/valdaria-dev/` (`SKILL.md` + `references/`).
+
+```bash
+node tools/test/smoke.cjs        # teste no navegador: 8 classes, cidade, NPC, janelas, Conta Full, celular
+node tools/test/balance.cjs 24   # simulação de balanceamento (24 h por classe)
+```
 
 ## Rodando localmente
 Os modelos 3D são carregados por HTTP, então abra o jogo por um servidor local (abrir o `index.html` direto do disco usa os bonecos simples):
