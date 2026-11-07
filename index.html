@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crônicas de Valdária</title>
+  <meta name="description" content="Idle MMORPG de navegador: escolha sua facção e classe, cace monstros, derrote chefes e upe até o nível 100.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Seleção de personagem -->
+  <section id="screen-select" class="screen">
+    <div class="title-box">
+      <h1>Crônicas de Valdária</h1>
+      <p class="subtitle">Idle MMORPG · Escolha seu herói</p>
+    </div>
+    <div id="slots" class="slots"></div>
+    <p class="muted center small-note">Seu progresso fica salvo neste navegador. O herói continua caçando mesmo com o jogo fechado (até 8h).</p>
+  </section>
+
+  <!-- Criação -->
+  <section id="screen-create" class="screen hidden">
+    <div class="title-box"><h1>Criar Herói</h1></div>
+    <div class="create-wrap">
+      <div id="faction-tabs" class="faction-tabs"></div>
+      <div id="class-grid" class="class-grid"></div>
+      <div class="create-foot">
+        <input id="char-name" maxlength="16" placeholder="Nome do herói" autocomplete="off">
+        <button class="btn" id="create-back">Voltar</button>
+        <button class="btn primary" id="create-btn" disabled>Criar herói</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Jogo -->
+  <section id="screen-game" class="screen hidden">
+    <header class="topbar">
+      <div id="hdr-name" class="hdr-name"></div>
+      <div class="hdr-right">
+        <span class="chip" id="hdr-lvl"></span>
+        <span class="chip gold">💰 <b id="hdr-gold"></b></span>
+        <span class="chip">💎 <b id="hdr-stones"></b></span>
+        <button class="btn small" id="btn-exit">Trocar herói</button>
+      </div>
+      <div id="xp-bar" class="xp-wrap"></div>
+    </header>
+
+    <main class="layout">
+      <aside class="col left">
+        <div class="panel" id="char-panel"></div>
+        <div class="panel" id="equip-panel"></div>
+      </aside>
+
+      <div class="col center">
+        <div class="panel arena-panel">
+          <div class="arena-head">
+            <div id="zone-title"></div>
+            <button class="btn small boss" id="boss-btn"></button>
+          </div>
+          <div class="arena">
+            <div class="fighter" id="player-card">
+              <div class="f-icon" id="p-icon"></div>
+              <div class="f-name">Você</div>
+              <div id="p-bars"></div>
+              <div id="p-buffs" class="buffs"></div>
+            </div>
+            <div class="vs">⚔️</div>
+            <div class="fighter" id="mon-card">
+              <div class="f-icon" id="mon-icon"></div>
+              <div class="f-name" id="mon-name"></div>
+              <div id="mon-bars"></div>
+            </div>
+          </div>
+          <div id="skill-bar" class="skill-bar"></div>
+        </div>
+        <div class="panel log-panel"><h3>Registro de combate</h3><div id="log" class="log"></div></div>
+      </div>
+
+      <aside class="col right">
+        <div class="panel tabs-panel">
+          <nav class="tabs">
+            <button class="tab-btn" data-tab="mapas">🗺️ Mapas</button>
+            <button class="tab-btn" data-tab="inventario">🎒 Itens</button>
+            <button class="tab-btn" data-tab="habilidades">📜 Skills</button>
+            <button class="tab-btn" data-tab="loja">🏪 Loja</button>
+            <button class="tab-btn" data-tab="refino">🔨 Refino</button>
+            <button class="tab-btn" data-tab="config">⚙️</button>
+          </nav>
+          <div id="tab-content" class="tab-content"></div>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+  <div id="modal" class="modal hidden"><div class="modal-box" id="modal-body"></div></div>
+  <div id="toasts" class="toasts"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
