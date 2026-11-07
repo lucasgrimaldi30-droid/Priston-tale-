@@ -995,6 +995,7 @@ const Scene3D = (() => {
     'Pirata Afogado':     { m: 'Skeleton_Rogue', tint: '#90d0c8', r: 'Skeleton_Blade' },
     'Capitão Abissal':    { m: 'Skeleton_Warrior', tint: '#70b0c8', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A', s: 1.15 },
     'Xamã Tribal':        { m: 'Skeleton_Mage', tint: '#b0e080', r: 'Skeleton_Staff', mage: true },
+    'Ceifador Astral':    { m: 'Skeleton_Warrior', tint: '#a090ff', r: 'Skeleton_Axe', s: 1.2 },
     'Guerreiro da Tempestade': { m: 'Skeleton_Warrior', tint: '#a8c8ff', r: 'Skeleton_Blade', l: 'Skeleton_Shield_Small_A' },
   };
   const NPC_MODEL = {

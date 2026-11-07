@@ -121,6 +121,21 @@ const startServer = require('./server.cjs');
     S.settings.autoAlma = true; const g0 = JSON.stringify(S.soul.grid); dropSoul(1, 30, 3); ok('Remonta sozinho (se o jogador ligar)', JSON.stringify(S.soul.grid) !== g0);
     S.soul.bag.atk[0] += 1; R.soulSel = { t: 'atk', l: 1 }; const fc = SOUL_ORDER.find((i) => !S.soul.grid[i] && soulCellOpen(i)) ?? 12; soulPlace(fc);
     ok('Montar à mão desliga a automática e mantém a escolha', S.settings.autoAlma === false && (dropSoul(1, 30, 2), S.soul.grid[fc] && S.soul.grid[fc].t === 'atk'));
+    // história, depois do 80, despertar, área perigosa e menus aos poucos
+    novo('gladiador', 1, { tut: 99 }); S.settings.auto = false; R.storyQ = []; tick();
+    ok('Herói novo começa a história e vê a conversa', storyState().ch === 0 && !!document.querySelector('#story-dlg:not(.hidden)'));
+    for (let i = 0; i < 15; i++) { const m = makeMonster('Coelho Saltador', '🐇', 1, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); }
+    ok('Capítulo 1 concluído com prêmio', storyState().ch === 1 && R.log.some((l) => l.msg.includes('História')));
+    ok('Menus aparecem aos poucos', document.querySelector('.menu-btns [data-win="alma"]').classList.contains('hidden') && winLocked('alma'));
+    localStorage.clear(); slot = 0; S = newCharacter('Velho', 'lanceiro'); S.lvl = 50; delete S.story; ok('Save antigo começa no capítulo do nível', STORY[storyState().ch].lvl >= 44 && STORY[storyState().ch].lvl <= 50, STORY[storyState().ch].title);
+    novo('paladino', 80, { tut: 99 }); S.settings.auto = false; S.story = { ch: STORY.findIndex((c) => c.obj.k === 'sboss'), prog: 0, seen: 99 }; S.zone = 'z9'; initWorld(); R.evT = 0; R.sbossT = 0; tick(); tick();
+    const vb = R.mons.find((m) => m.sboss); ok('Vaelor aparece na arena do Vale', !!vb && vb.name.startsWith('Vaelor'));
+    if (vb) { vb.hp = 0; killMonster(vb); } ok('Vencer Vaelor avança a história', STORY[storyState().ch].zone === 'e1' && !!S.stats.vaelor);
+    S.lvl = 85; ok('Depois do 80, solo rende pouco XP', teamXpFactor() === SOLO_80);
+    const x0 = S.xp; gainXp(100000); ok('XP solo reduzido', S.xp - x0 === Math.round(100000 * SOLO_80) || S.lvl > 85);
+    S.lvl = 90; S.awk = {}; const at0 = derived().atkMin; awkAdd('furia'); awkAdd('furia');
+    ok('Despertar: 10 pontos no nível 90 e cada um conta', awkFree() === 8 && derived().atkMin >= Math.round(at0 * 1.05));
+    S.zone = 'e1'; initWorld(); ok('Fenda Primordial tem monstros perigosos', R.mons.filter((m) => m.danger).length >= 8);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

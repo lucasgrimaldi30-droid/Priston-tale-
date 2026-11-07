@@ -53,6 +53,7 @@ python3 -m http.server 8000          # jogar: http://localhost:8000 (modelos 3D 
 node tools/test/features.cjs         # sistemas (tutorial, habilidades, loja, forja, gemas, chefe, masmorra, diárias, login, conjuntos, renascimento, PWA, duplicatas) ~20 s
 node tools/test/smoke.cjs            # navegador: 8 classes, cidade, NPC, janelas, Conta Full em iframe, celular (~3 min); --rapido para ~1 min
 node tools/test/balance.cjs 24       # simulação de 24 h por classe (ou: node tools/test/balance.cjs 12 lanceiro,arcanista)
+node tools/test/danger.cjs           # Fenda Primordial: médio solo × médio em equipe × muito forte (5 min cada)
 node tools/test/multiplayer.cjs      # sobe o servidor e testa 2 jogadores: presença, chat, save na nuvem, ranking, segurança (cd server && npm install antes)
 cd server && npm install && node server.js   # jogar online localmente em http://localhost:8080
 node --check js/*.js                 # sintaxe

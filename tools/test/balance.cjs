@@ -31,7 +31,7 @@ const CLASSES = (process.argv[3] || 'gladiador,engenheiro,lanceiro,cacadora,pala
             if (S.stones > 3 && S.equip.arma) { R.refSel = S.equip.arma.uid; doRefine(); }
           }
         }
-        if (marks.includes(h)) res.push(`${h}h: nv ${S.lvl} ${S.zone} mortes ${S.stats.deaths}`);
+        if (marks.includes(h)) res.push(`${h}h: nv ${S.lvl} ${S.zone} mortes ${S.stats.deaths}${typeof storyState === "function" ? " cap " + storyState().ch : ""}`);
       }
       return res;
     }, [HOURS, marks]);

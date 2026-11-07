@@ -568,3 +568,18 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 @media (max-width: 600px) { .soul-grid { grid-template-columns: repeat(5, 1fr); width: 100%; } .soul-cell { width: auto; aspect-ratio: 1; } .art-cross { grid-template-columns: repeat(3, 1fr); width: 100%; } }
 .build-box { background: rgba(255, 210, 120, .06); border: 1px solid rgba(255, 210, 120, .3); border-radius: 10px; padding: 8px 10px; margin: 8px 0; display: grid; gap: 4px; font-size: 13px; }
 .build-box small { color: #c8c8d0; }
+
+/* história e despertar */
+.story-dlg { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 60; width: min(560px, calc(100vw - 24px)); }
+.sd-box { background: rgba(14, 16, 24, .96); border: 1px solid #c8a050; border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .6); }
+.sd-title { font-family: Cinzel, serif; color: #f0c860; font-size: 13px; margin-bottom: 6px; }
+.sd-row { display: flex; gap: 10px; align-items: flex-start; }
+.sd-ico { font-size: 30px; line-height: 1; }
+.sd-row b { color: #ffe8a0; font-size: 13px; }
+.sd-row p { margin: 3px 0 8px; font-size: 14px; line-height: 1.4; }
+.qt-story { border-left: 3px solid #f0c860 !important; }
+.qt-story small { display: block; font-size: 10px; color: #c8c8d0; }
+.awk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.awk { text-align: left; background: rgba(0, 0, 0, .25); border: 1px solid #4a5470; border-radius: 8px; padding: 5px 7px; color: #ddd; cursor: pointer; display: grid; font-size: 12px; }
+.awk small { font-size: 10px; color: #9ab; }
+.awk:disabled { cursor: default; opacity: .85; }

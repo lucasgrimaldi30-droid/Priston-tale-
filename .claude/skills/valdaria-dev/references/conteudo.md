@@ -49,7 +49,9 @@ fxVortex, fxNova, fxRain, slash, ring, projectile, burst`. Bônus visível enqua
 `NPC_MODEL`. Posição também no minimapa da cidade (`drawMinimap`).
 
 ## Balanceamento (metas atuais)
-- `node tools/test/balance.cjs 24`: **nível ~45–56 em 24 h** de jogo contínuo no Auto (com pontos de habilidade automáticos), poucas mortes (< 30), nenhuma classe muito à frente.
+- Regra do dono: **até o 80 dá para ir sozinho seguindo a história; do 80 ao 100 é com equipe** (solo é muito lento) e cada ponto depois do 80 tem
+  que fazer diferença. A Fenda Primordial é o lugar de grupo (ou de herói muito forte). Rode `node tools/test/danger.cjs` se mexer em combate.
+- `node tools/test/balance.cjs 24`: **nível ~50–60 em 24 h** (com a história; mostra o capítulo alcançado) de jogo contínuo no Auto (com pontos de habilidade automáticos), poucas mortes (< 30), nenhuma classe muito à frente.
 - Se uma classe travar sem morrer, procure laços: chefe que cura, alvo inalcançável ou missão impossível ocupando espaço.
 - XP por nível: `xpNeed(l) = 40·l^2,6 (+8%/nível acima de 79) + 60`. Monstros do mundo: vida ×0,55, ataque ×0,5, XP ×0,78 (×0,6 do grupo ×1,3 do mundo).
 - Missões: caçada = 12% do XP do nível; chefe = 35%.
@@ -85,3 +87,8 @@ Regra do dono: **cada personagem reforça o que falta**. Quem já bate muito bus
 | b3 | Selva Esmeralda 🌴 | 30–38 | Deserto de Cobre | Pantera Negra, Planta Carnívora, Xamã Tribal | Serpente Ancestral |
 | b4 | Picos Trovejantes ⛈️ | 60–69 | Cidadela Infernal | Harpia, Golem Rúnico, Guerreiro da Tempestade | Senhor do Trovão (quase sempre chove) |
 Para um monstro novo: nome em `MON_TYPE` (data.js), aparência em `MON` (scene.js) e, se for humanoide, modelo em `MON_MODEL` (scene3d.js).
+
+## Capítulo de história
+Em `STORY` (`js/game.js`): `{ lvl, title, zone, obj: {k, n}, intro: [[quem, fala]...], outro: [...] }`. `quem` vem de `SPEAK`. Objetivos que o Auto
+consegue fazer: `kill`, `boss` (desafia sozinho com 25 abates), `visit` (só desvio do mapa atual), `dungeon` (do mapa atual), `sboss`.
+Mantenha a ordem por nível e o mapa compatível com o nível, senão o Auto trava. Conteúdo sempre próprio (nada de nomes de outros jogos).

@@ -350,6 +350,7 @@ function derived() {
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SP[k]) SB[k] = (SB[k] || 0) + SP[k];
   // alma e artefato
   const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
+  for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
@@ -434,6 +435,8 @@ function walkZone(ex) {
   if (nz.parent) { S.visited = S.visited || {}; if (!S.visited[nz.id]) { S.visited[nz.id] = 1; log(`🧭 Você descobriu <b>${esc(nz.name)}</b>!`, 'lvl'); } }
   R.arrive = back ? inward(back, 3.5) : null;
   log(`🚶 Você chegou a <b>${nz.icon} ${esc(nz.name)}</b> (Nv. ${nz.min}+).`, 'muted'); toast(`${nz.icon} ${nz.name}`);
+  storyProgress('visit', nz.id);
+  if (nz.danger) { log('⚠️ <b>Área perigosa:</b> monstros muito fortes. Sozinho, só com um herói muito forte. Recomendado: equipe de 3 ou mais.', 'death'); toast('⚠️ Área perigosa: vá em equipe de 3+', 'bad'); }
   Sfx.play('portal'); R.dirty.all = true;
   if (R.win === 'mapas') renderTab();
 }
@@ -443,10 +446,15 @@ function travelStep(dt, speed) {
   R.travelT = (R.travelT || 0) - dt;
   if (!R.travel && R.travelT <= 0) {
     R.travelT = 4;
-    const cz = zoneById(S.zone);
-    if (cz && cz.parent && S.lvl >= cz.min + cz.span + 2) { R.travel = zoneExits(S.zone)[0]; log(`🚶 Este mapa ficou fácil. Voltando para ${esc(zoneById(cz.parent).name)}...`, 'muted'); }
+    const cz = zoneById(S.zone), sw = storyWants();
+    if (sw && sw.zone !== S.zone && zoneById(sw.zone) && zoneById(sw.zone).parent === S.zone) { const bx = zoneExits(S.zone).find((e) => e.to === sw.zone); if (bx && !exitLocked(bx)) { R.travel = bx; log(`📖 Seguindo a história: indo para ${esc(zoneById(sw.zone).name)}...`, 'muted'); return false; } }
+    if (sw && sw.obj.k === 'dungeon' && sw.zone === S.zone && !R.inTown && dunReady(S.zone) && S.gold >= dunCost(cz) && S.hp > derived().maxHp * 0.7) { log('📖 Seguindo a história: entrando na masmorra.', 'muted'); enterDungeon(S.zone); return true; }
+    if (cz && cz.danger && (R.dangerDeaths || 0) >= 2 && partyNear() < 2) { R.dangerDeaths = 0; R.travel = zoneExits(S.zone)[0]; log('⚠️ Muito perigoso sozinho. Voltando para um lugar mais seguro...', 'muted'); }
+    else if (cz && cz.parent && !cz.danger && S.lvl >= cz.min + cz.span + 2 && !(sw && sw.zone === S.zone)) { R.travel = zoneExits(S.zone)[0]; log(`🚶 Este mapa ficou fácil. Voltando para ${esc(zoneById(cz.parent).name)}...`, 'muted'); }
     const i = ZONES.findIndex((z) => z.id === S.zone), nx = i >= 0 && ZONES[i + 1];
-    if (!R.travel && nx && S.lvl >= nx.min + 1 && !R.mons.some((m) => m.boss && m.aggro)) { R.travel = zoneExits(S.zone).find((e) => e.side === 'next'); if (R.travel) log(`🚶 Você já está forte para ${nx.icon} ${esc(nx.name)}. Indo para lá a pé...`, 'muted'); }
+    const si = sw ? ZONES.findIndex((z) => z.id === (zoneById(sw.zone).parent || sw.zone)) : -1; // mapa da história (ou o de onde sai o desvio)
+    if (!R.travel && i >= 0 && si >= 0 && si < i && S.lvl - ZONES[si].min <= 30) { R.travel = zoneExits(S.zone).find((e) => e.side === 'prev'); if (R.travel) log(`📖 Seguindo a história: voltando para ${esc(ZONES[i - 1].name)}...`, 'muted'); }
+    if (!R.travel && nx && S.lvl >= nx.min + 1 && !(si >= 0 && si < i) && !(sw && sw.zone === S.zone && sw.obj.k !== 'kill' && S.lvl < nx.min + 6) && !R.mons.some((m) => m.boss && m.aggro)) { R.travel = zoneExits(S.zone).find((e) => e.side === 'next'); if (R.travel) log(`🚶 Você já está forte para ${nx.icon} ${esc(nx.name)}. Indo para lá a pé...`, 'muted'); }
   }
   if (!R.travel) return false;
   if (aliveMons().some((m) => m.aggro && !m.returning && dist2(m, R.pos) < 8)) return false; // luta primeiro, depois segue viagem
@@ -458,6 +466,9 @@ function travelStep(dt, speed) {
 }
 // monstros que vêm dos mapas vizinhos e errantes raros
 const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
+// área perigosa (Fenda Primordial): calibrada para herói médio do 88 sozinho quase morrer, com equipe de 3 ficar tranquilo
+// e herói muito forte (itens +10, Alma e artefatos) ficar solo — ver tools/test/danger.cjs
+const DANGER = { hp: 4, atk: 19, xp: 2.4, bossHp: 5, bossAtk: 8 };
 function spawnSource() {
   const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
   if (exits.length && Math.random() < BORDER_CHANCE) {
@@ -496,6 +507,7 @@ function spawnWorldMonster(initial = false) {
     const m = makeMonster(src.mon[0], src.mon[1], Math.max(1, src.lvl), false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
     if (src.border) m.border = src.border;
+    if (zoneById(S.zone).danger && !src.border) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.hp); m.atk = Math.round(m.atk * DANGER.atk); m.def = Math.round(m.def * 1.3); m.xp = Math.round(m.xp * DANGER.xp); m.gold = Math.round(m.gold * 1.6); m.danger = true; }
     if (!initial && !R.dungeon && Math.random() < ROAM_CHANCE && !R.mons.some((o) => o.roamer)) { // errante raro: elite forte que cruza o mapa
       m.roamer = true; m.elite = true; m.skin = m.name; m.name = m.name + ' Errante';
       m.maxHp = m.hp = Math.round(m.maxHp * 4); m.atk = Math.round(m.atk * 1.5); m.def = Math.round(m.def * 1.2); m.xp *= 7; m.gold *= 7;
@@ -518,6 +530,7 @@ function spawnBoss() {
   const z = zoneById(S.zone);
   const m = makeMonster(z.boss[0], z.boss[1], z.min + zoneSpan(z) + 2, true, 1);
   Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2 });
+  if (z.danger) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.bossHp); m.atk = Math.round(m.atk * DANGER.bossAtk); m.xp *= 3; m.danger = true; }
   R.mons.push(m);
   log(`👑 O chefe <b>${esc(m.name)}</b> apareceu na arena ao norte!`, 'boss'); Sfx.play('boss');
   if (S.settings.auto) { R.mon = m; R.move = null; }
@@ -545,6 +558,8 @@ function eventNow(t = Date.now()) {
   return { id: null, slot, next: ne, nextIn: EV_SLOT - into };
 }
 function eventTick() {
+  storyTick();
+  { const c = storyCur(); if (c && c.obj.k === 'sboss' && S.lvl >= c.lvl && S.zone === c.zone && !R.inTown && !R.dungeon && R.pos && (R.sbossT = (R.sbossT || 0) - 1) <= 0) { R.sbossT = 20; spawnStoryBoss(); } }
   const ev = eventNow();
   if (ev.id !== R.lastEv) {
     if (ev.id) { log(`${ev.icon} <b>Evento: ${ev.name}!</b> ${ev.desc} (10 min)`, 'boss'); toast(`${ev.icon} Evento: ${ev.name}!`, 'good'); }
@@ -702,7 +717,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons');
+  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id);
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -832,7 +847,7 @@ function hitMonster(m, mult, sk, d, forceCrit, src) {
   if (m.type === 'undead') dmg *= 1 + d.undead + (sk && sk.holy ? 0.5 : 0);
   if (m.boss && sk && sk.boss) dmg *= 1 + sk.boss;
   if (sk && sk.type === 'aoe') dmg *= 1 + d.aoeMult; else if (sk && sk.type === 'dmg') dmg *= 1 + d.singleMult;
-  dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
+  dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def) * teamBond().dmg));
   m.hp -= dmg; m.aggro = true;
   if (isMember()) R.coop.hits.set(m.sid, (R.coop.hits.get(m.sid) || 0) + dmg);
   meterHit(dmg, src || (sk ? sk.name : 'Ataque básico'));
@@ -878,7 +893,7 @@ function monsterHit(m) {
   }
   if (Math.random() < d.evade) { Sfx.play('whiff'); Scene.monsterAttack({ sid: m.sid, text: 'Esquiva', cls: 'miss' }); return; }
   if (Math.random() < d.block) { Sfx.play('hit', { gap: 60 }); Scene.monsterAttack({ sid: m.sid, text: 'Bloqueio', cls: 'block' }); return; }
-  dmg = Math.max(1, Math.round(dmg * (1 - d.absorb)));
+  dmg = Math.max(1, Math.round(dmg * (1 - d.absorb) * teamBond().taken));
   if (d.mshield > 0 && S.mp > 0) { const toMp = Math.min(S.mp, Math.round(dmg * d.mshield)); S.mp -= toMp; dmg -= toMp; }
   S.hp -= dmg;
   if (d.reflect > 0) { const rf = Math.round(dmg * d.reflect); m.hp -= rf; }
@@ -908,6 +923,9 @@ function killMonster(m) {
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
+  if (!m.tower && !m.dun) storyProgress('kill', S.zone);
+  if (m.sboss) { storyProgress('sboss', S.zone); S.stats.vaelor = 1; }
+  else if (m.boss && !m.tower && !m.wboss && !m.dun) storyProgress('boss', S.zone);
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
@@ -930,7 +948,7 @@ function killMonster(m) {
     if (Math.random() < 0.25) { addMat('essencia', 1); log('✨ O elite deixou uma Essência!', 'loot'); }
   } else {
     if (Math.random() < 0.09) dropItem(genItem(m.lvl));
-    dropGem(0.025, m.lvl); dropSoul(0.004, m.lvl);
+    dropGem(0.025, m.lvl); dropSoul(m.danger ? 0.03 : 0.004, m.lvl);
     if (Math.random() < 0.012) { S.stones++; log('💎 Você encontrou uma Pedra de Refino!', 'loot'); }
   }
   gainXp(xp);
@@ -961,6 +979,7 @@ function dropItem(it) {
 
 function gainXp(xp) {
   if (S.lvl >= MAX_LEVEL) return;
+  if (S.lvl >= 80) xp = Math.round(xp * teamXpFactor());
   S.xp += xp;
   while (S.lvl < MAX_LEVEL && S.xp >= xpNeed(S.lvl)) {
     S.xp -= xpNeed(S.lvl);
@@ -974,7 +993,7 @@ function gainXp(xp) {
     if (sk) log(`📜 Nova habilidade: <b>${esc(sk.name)}</b>`, 'lvl');
     R.dirty.all = true;
   }
-  if (S.settings.autoPts) autoDistribute();
+  if (S.settings.autoPts) { autoDistribute(); if (awkFree() > 0) awkAuto(); }
   autoSkillPoints();
   if (S.lvl >= MAX_LEVEL) S.xp = 0;
 }
@@ -1001,6 +1020,7 @@ function die(killer) {
   }
   S.hp = 0;
   S.stats.deaths++;
+  if (zoneById(S.zone) && zoneById(S.zone).danger && !R.dungeon) R.dangerDeaths = (R.dangerDeaths || 0) + 1;
   const loss = Math.floor(xpNeed(S.lvl) * 0.03);
   S.xp = Math.max(0, S.xp - loss);
   Sfx.play('death');
@@ -1111,7 +1131,7 @@ function tick() {
   if (R.dungeon) { if (!isMember()) dungeonTick(dt); }
   // população do mapa
   else if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
-  if (!R.dungeon && (R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25 && S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1 && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
+  if (!R.dungeon && (R.bossFight || ((S.settings.autoBoss || (storyWants() && storyWants().obj.k === 'boss' && storyWants().zone === S.zone)) && (S.zoneKills[S.zone] || 0) >= 25 && S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1 && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
   usePotions(d);
   if (S.hp <= 0) return;
   if (isMember()) coopMemberTick(dt);
@@ -1150,7 +1170,7 @@ function playerAI(dt, d) {
   if (!R.dungeon && gatherStep(dt, speed)) return;
   if (!R.mon && S.settings.auto) { // no modo manual o herói só ataca o que o jogador tocar
     const attackers = aliveMons().filter((m) => m.aggro && !m.returning);
-    const pool = attackers.length ? attackers : aliveMons().filter((m) => (!m.boss || (m.wboss && S.lvl >= m.lvl - 6)));
+    const pool = attackers.length ? attackers : aliveMons().filter((m) => (!m.boss || ((m.wboss || m.sboss) && S.lvl >= m.lvl - 6)));
     let best = null, bd = 1e9;
     for (const m of pool) { const dd = dist2(m, R.pos); if (dd < bd) { bd = dd; best = m; } }
     R.mon = best;
@@ -1229,9 +1249,9 @@ function monstersAI(dt) {
     if (m.stun > 0) { m.stun -= dt; continue; }
     if (m.slow > 0) m.slow -= dt;
     const sp = m.slow > 0 ? 0.5 : 1, dp = dist2(m, R.pos);
-    if (!m.aggro && !m.returning && dp < (m.dun ? 9 : m.boss ? 9 : 5) && !(R.stealth > 0)) {
+    if (!m.aggro && !m.returning && dp < (m.dun ? 9 : m.boss ? 9 : m.danger ? 8.5 : 5) && !(R.stealth > 0)) {
       m.aggro = true;
-      for (const o of live) if (!o.aggro && !o.boss && o !== m && o.name === m.name && dist2(o, m) < 4.5) o.aggro = true; // matilha
+      for (const o of live) if (!o.aggro && !o.boss && o !== m && (o.name === m.name || (m.danger && o.danger)) && dist2(o, m) < (m.danger ? 7 : 4.5)) o.aggro = true; // matilha (na área perigosa, todos juntos)
     }
     if (m.boss && m.aggro) bossMechanics(m, dt);
     if (m.aggro) {
@@ -1573,6 +1593,35 @@ function tradeDone(m) {
   save(); R.dirty.inv = true; if (R.win === 'troca') closeWin();
 }
 
+// ---------- depois do nível 80: equipe, Despertar e área perigosa ----------
+const SOLO_80 = 0.22, DUO_80 = 0.55, TEAM_80 = 1.15; // XP depois do 80: sozinho, em dupla, em equipe de 3+
+function teamXpFactor() { if (S.lvl < 80) return 1; const n = partyNear(); return n >= 2 ? TEAM_80 : n === 1 ? DUO_80 : SOLO_80; }
+// Laço de Equipe: cada colega no mesmo mapa = +25% de dano e -20% de dano recebido
+const BOND = { dmg: 0.25, taken: 0.2 };
+function teamBond() { const n = Math.min(3, partyNear()); return { dmg: 1 + BOND.dmg * n, taken: Math.max(0.35, 1 - BOND.taken * n), n }; }
+const AWK = {
+  furia:      { name: 'Fúria',      icon: '🔥', k: 'atkp',    per: 3,    txt: (v) => `+${v}% ataque` },
+  precisao:   { name: 'Precisão',   icon: '🎯', k: 'crit',    per: 1,    txt: (v) => `+${v}% crítico` },
+  vigor:      { name: 'Vigor',      icon: '❤️', k: 'hpp',     per: 4,    txt: (v) => `+${v}% vida` },
+  bastiao:    { name: 'Bastião',    icon: '🛡️', k: 'defp',    per: 3,    txt: (v) => `+${v}% defesa` },
+  celeridade: { name: 'Celeridade', icon: '💨', k: 'spd',     per: 0.02, txt: (v) => `+${Math.round(v * 100)}% velocidade` },
+  ruina:      { name: 'Ruína',      icon: '💀', k: 'critdmg', per: 0.05, txt: (v) => `+${Math.round(v * 100)}% dano crítico` },
+};
+function awkState() { S.awk = S.awk || {}; return S.awk; }
+function awkTotal() { return Math.max(0, S.lvl - 80); }
+function awkFree() { return awkTotal() - Object.values(awkState()).reduce((a, n) => a + n, 0); }
+function awkAdd(k) { if (awkFree() <= 0 || !AWK[k]) return; awkState()[k] = (S.awk[k] || 0) + 1; Sfx.play('click'); R.dirty.all = true; }
+function awkAuto() { // segue a sugestão da classe quando os pontos são automáticos
+  const map = { atk: 'furia', crit: 'precisao', vit: 'vigor', def: 'bastiao', res: 'bastiao' }, ord = buildWeights().order.map((t) => map[t]);
+  let i = 0; while (awkFree() > 0) { const k = ord[i % 3]; awkState()[k] = (S.awk[k] || 0) + 1; i++; }
+}
+function awkPanel() {
+  if (S.lvl < 80) return `<h3>Despertar <small class="muted">(libera no nível 80)</small></h3><p class="muted small-note">Do 81 ao 100, cada nível dá 1 ponto de Despertar com efeito grande.</p>`;
+  const a = awkState();
+  return `<h3>Despertar <span class="pts">Pontos: <b>${awkFree()}</b></span></h3><div class="awk-grid">${Object.entries(AWK).map(([k, v]) => `<button class="awk" data-awk="${k}" ${awkFree() <= 0 ? 'disabled' : ''}><span>${v.icon} ${v.name} <b>${a[k] || 0}</b></span><small>${v.txt(v.per)} por ponto · agora ${v.txt(+(v.per * (a[k] || 0)).toFixed(2))}</small></button>`).join('')}</div>
+    <p class="muted small-note">Depois do 80, sozinho o XP rende ${Math.round(SOLO_80 * 100)}%; em dupla ${Math.round(DUO_80 * 100)}%; com 3 ou mais no mesmo mapa ${Math.round(TEAM_80 * 100)}%.</p>`;
+}
+
 // ---------- grupo e guilda (precisam do servidor) ----------
 const GUILD_COST = 50000;
 function partyNear() { const pt = online() && Net.st.party; return pt ? pt.members.filter((m) => m.name !== S.name && m.zone === S.zone && !m.town && !m.dun).length : 0; }
@@ -1583,7 +1632,7 @@ function renderPartyHud() {
   const pt = online() && Net.st.party;
   if (!pt) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('div'); el.id = 'party-hud'; el.className = 'party-hud'; const st = document.getElementById('stage'); if (!st) return; st.appendChild(el); }
-  el.innerHTML = `<div class="ph-title">👥 Grupo${partyNear() ? ` · +${partyNear() * 10}% XP` : ''}</div>` + pt.members.filter((m) => m.name !== S.name).map((m) => {
+  el.innerHTML = `<div class="ph-title">👥 Grupo${partyNear() ? ` · +${partyNear() * 10}% XP · Laço: +${Math.round((teamBond().dmg - 1) * 100)}% dano, -${Math.round((1 - teamBond().taken) * 100)}% dano recebido` : ''}</div>` + pt.members.filter((m) => m.name !== S.name).map((m) => {
     const far = m.zone !== S.zone || m.town || m.dun;
     return `<div class="ph-row${far ? ' far' : ''}"><b>${esc(m.name)}</b> <small>Nv.${m.lvl}${m.name === pt.leader ? ' 👑' : ''}${far ? ' · ' + (m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')) : ''}</small><i style="--w:${Math.round((m.hp || 0) * 100)}%"></i></div>`;
   }).join('');
@@ -1652,7 +1701,19 @@ function bar(cur, max, cls, label) {
   return `<div class="bar ${cls}"><div class="fill" style="width:${p}%"></div><span>${label}</span></div>`;
 }
 
+// os menus aparecem aos poucos, para o começo não assustar
+const UNLOCK = { conquistas: 3, ranking: 6, social: 10, alma: 20 };
+const UNLOCK_NAME = { conquistas: '🏆 Conquistas', ranking: '🏅 Ranking', social: '👥 Grupo e Guilda', alma: '🔮 Alma e Artefatos' };
+function winLocked(w) { return UNLOCK[w] && S.lvl < UNLOCK[w]; }
+function applyUnlocks() {
+  S.unl = S.unl || {};
+  for (const b of document.querySelectorAll('.menu-btns [data-win]')) {
+    const w = b.dataset.win, lock = winLocked(w); b.classList.toggle('hidden', !!lock);
+    if (!lock && UNLOCK[w] && !S.unl[w]) { S.unl[w] = 1; if (S.lvl === UNLOCK[w] || S.lvl === UNLOCK[w] + 1) { toast(`🔓 Novo: ${UNLOCK_NAME[w]}!`, 'good'); log(`🔓 Liberado: <b>${UNLOCK_NAME[w]}</b> (veja o menu).`, 'lvl'); } }
+  }
+}
 function renderAll() {
+  applyUnlocks();
   renderHeader();
   renderChar();
   renderEquip();
@@ -1802,7 +1863,7 @@ function renderChar() {
       <span>Abates</span><b>${fmt(S.stats.kills)}</b>
       <span>Chefes</span><b>${fmt(S.stats.bosses)}</b>
       <span>Mortes</span><b>${fmt(S.stats.deaths)}</b>
-    </div>`;
+    </div>${awkPanel()}`;
 }
 
 function itemIcon(it) {
@@ -2180,6 +2241,118 @@ function tabWeekly() {
   <p class="muted">Faça as 3 para ganhar mais 3 pedras da Alma de nível alto.</p>`;
 }
 
+// ============================================================
+//  HISTÓRIA: a Marca do Vazio (nível 1 → 80) e o que vem depois
+// ============================================================
+const SPEAK = {
+  varek: { name: 'Comandante Varek', icon: '⚔️' }, mirela: { name: 'Sábia Mirela', icon: '📜' }, torvak: { name: 'Torvak, o Ferreiro', icon: '🔨' },
+  elyon: { name: 'Elyon, Mestre dos Portais', icon: '🌀' }, bruna: { name: 'Bruna, a Mercadora', icon: '🛒' }, vaelor: { name: 'Vaelor, o Arauto do Vazio', icon: '🌑' },
+  heroi: { name: 'Você', icon: '🙂' },
+};
+const STORY_BOSS = { name: 'Vaelor, o Arauto do Vazio', icon: '🌑', skin: 'Lich Ancião', zone: 'z9' };
+// objetivo: kill (n abates no mapa), boss (chefe do mapa), visit (chegar a pé), dungeon (concluir masmorra), sboss (vencer Vaelor), lvl (chegar ao nível)
+const STORY = [
+  { lvl: 1, title: 'A primeira marca', zone: 'z1', obj: { k: 'kill', n: 15 }, intro: [['varek', 'Que bom que chegou. Os bichos dos Campos de Aurora estão agressivos como nunca. Coelhos atacando caravanas... isso não é normal.'], ['varek', 'Vá até os Campos e derrote 15 deles. Quero saber o que está acontecendo.']],
+    outro: [['varek', 'Quinze? Ótimo trabalho. E olhe isto: alguns tinham uma mancha roxa na pele, como uma queimadura.'], ['varek', 'Vou mostrar para a Sábia Mirela. Enquanto isso, fique atento.']] },
+  { lvl: 4, title: 'O javali marcado', zone: 'z1', obj: { k: 'boss' }, intro: [['mirela', 'Essa mancha é a Marca do Vazio. Uma energia antiga que corrói tudo o que toca.'], ['mirela', 'Dizem que o Rei Javali carrega a marca maior de todas. Derrote-o e traga o que encontrar.']],
+    outro: [['mirela', 'Um fragmento de cristal negro... estava cravado nele. Alguém está espalhando esses cristais pelo reino de propósito.'], ['heroi', 'Quem faria isso?'], ['mirela', 'Ainda não sei. Mas o rastro vai para o Bosque Sussurrante.']] },
+  { lvl: 8, title: 'Sussurros no bosque', zone: 'z2', obj: { k: 'kill', n: 40 }, intro: [['elyon', 'Meus portais para o Bosque tremem quando abro. Algo puxa a energia de lá.'], ['elyon', 'Limpe o caminho: 40 criaturas do Bosque Sussurrante.']],
+    outro: [['elyon', 'O tremor parou. E os goblins falavam de "navios negros" numa praia escondida ao sul do bosque.'], ['elyon', 'Procure a saída de baixo no Bosque. Ninguém mapeou aquele caminho ainda.']] },
+  { lvl: 10, title: 'A costa esquecida', zone: 'b1', obj: { k: 'visit' }, intro: [['bruna', 'Navios negros? Meus fornecedores sumiram justamente naquela costa!'], ['bruna', 'Se você achar o caminho para a Costa dos Naufrágios, eu te pago bem.']],
+    outro: [['bruna', 'Você achou! E os cascos estão cheios de cristais negros... carga para as Minas de Ferro Negro, pelo que diz o mapa.'], ['bruna', 'Tome, pelo trabalho. E cuidado: quem manda nesses navios não gosta de visitas.']] },
+  { lvl: 14, title: 'A bruxa que sabia demais', zone: 'z3', obj: { k: 'boss' }, intro: [['mirela', 'A Bruxa do Pântano Cinzento compra esses cristais. Ela sabe quem os vende.'], ['mirela', 'Derrote-a. Talvez ela fale antes de cair.']],
+    outro: [['heroi', 'Antes de cair, ela gritou um nome: "O Arauto vai voltar".'], ['mirela', 'O Arauto... uma lenda de antes do reino existir. Se for verdade, estamos em perigo.']] },
+  { lvl: 21, title: 'Ferro e cristal', zone: 'z4', obj: { k: 'dungeon' }, intro: [['torvak', 'O metal das Minas de Ferro Negro chega para mim podre, rachado. Tem cristal negro misturado.'], ['torvak', 'Desça na masmorra das Minas e limpe tudo. Traga o que sobrar do mal que está lá.']],
+    outro: [['torvak', 'Um martelo com a marca de um culto... os Mantos do Vazio. Eles constroem os colossos que guardam as minas.'], ['torvak', 'Pelo menos agora meu ferro volta a prestar. Obrigado.']] },
+  { lvl: 30, title: 'O selo do sol', zone: 'z5', obj: { k: 'boss' }, intro: [['mirela', 'Achei nos livros: o Arauto foi preso por quatro selos. Um deles está com o Faraó Esquecido, no Deserto de Cobre.'], ['mirela', 'Se o culto pegar o selo antes de nós, uma das correntes cai.']],
+    outro: [['mirela', 'O Selo Solar está seguro com você. Mas ele está frio... alguém já tirou parte da força dele.'], ['mirela', 'Faltam três selos. E o culto está um passo à frente.']] },
+  { lvl: 38, title: 'Ossos que obedecem', zone: 'z6', obj: { k: 'boss' }, intro: [['varek', 'Meus batedores voltaram das Catacumbas Esquecidas falando de um mago que levanta os mortos e fala com uma sombra.'], ['varek', 'Derrote o Lich Ancião. Quero saber com quem ele conversa.']],
+    outro: [['vaelor', 'Você quebra meus servos um por um... interessante. Eu sou Vaelor. E cada selo que você protege só me deixa mais curioso.'], ['heroi', 'Era a voz do Arauto. Ele está acordado.']] },
+  { lvl: 47, title: 'O dragão de gelo', zone: 'z7', obj: { k: 'boss' }, intro: [['mirela', 'O segundo selo é o coração do Dragão Branco, guardião dos Picos Gélidos. Vaelor corrompeu o guardião.'], ['mirela', 'É triste, mas só derrotando o dragão o selo volta a ser nosso.']],
+    outro: [['mirela', 'O Selo de Gelo... você conseguiu. O dragão descansou em paz.'], ['mirela', 'Dois selos com a gente. O terceiro está na Cidadela Infernal.']] },
+  { lvl: 57, title: 'Portões de fogo', zone: 'z8', obj: { k: 'boss' }, intro: [['elyon', 'A Cidadela Infernal está abrindo portais por todo lado. O Senhor das Chamas usa o terceiro selo para isso.'], ['elyon', 'Feche esses portões. Derrote-o.']],
+    outro: [['elyon', 'Os portais fecharam. O Selo de Fogo é nosso.'], ['vaelor', 'Três selos... e mesmo assim eu estou mais perto do que você imagina. Os titãs já me ouvem.']] },
+  { lvl: 63, title: 'A tempestade', zone: 'b4', obj: { k: 'boss' }, intro: [['mirela', 'O último selo foi escondido nos Picos Trovejantes, sob a guarda do Senhor do Trovão.'], ['mirela', 'O caminho sai da Cidadela, pela saída de baixo. Pegue o selo antes do culto.']],
+    outro: [['mirela', 'Os quatro selos! Com eles, podemos prender Vaelor de novo... se conseguirmos chegar até ele.'], ['mirela', 'Ele está no Vale dos Titãs, acordando os gigantes.']] },
+  { lvl: 70, title: 'O despertar dos titãs', zone: 'z9', obj: { k: 'boss' }, intro: [['varek', 'Todo o exército do reino está no Vale dos Titãs. O Titã Primordial acordou e está esmagando nossas linhas.'], ['varek', 'Derrube o titã. É o último muro antes de Vaelor.']],
+    outro: [['varek', 'O titã caiu! Os soldados estão gritando o seu nome.'], ['varek', 'Agora é com você. Fique mais forte e enfrente Vaelor na arena do Vale.']] },
+  { lvl: 78, title: 'O Arauto do Vazio', zone: 'z9', obj: { k: 'sboss' }, intro: [['vaelor', 'Então você veio. Quatro selos nas mãos de um mortal... vamos ver se aguenta o peso.'], ['mirela', 'Ele está na arena ao norte do Vale dos Titãs. Use os selos. É agora ou nunca!']],
+    outro: [['vaelor', 'Os selos... ardem... Mas você não entende. Eu era só a porta. O que vem do outro lado não pode ser preso.'], ['mirela', 'Vaelor foi selado. Mas a fenda que ele abriu no Abismo Eterno continua lá, e cresce.'], ['varek', 'Daqui para frente, ninguém vai sozinho. Junte uma equipe, aventureiro.']] },
+  { lvl: 80, title: 'Além da fenda', zone: 'e1', obj: { k: 'visit' }, intro: [['elyon', 'A fenda está no Abismo Eterno. Siga a saída de baixo de lá e você chega na Fenda Primordial.'], ['elyon', 'É o lugar mais perigoso que já vi. Sozinho, só se você for muito forte. Vá com no mínimo três.']],
+    outro: [['elyon', 'Você pisou na Fenda e voltou para contar. Daqui até o nível 100, a força vem da equipe.'], ['heroi', 'Então vamos juntos.']] },
+];
+function storyState() {
+  if (!S.story) { // heróis que já existiam começam no capítulo do seu nível (sem prêmio dos anteriores)
+    let ch = 0; if (S.lvl > 5) { ch = STORY.findIndex((c) => c.lvl >= S.lvl - 6); if (ch < 0) ch = STORY.length - 1; }
+    S.story = { ch, prog: 0, seen: -1 };
+  }
+  return S.story;
+}
+// o que o Auto deve fazer pela história neste mapa
+function storyWants() { const c = storyCur(); return c && S.lvl >= c.lvl && S.settings.auto ? c : null; }
+function storyCur() { const st = storyState(); return STORY[st.ch] || null; }
+function storyObjText(c) { const z = zoneById(c.zone); const zn = z ? z.name : ''; return { kill: `Derrote ${c.obj.n} monstros em ${zn}`, boss: `Derrote o chefe de ${zn}`, visit: `Chegue a pé em ${zn}`, dungeon: `Conclua a masmorra de ${zn}`, sboss: `Vença ${STORY_BOSS.name} na arena de ${zn}`, lvl: `Chegue ao nível ${c.obj.n}` }[c.obj.k]; }
+function storyNeed(c) { return c.obj.k === 'kill' ? c.obj.n : 1; }
+function storyReady() { const c = storyCur(); return !!(c && S.lvl >= c.lvl); }
+function storyProgress(kind, zone, n = 1) {
+  const c = storyCur(), st = storyState();
+  if (!c || S.lvl < c.lvl || c.obj.k !== kind || (zone && zone !== c.zone)) return;
+  st.prog = Math.min(storyNeed(c), st.prog + n);
+  if (st.prog >= storyNeed(c)) storyFinish();
+  else renderQuestTrack();
+}
+function storyFinish() {
+  const st = storyState(), c = STORY[st.ch]; if (!c) return;
+  const xp = Math.round(xpNeed(Math.min(S.lvl, 79)) * 0.15), gold = Math.round(400 * Math.pow(c.lvl + 2, 1.3));
+  S.gold += gold; gainXp(xp); S.stones += 2 + Math.floor(c.lvl / 10);
+  if (st.ch >= 4) dropItem(genItem(Math.min(MAX_LEVEL, c.lvl + 3), 4));
+  log(`📖 <b>História: ${esc(c.title)}</b> concluída! +${fmt(xp)} XP, +${fmt(gold)} ouro, +${2 + Math.floor(c.lvl / 10)} 💎.`, 'lvl');
+  toast(`📖 ${c.title}: concluída!`, 'good'); Sfx.play('levelup');
+  storyShow(c.outro, c.title + ' — fim');
+  st.ch++; st.prog = 0; S.stats.story = st.ch;
+  renderQuestTrack();
+}
+// conversas em fila; o jogo continua rodando por trás (modo idle não trava)
+function storyShow(lines, title) { (R.storyQ = R.storyQ || []).push({ lines, title, i: 0 }); storyNext(); }
+function storyNext() {
+  let el = document.getElementById('story-dlg');
+  const q = R.storyQ || [], cur = q[0];
+  if (!cur) { if (el) el.classList.add('hidden'); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'story-dlg'; el.className = 'story-dlg'; document.body.appendChild(el); }
+  const [who, text] = cur.lines[cur.i], sp = SPEAK[who] || SPEAK.heroi;
+  el.innerHTML = `<div class="sd-box"><div class="sd-title">📖 ${esc(cur.title)}</div><div class="sd-row"><span class="sd-ico">${sp.icon}</span><div><b>${esc(who === 'heroi' ? S.name : sp.name)}</b><p>${esc(text)}</p></div></div>
+    <div class="row-btns"><button class="btn small" data-story="skip">Pular</button><button class="btn small primary" data-story="next">${cur.i < cur.lines.length - 1 ? 'Continuar ▸' : 'Fechar'}</button></div></div>`;
+  el.classList.remove('hidden');
+}
+function storyClick(a) {
+  const q = R.storyQ || []; if (!q[0]) return;
+  if (a === 'skip' || q[0].i >= q[0].lines.length - 1) q.shift(); else q[0].i++;
+  Sfx.play('click'); storyNext();
+}
+function storyTick() { // abre a conversa do capítulo novo quando o nível chega
+  const c = storyCur(), st = storyState(); if (!c || S.lvl < c.lvl || st.seen === st.ch) return;
+  st.seen = st.ch; storyShow(c.intro, `Capítulo ${st.ch + 1}: ${c.title}`);
+  log(`📖 Novo capítulo da história: <b>${esc(c.title)}</b> — ${storyObjText(c)}.`, 'boss');
+  if (c.obj.k === 'visit' && S.zone === c.zone) storyProgress('visit', c.zone);
+  renderQuestTrack();
+}
+function spawnStoryBoss() {
+  if (R.mons.some((m) => m.sboss)) return;
+  const m = makeMonster(STORY_BOSS.name, STORY_BOSS.icon, 84, true, 1);
+  Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2, sboss: true, skin: STORY_BOSS.skin, type: 'demon' });
+  m.maxHp = m.hp = Math.round(m.maxHp * 3.2); m.atk = Math.round(m.atk * 1.1); m.xp *= 4; m.gold *= 5;
+  R.mons = R.mons.filter((x) => !x.boss); R.mons.push(m);
+  log(`🌑 <b>${esc(m.name)}</b> espera você na arena ao norte!`, 'boss'); Sfx.play('boss');
+}
+function tabStory() {
+  const st = storyState(), c = storyCur();
+  const done = STORY.slice(0, st.ch).map((x, i) => `<div class="q-card ok"><h4><span>✔ ${i + 1}. ${esc(x.title)}</span><button class="btn tiny" data-sreplay="${i}">Rever</button></h4></div>`).join('');
+  const cur = c ? `<div class="q-card"><h4><span>📖 ${st.ch + 1}. ${esc(c.title)}</span><small class="muted">Nível ${c.lvl}+</small></h4>
+    ${S.lvl >= c.lvl ? `<p>${esc(storyObjText(c))}</p><div class="q-prog"><i style="width:${st.prog / storyNeed(c) * 100}%"></i></div><small>${st.prog}/${storyNeed(c)}</small><div class="item-actions"><button class="btn tiny" data-sreplay="${st.ch}">Ver conversa</button></div>` : `<p class="muted">Libera no nível ${c.lvl}.</p>`}</div>`
+    : '<p class="good">Você terminou a história principal! Do nível 80 ao 100, o caminho é com equipe.</p>';
+  return `<div class="q-sec">📖 História: a Marca do Vazio</div>${cur}${done}`;
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -2298,6 +2471,8 @@ const ACH = [
   { id: 't30', name: 'Mestre da Torre', desc: 'Chegue ao andar 30 da Torre Infinita', ok: () => (S.towerBest || 0) >= 30, stones: 20, title: 'Mestre da Torre' },
   { id: 'wb1', name: 'Caçador de Avatares', desc: 'Derrote um Chefe Mundial', ok: () => (S.stats.wbosses || 0) >= 1, stones: 8, title: 'Caçador de Avatares' },
   { id: 'exp4', name: 'Desbravador', desc: 'Descubra os 4 mapas escondidos andando pelas saídas', ok: () => Object.keys(S.visited || {}).length >= 4, stones: 10, title: 'Desbravador' },
+  { id: 'st6', name: 'Caçador de Cristais', desc: 'Conclua 6 capítulos da história', ok: () => storyState().ch >= 6, stones: 10 },
+  { id: 'stv', name: 'Selador do Vazio', desc: 'Derrote Vaelor, o Arauto do Vazio', ok: () => !!S.stats.vaelor, stones: 30, title: 'Selador do Vazio' },
   { id: 'art1', name: 'Consagrado', desc: 'Transforme um item +10 em artefato', ok: () => (S.stats.arts || 0) >= 1, stones: 10, title: 'Consagrado' },
   { id: 'soul5', name: 'Alma em Harmonia', desc: 'Forme uma combinação na grade da Alma', ok: () => S.soul && soulLines().length >= 1, stones: 10, title: 'Alma em Harmonia' },
   { id: 'ro1', name: 'Rastreador', desc: 'Derrote um monstro Errante', ok: () => (S.stats.roamers || 0) >= 1, stones: 5, title: 'Rastreador' },
@@ -2422,7 +2597,7 @@ function tabDaily() {
   <p class="muted">Faça as 3 para ganhar uma gema e +50% de experiência por 30 minutos.</p>`;
 }
 function tabQuests() {
-  return tabDaily() + tabWeekly() + tabQuestsMain();
+  return tabStory() + tabDaily() + tabWeekly() + tabQuestsMain();
 }
 function tabQuestsMain() {
   const q = questState(), defs = questDefs();
@@ -2444,7 +2619,9 @@ function tabQuestsMain() {
 function renderQuestTrack() {
   const el = document.getElementById('quest-track'); if (!el || !S) return;
   const q = questState(), defs = questDefs();
-  el.innerHTML = Object.keys(q.active).map((id) => { const d = defs.find((x) => x.id === id); if (!d) return ''; const pr = q.active[id], ok = pr >= d.need; return `<div class="qt-item ${ok ? 'ok' : ''}" data-win="missoes"><b>${ok ? '✔ ' : ''}${esc(d.title)}</b> ${Math.min(pr, d.need)}/${d.need}</div>`; }).join('');
+  const sc = storyCur(), sst = storyState();
+  const sline = sc && S.lvl >= sc.lvl ? `<div class="qt-item qt-story" data-win="missoes"><b>📖 ${esc(sc.title)}</b> ${storyNeed(sc) > 1 ? `${sst.prog}/${storyNeed(sc)}` : ''}<small>${esc(storyObjText(sc))}</small></div>` : '';
+  el.innerHTML = sline + Object.keys(q.active).map((id) => { const d = defs.find((x) => x.id === id); if (!d) return ''; const pr = q.active[id], ok = pr >= d.need; return `<div class="qt-item ${ok ? 'ok' : ''}" data-win="missoes"><b>${ok ? '✔ ' : ''}${esc(d.title)}</b> ${Math.min(pr, d.need)}/${d.need}</div>`; }).join('');
 }
 
 const NPCS = {
@@ -2491,6 +2668,7 @@ function setTown(on) {
 const WIN_TITLES = { alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
+  if (winLocked(name)) { toast(`Libera no nível ${UNLOCK[name]}.`); return; }
   R.win = name;
   $('#gwin').classList.remove('hidden');
   $('#gwin-title').textContent = WIN_TITLES[name] || '';
@@ -2793,7 +2971,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2838,6 +3016,9 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.story) { storyClick(ds.story); return; }
+  if (ds.sreplay !== undefined) { const c = STORY[+ds.sreplay]; if (c) storyShow(+ds.sreplay < storyState().ch ? [...c.intro, ...c.outro] : c.intro, c.title); return; }
+  if (ds.awk) { awkAdd(ds.awk); renderChar(); return; }
   if (ds.soul) { soulPlace(+ds.soul); return; }
   if (ds.ssel) { const [t2, l2] = ds.ssel.split(':'); R.soulSel = R.soulSel && R.soulSel.t === t2 && R.soulSel.l === +l2 ? null : { t: t2, l: +l2 }; return renderTab(); }
   if (ds.scomb) { const [t2, l2] = ds.scomb.split(':'); soulCombine(t2, +l2); return; }
