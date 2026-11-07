@@ -15,16 +15,21 @@
 | `tools/` | `models-to-json.mjs` (publicação) e `test/` (smoke, balance, servidor estático) |
 
 ## Estado
-- `S` = personagem salvo (localStorage `valdaria_slot_N`): `cls, lvl, xp, gold, pts, attr, equip, inv, pots, stones, zone, zoneKills, bosses, quests, settings, stats, skillOff`.
-  `settings`: `autoHp, autoMp, autoSell, autoBoss, autoBuyPots, autoPts, gfx, sfxVol, musVol, muted, auto, autoQuest`.
-- `R` = execução (não salvo): `mons` (monstros vivos no mapa), `mon` (alvo), `pos`, `move`, `face`, `moving`, `worldZone`, `pet`, `stealth`,
-  `buffs`, `cds`, `dead`, `inTown`, `npc`, `win`, `tab`, `log`, `chatTab`, `forceSkill`.
-- `derived()` calcula tudo a partir de `S` + buffs + passivas: vida, mana, ataque, defesa, crítico, velocidade, esquiva, bloqueio, absorção, reflexo, escudo de mana etc.
+- `S` = personagem salvo (localStorage `valdaria_slot_N`):
+  - básico: `name, cls, lvl, xp, gold, pts, attr, hp, mp, stones, pots, zone, zoneKills, bosses, stats {kills, deaths, bosses, elites, dungeons, goldEarned}`
+  - itens: `equip, inv` (item: `slot, wtype, ilvl, rarity, min, max, def, affixes, refine, req, gems[], set`), `gems {tipo: [n1..n5]}`
+  - progressão: `skillLv {id: 1–10}`, `skillOff`, `rebirths`, `quests {active, done}`, `daily {day, list, streak, last, bonusTaken}`, `ach`, `title`, `tut`
+  - extras: `owned`, `mount`, `companion`, `xpBoostUntil`, `dunCd`, `settings`
+  - `settings`: `autoHp, autoMp, autoSell, autoBoss, autoBuyPots, autoPts, autoSkill, autoQuest, auto, gfx, quality, sfxVol, musVol, muted`
+- `R` = execução (não salvo): `mons`, `mon` (alvo), `pos`, `move`, `face`, `moving`, `mounted`, `worldZone`, `dungeon`, `tele` (marcas de chefe),
+  `pet` (invocação), `stealth`, `buffs`, `cds`, `dead`, `inTown`, `npc`, `win`, `tab`, `forgeTab`, `log`, `chatTab`, `forceSkill`, `castCount`.
+- `derived()` junta atributos + itens ativos (`S.lvl >= req`) + gemas + conjuntos + buffs + passivas + mascote + renascimentos.
 
 ## Laço do jogo (`tick`, 10× por segundo)
-regeneração → cidade (zona segura) → `initWorld` se trocou de mapa → morte/renascer → repor monstros (`spawnWorldMonster`, limite `WORLD.cap`)
-→ chefe (`spawnBoss`) → poções automáticas → `monstersAI` → invocação → `playerAI`.
-A interface roda em `startLoop` (renderLive a cada tick; minimapa a cada 2; rastreador de missões a cada 10). Abas em segundo plano recuperam os ticks atrasados.
+regeneração → cidade (zona segura) → `initWorld` se trocou de mapa (fora de masmorra) → morte/renascer → `dungeonTick` **ou** repor monstros
+(`spawnWorldMonster`, limite `WORLD.cap`) → chefe (`spawnBoss`, Auto só com nível) → poções → `monstersAI` (inclui `bossMechanics`)
+→ `resolveTelegraphs` → invocação → `playerAI` (`autoDodge`, ordem de movimento, alvo, ataque/`trySkills`).
+Interface em `startLoop`: `renderLive` a cada tick; minimapa a cada 2; tutorial a cada 5; missões a cada 10; conquistas a cada 50.
 
 ## Mundo aberto
 - `WORLD`: área de ±33 m, entrada ao sul `{0,15}`, arena do chefe ao norte `{0,-23}`, 12 monstros.
@@ -62,7 +67,7 @@ Atalhos no `keydown` do fim de `game.js`.
 - Câmera: `updateCamera` (isométrica no mundo, fixa na cidade), controles em `bindControls` (arrastar, roda, pinça, duplo clique), toque → `pickWorld`/`pickNpc`.
 - Tiers visuais: `floor(ilvl/17)` → 0–5; `TIER_COL`, `METAL`, `GRIP`; raridade dá cor e brilho, refino aumenta a intensidade.
 
-## Sistemas de progressão (melhorias gerais)
+## Sistemas de progressão
 - **Níveis de habilidade:** `S.skillLv[id]` (1–10), pontos `skillPointsTotal() = floor(nível × 0,6)`, `skillAt(s)` aplica os bônus do nível
   (dano +12%/nv, recarga −3%/nv, duração, efeito; custo de mana +5%/nv). Use sempre `classSkills()` no lugar de `CLASSES[x].skills` em combate.
   `autoSkillPoints()` gasta os pontos quando `S.settings.autoSkill`.

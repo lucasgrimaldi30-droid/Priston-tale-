@@ -1,16 +1,22 @@
 # Roadmap e decisões
 
 ## Feito
-- Base idle: 8 classes em 2 facções, atributos, 10 mapas com chefes, drops por raridade, refino +10, loja, progresso offline (8 h), 3 espaços de herói.
-- Cena 3D (Three.js) com modelos KayKit CC0 animados; cena 2D de reserva; áudio procedural; cidades por facção (Forja de Ferrovale, Santuário de Lumínia).
-- Reforma: combate em grupo, área, atordoar, lentidão, invocações, furtividade, bloqueio, escudo de mana, reflexo, ressurreição, tipos de monstro.
-- Equipamento 100% visível por tier (6 visuais por arma, elmo, armadura, luvas, botas, escudo, amuleto, anel). Conta Full de demonstração.
-- **Fase 1** — mundo aberto isométrico, tocar para andar/atacar, monstros com IA, modo Auto.
-- **Fase 3** — interface de MMO em tela cheia, minimapa, chat com comandos, barra de habilidades manual, atalhos, 40 missões (Comandante Varek).
+- **Base:** 8 classes em 2 facções, atributos, 10 mapas com chefes, raridades, refino +10, loja, progresso offline (8 h), 3 espaços de herói, Conta Full.
+- **Visual e som:** cena 3D (Three.js) com modelos KayKit CC0 animados, cena 2D de reserva, áudio procedural, cidades por facção
+  (Forja de Ferrovale, Santuário de Lumínia), equipamento visível por tier, efeito próprio por habilidade, bônus visíveis, impacto dos golpes.
+- **Combate:** grupos, área, atordoar, lentidão, invocações, furtividade, bloqueio, escudo de mana, reflexo, ressurreição, tipos de monstro, elites,
+  chefes com marcas no chão/fúria/reforços, masmorras de 3 andares.
+- **Fase 1:** mundo aberto isométrico, tocar para andar/atacar, monstros com IA, modo Auto.
+- **Fase 3:** interface de MMO em tela cheia, minimapa, chat com comandos, barra de habilidades manual, atalhos, 40 missões (Comandante Varek).
+- **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
+  renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA).
 
-- **Melhorias gerais:** níveis de habilidade, elites, chefes com mecânicas, masmorras, gemas, forja, loja nova, montarias, mascotes,
-  conquistas e títulos, tutorial, equipar melhores, qualidade gráfica.
-- **Retenção:** missões diárias, prêmio de login (7 dias), renascimento, conjuntos de equipamento, impacto dos golpes, aplicativo (PWA).
+## Ideias sugeridas e ainda não feitas
+Torre infinita · chefe mundial e eventos de hora em hora · especialização de classe no nível 50 · bestiário com bônus · coleta e profissões ·
+mascotes que evoluem · dia/noite e clima · efeito das habilidades crescendo com o nível · mais mapas e biomas · medidor de dano e estatísticas.
+
+## Pendente com o dono
+- Revisão **golpe por golpe** das 8 classes (ele vai jogar e mandar os ajustes, um por vez).
 
 ## Planejado (o dono pediu para deixar os modelos de personagens e monstros para o final)
 - **Fase 5 — multiplayer:** servidor (Node.js), contas, salvamento online, outros jogadores no mapa, chat real, anti-trapaça (servidor calcula XP/drops).

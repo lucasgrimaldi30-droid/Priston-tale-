@@ -30,6 +30,7 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 O guia completo para mexer, testar e publicar está na skill `.claude/skills/valdaria-dev/` (`SKILL.md` + `references/`).
 
 ```bash
+node tools/test/features.cjs     # sistemas de progressão (rápido)
 node tools/test/smoke.cjs        # teste no navegador: 8 classes, cidade, NPC, janelas, Conta Full, celular
 node tools/test/balance.cjs 24   # simulação de balanceamento (24 h por classe)
 ```

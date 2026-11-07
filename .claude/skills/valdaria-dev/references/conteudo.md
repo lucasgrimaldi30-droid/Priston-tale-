@@ -28,6 +28,21 @@ As missões do mapa são geradas sozinhas (`questDefs`).
 Tier = `floor(ilvl/17)`. Nomes por tier em `WEAPON_NAMES`/`ARMOR_SLOTS`. Visual de arma nova: crie `wNovaArma(t, k, M, rc)` e registre em `W_BUILD`
 (a arma é montada apontando para −y a partir da mão). Raridades em `RARITIES`, atributos extras em `AFFIXES`.
 
+## Conjunto, gema, conquista, diária, login e loja
+- **Conjunto:** `SETS` em `game.js` (`name, tier, color, b2, b4, d2, d4`; chaves de bônus: `defp, hpp, crit, critdmg, atkp, spd, block, xpb`).
+  Um conjunto por tier; peças nascem em `maybeSet`.
+- **Gema:** `GEMS` em `data.js` (`name, icon, color, label, per`) e o efeito em `gemBonus`.
+- **Conquista:** item em `ACH` (`id, name, desc, ok(), gold, stones, title`).
+- **Diária:** item em `DAILY_TYPES` (`k, t(n), n()`, `minLvl` opcional) e um `dailyProgress('k')` no ponto do jogo onde acontece.
+- **Prêmio de login:** `LOGIN_DAYS` (7 posições).
+- **Loja:** `SHOP` em `data.js` (`type`: hp, mp, mat, scroll, gembag, mount, pet); o efeito da compra fica em `buyShop`.
+- **Masmorra:** custo `dunCost`, recarga `DUN_CD`, andares e força dos monstros em `dungeonFloor`, prêmio em `dungeonReward`.
+
+## Efeito visual de uma habilidade
+`SFX[id]` em `scene3d.js`: `anim` (clipe do modelo), `motion` (`spin` com `turns`, `leap` com `h`, `dash` com `n`) e `fx(ctx)`, que agenda os efeitos
+e chama `ctx.impact(hit)`/`ctx.hitAll()`. Ajudantes prontos: `fxWhirl, fxShock, fxCracks, fxSpikes, fxBeam, fxBolt, fxCross, fxShards, fxMeteor,
+fxVortex, fxNova, fxRain, slash, ring, projectile, burst`. Bônus visível enquanto ativo: `BUFF_VIS[id] = [tipo, cor]`.
+
 ## NPC da cidade
 `NPCS` (`game.js`: nome, ícone, aba, fala), botão em `#npc-bar` (`index.html`), e em `scene3d.js`: `NPC_LOOK` (posição), `NPC_NAMES`, `NPC_ICON`,
 `NPC_MODEL`. Posição também no minimapa da cidade (`drawMinimap`).
