@@ -93,6 +93,12 @@ Atalhos no `keydown` do fim de `game.js`.
   Itens com `req` acima do nível ficam **inativos** em `derived()` até o herói alcançá-los.
 - **Conjuntos:** `SETS` (um por tier 2–5), `maybeSet` (18% das peças raras+ de armadura/elmo/luvas/botas), `setCounts`, `setBonus` (2 e 4 peças).
   Na cena, as peças usam a cor do conjunto e o herói ganha aura (`setfull` com 4 peças).
+- **Especialização (nível 50):** `SPECS[classe]` (2 por classe, chaves de bônus atkp, defp, hpp, crit, critdmg, spd, block, singleMult, aoeMult,
+  petMult, healMult, buffDur, undead, mshield), `specOf()`, `chooseSpec(id)` (trocar custa 20.000 × nível em ouro). Cartões na janela de habilidades.
+- **Mascotes evoluem:** `S.petXp[id]` conta abates; `petLevel(id)` = 1 + √(abates/60) até 10; cada nível dá +15% ao bônus do mascote.
+- **Bestiário:** `S.best[nome]` conta abates; marcos `BEST_TIERS` (50/250/1000) dão +0,25% de dano e XP cada (`bestTiers()`). Janela `bestiario` (tecla B).
+- **Medidor:** `R.meter` (`meter()`, `meterHit(dano, fonte)` chamado em `hitMonster`), janela `stats` (tecla D): DPS 30 s, XP/ouro/abates por hora, dano por habilidade.
+- **Efeito cresce com o nível:** em `scene3d.js`, `FXS = 1 + (nv−1) × 0,07` aumenta os efeitos grandes; no nível 10 sai um brilho dourado extra.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

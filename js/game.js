@@ -176,6 +176,71 @@ function upgradeSkill(id) {
   renderSkillBar(); renderTab();
 }
 
+// ---------- especialização de classe (nível 50) ----------
+const SPEC_LVL = 50;
+const SPECS = {
+  gladiador:  [{ id: 'berserker', name: 'Berserker', icon: '🩸', desc: '+20% ataque, +10% velocidade, +20% dano em alvo único, −10% defesa', b: { atkp: 20, spd: 0.1, singleMult: 0.2, defp: -10 } },
+               { id: 'guardiao', name: 'Guardião', icon: '🛡️', desc: '+30% defesa, +20% vida, +10% bloqueio, +10% dano em área', b: { defp: 30, hpp: 20, block: 0.1, aoeMult: 0.1 } }],
+  engenheiro: [{ id: 'forjador', name: 'Forjador', icon: '🤖', desc: 'Autômato +60% mais forte, +20% defesa', b: { petMult: 0.6, defp: 20 } },
+               { id: 'demolidor', name: 'Demolidor', icon: '💥', desc: '+30% dano em área, +10% ataque', b: { aoeMult: 0.3, atkp: 10 } }],
+  cacadora:   [{ id: 'atiradora', name: 'Atiradora de Elite', icon: '🎯', desc: '+10% crítico, +40% dano crítico, +15% alvo único', b: { crit: 10, critdmg: 0.4, singleMult: 0.15 } },
+               { id: 'feras', name: 'Mestra das Feras', icon: '🦅', desc: 'Falcão +80% mais forte, +10% velocidade', b: { petMult: 0.8, spd: 0.1 } }],
+  lanceiro:   [{ id: 'ceifador', name: 'Ceifador', icon: '🌀', desc: '+30% dano em área, +10% ataque', b: { aoeMult: 0.3, atkp: 10 } },
+               { id: 'assassino', name: 'Assassino', icon: '🗡️', desc: '+8% crítico, +60% dano crítico, +10% alvo único', b: { crit: 8, critdmg: 0.6, singleMult: 0.1 } }],
+  paladino:   [{ id: 'cruzado', name: 'Cruzado', icon: '✝️', desc: '+50% contra mortos-vivos, +20% área, +10% ataque', b: { undead: 0.5, aoeMult: 0.2, atkp: 10 } },
+               { id: 'protetor', name: 'Protetor', icon: '🏰', desc: '+15% bloqueio, +25% defesa, +15% vida', b: { block: 0.15, defp: 25, hpp: 15 } }],
+  valquiria:  [{ id: 'tempestade', name: 'Tempestade', icon: '🌪️', desc: '+30% dano em área, +10% velocidade', b: { aoeMult: 0.3, spd: 0.1 } },
+               { id: 'escudeira', name: 'Escudeira', icon: '🛡️', desc: '+15% bloqueio, +20% defesa, Fera Alada +40%', b: { block: 0.15, defp: 20, petMult: 0.4 } }],
+  arcanista:  [{ id: 'piromante', name: 'Piromante', icon: '🔥', desc: '+30% dano em área, +10% ataque', b: { aoeMult: 0.3, atkp: 10 } },
+               { id: 'criomante', name: 'Criomante', icon: '❄️', desc: '+20% escudo de mana, +15% vida, +15% alvo único', b: { mshield: 0.2, hpp: 15, singleMult: 0.15 } }],
+  cleriga:    [{ id: 'santa', name: 'Santa', icon: '😇', desc: 'Curas +50%, +20% vida, bônus duram +30%', b: { healMult: 0.5, hpp: 20, buffDur: 0.3 } },
+               { id: 'inquisidora', name: 'Inquisidora', icon: '⚡', desc: '+25% ataque, +20% área, +40% contra mortos-vivos', b: { atkp: 25, aoeMult: 0.2, undead: 0.4 } }],
+};
+function specOf() { return S.spec && (SPECS[S.cls] || []).find((x) => x.id === S.spec); }
+function chooseSpec(id) {
+  const sp = (SPECS[S.cls] || []).find((x) => x.id === id); if (!sp || S.lvl < SPEC_LVL) return;
+  const cost = S.spec ? 20000 * S.lvl : 0;
+  if (S.spec === id) return;
+  if (cost && S.gold < cost) { toast(`Trocar de especialização custa ${fmt(cost)} ouro.`, 'bad'); return; }
+  S.gold -= cost; S.spec = id;
+  log(`${sp.icon} Especialização escolhida: <b>${sp.name}</b>!`, 'lvl'); Sfx.play('levelup'); Scene.levelUp();
+  renderTab(); renderHeader();
+}
+
+// ---------- mascotes que evoluem ----------
+function petLevel(id) { const k = (S.petXp && S.petXp[id]) || 0; return Math.min(10, 1 + Math.floor(Math.sqrt(k / 60))); }
+function petMult(id) { return 1 + (petLevel(id) - 1) * 0.15; }
+
+// ---------- bestiário ----------
+const BEST_TIERS = [50, 250, 1000];
+function bestTiers() { let n = 0; for (const k in (S.best || {})) for (const t of BEST_TIERS) if (S.best[k] >= t) n++; return n; }
+function tabBestiary() {
+  S.best = S.best || {};
+  const all = ZONES.flatMap((z) => [...z.monsters.map((m) => ({ n: m[0], i: m[1], z })), { n: z.boss[0], i: z.boss[1], z, boss: true }]);
+  const tiers = bestTiers();
+  return `<p class="muted">Cada marco (50, 250 e 1.000 derrotados) de cada monstro dá <b>+0,25% de dano e de experiência</b> para sempre. Total atual: <b>+${(tiers * 0.25).toFixed(2)}%</b> (${tiers}/${all.length * 3} marcos).</p>
+  <div class="best-grid">${all.map((m) => { const k = S.best[m.n] || 0, next = BEST_TIERS.find((t) => k < t); return `<div class="best-card ${k ? '' : 'unknown'}"><span class="best-ico">${k ? m.i : '❔'}</span><b>${k ? esc(m.n) : '???'}</b><small class="muted">${esc(m.z.name)}${m.boss ? ' · chefe' : ''}</small><small>${fmt(k)} derrotados ${BEST_TIERS.map((t) => (k >= t ? '★' : '☆')).join('')}</small>${next ? `<div class="q-prog"><i style="width:${Math.min(100, k / next * 100)}%"></i></div>` : '<small class="good">Completo!</small>'}</div>`; }).join('')}</div>`;
+}
+
+// ---------- medidor de dano e estatísticas ----------
+function meter() { if (!R.meter) R.meter = { start: Date.now(), dmg: 0, xp: 0, gold: 0, kills: 0, bySk: {}, recent: [] }; return R.meter; }
+function meterHit(dmg, name) {
+  const M = meter(), now = Date.now();
+  M.dmg += dmg; M.bySk[name] = (M.bySk[name] || 0) + dmg; M.recent.push([now, dmg]);
+  while (M.recent.length && now - M.recent[0][0] > 30000) M.recent.shift();
+}
+function tabStats() {
+  const M = meter(), hrs = Math.max(1 / 60, (Date.now() - M.start) / 3600000), now = Date.now();
+  const dps = M.recent.reduce((a, r) => a + r[1], 0) / Math.max(1, Math.min(30, (now - (M.recent[0] ? M.recent[0][0] : now)) / 1000 || 1));
+  const top = Object.entries(M.bySk).sort((a, b) => b[1] - a[1]).slice(0, 6), total = Object.values(M.bySk).reduce((a, v) => a + v, 0) || 1;
+  return `<div class="stat-cards">
+    <div><small>Dano por segundo (30 s)</small><b>${fmt(dps)}</b></div><div><small>Experiência por hora</small><b>${fmt(M.xp / hrs)}</b></div>
+    <div><small>Ouro por hora</small><b>${fmt(M.gold / hrs)}</b></div><div><small>Abates por hora</small><b>${fmt(M.kills / hrs)}</b></div></div>
+    <div class="q-sec">De onde vem o seu dano</div>
+    ${top.map(([n, v]) => `<div class="dmg-row"><span>${esc(n)}</span><div class="q-prog"><i style="width:${v / total * 100}%"></i></div><small>${Math.round(v / total * 100)}%</small></div>`).join('') || '<p class="muted">Lute um pouco para ver os números.</p>'}
+    <p class="muted">Medindo há ${Math.round(hrs * 60)} min. <button class="btn tiny" data-act="meter-reset">Zerar</button></p>`;
+}
+
 // ---------- conjuntos de equipamento ----------
 const SETS = {
   guardiao: { name: 'Guardião de Ferro', tier: 2, color: '#7ac0ff', b2: { defp: 20 }, b4: { hpp: 15, block: 0.1 }, d2: '+20% de defesa', d4: '+15% de vida e +10% de bloqueio' },
@@ -281,9 +346,12 @@ function derived() {
   }
   gemBonus(bonus);
   const SB = {}; setBonus(SB);
+  const SP = (specOf() || {}).b || {};
+  for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SP[k]) SB[k] = (SB[k] || 0) + SP[k];
+  const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
   bonus.xpb += (SB.xpb || 0) + rb * 10; bonus.gold += rb * 10; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * 10;
-  { const pc = S.companion && SHOP.find((x) => x.id === S.companion); if (pc) { bonus.gold += pc.gold || 0; bonus.xpb += pc.xp || 0; } }
+  { const pc = S.companion && SHOP.find((x) => x.id === S.companion); if (pc) { const pm = petMult(pc.id); bonus.gold += (pc.gold || 0) * pm; bonus.xpb += (pc.xp || 0) * pm; } }
   const A = {};
   for (const k of ['for', 'int', 'des', 'agi', 'vit']) A[k] = S.attr[k] + bonus[k];
   const main = A[c.main];
@@ -310,8 +378,9 @@ function derived() {
     block: clamp((S.equip.escudo ? 0.08 : 0) + buff('block'), 0, 0.6),
     absorb: clamp(buff('absorb'), 0, 0.6),
     reflect: buff('reflect'),
-    mshield: clamp(buff('mshield'), 0, 0.8),
-    undead: buff('undead'),
+    mshield: clamp(buff('mshield') + (SP.mshield || 0), 0, 0.8),
+    undead: buff('undead') + (SP.undead || 0),
+    aoeMult: SP.aoeMult || 0, singleMult: SP.singleMult || 0, petMult: SP.petMult || 0, healMult: SP.healMult || 0, buffDur: SP.buffDur || 0,
     xpb: bonus.xpb, goldb: bonus.gold,
     hpRegen: 0.01 * baseHp + A.vit * 0.1, mpRegen: 0.015 * (15 + A.int * 4 + S.lvl * 3) + A.int * 0.05,
   };
@@ -498,14 +567,16 @@ function attackSound(skillName, crit, miss) {
 }
 
 // calcula e aplica o dano de um golpe em um monstro
-function hitMonster(m, mult, sk, d, forceCrit) {
+function hitMonster(m, mult, sk, d, forceCrit, src) {
   let dmg = rnd(d.atkMin, d.atkMax) * mult;
   const crit = forceCrit || Math.random() * 100 < d.crit;
   if (crit) dmg *= d.critMult + (forceCrit ? 0.5 : 0);
   if (m.type === 'undead') dmg *= 1 + d.undead + (sk && sk.holy ? 0.5 : 0);
   if (m.boss && sk && sk.boss) dmg *= 1 + sk.boss;
+  if (sk && sk.type === 'aoe') dmg *= 1 + d.aoeMult; else if (sk && sk.type === 'dmg') dmg *= 1 + d.singleMult;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
   m.hp -= dmg; m.aggro = true;
+  meterHit(dmg, src || (sk ? sk.name : 'Ataque básico'));
   if (sk && sk.stun) m.stun = Math.max(m.stun, sk.stun * (m.boss ? 0.4 : 1));
   if (sk && sk.slow) m.slow = Math.max(m.slow, sk.slow);
   return { dmg, crit };
@@ -529,7 +600,7 @@ function playerHit(mult = 1, sk = null) {
     hits.push({ sid: t.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : (sk ? 'skill' : 'dmg'), stun: t.stun > 0, slow: t.slow > 0 });
   }
   attackSound(skillName, anyCrit, false);
-  Scene.playerAttack({ text: hits[0].text, cls: hits[0].cls, crit: anyCrit, skill: !!sk, skillName, aoe: targets.length > 1 || (sk && sk.type === 'aoe'), hits, stealth, multi: sk && sk.hits, skillId: sk && sk.id });
+  Scene.playerAttack({ text: hits[0].text, cls: hits[0].cls, crit: anyCrit, skill: !!sk, skillName, aoe: targets.length > 1 || (sk && sk.type === 'aoe'), hits, stealth, multi: sk && sk.hits, skillId: sk && sk.id, skillLv: sk && sk.lv });
   if (sk) log(`Você usou <b>${esc(skillName)}</b>${targets.length > 1 ? ` em ${targets.length} monstros` : ''} causando ${fmt(total)} de dano${sk.stun ? ' e atordoando' : ''}${sk.slow ? ' e congelando' : ''}.`, 'skill');
   if (sk && sk.healPct) { const h = Math.round(d.maxHp * sk.healPct); S.hp = Math.min(d.maxHp, S.hp + h); floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); }
   for (const t of targets) if (t.hp <= 0) killMonster(t);
@@ -565,8 +636,12 @@ function killMonster(m) {
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
   const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1));
+  S.best = S.best || {}; const bk = S.best[m.name] || 0; S.best[m.name] = bk + 1;
+  if (BEST_TIERS.includes(bk + 1)) log(`📖 Bestiário: ${m.icon} ${esc(m.name)} chegou a ${bk + 1} derrotados! (+0,25% dano e XP)`, 'lvl');
+  if (S.companion) { S.petXp = S.petXp || {}; const pl = petLevel(S.companion); S.petXp[S.companion] = (S.petXp[S.companion] || 0) + 1; if (petLevel(S.companion) > pl) log(`🐾 Seu mascote evoluiu para o nível ${petLevel(S.companion)}!`, 'lvl'); }
+  { const M = meter(); M.kills++; M.xp += xp; }
   const gold = Math.round(m.gold * (1 + d.goldb / 100));
-  S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++;
+  S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
@@ -775,7 +850,7 @@ function tick() {
     R.pet.t -= dt; R.pet.timer -= dt;
     if (R.pet.timer <= 0 && R.mon && dist2(R.mon, R.pos) < 9) {
       R.pet.timer = R.pet.kind === 'falcao' ? 0.8 : 1.1;
-      const r = hitMonster(R.mon, R.pet.mult, null, d, false);
+      const r = hitMonster(R.mon, R.pet.mult, null, d, false, R.pet.name);
       Scene.petAttack({ sid: R.mon.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : 'pet' });
       if (R.mon.hp <= 0) killMonster(R.mon);
     }
@@ -1048,7 +1123,8 @@ function makeFullChar(name, cls, wtype) {
   S.skillLv = {}; for (const sk of CLASSES[cls].skills) S.skillLv[sk.id] = SKILL_MAX;
   const gemOrder = ['rubi', 'ametista', 'esmeralda', 'safira'];
   for (const sl of SLOT_ORDER) if (S.equip[sl]) S.equip[sl].gems = gemOrder.slice(0, sockets(S.equip[sl])).map((t) => ({ t, l: 5 }));
-  S.owned = { mount2: true, pet2: true }; S.mount = 'mount2'; S.companion = 'pet2';
+  S.owned = { mount2: true, pet2: true }; S.mount = 'mount2'; S.companion = 'pet2'; S.petXp = { pet2: 6000 };
+  S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
   S.zoneKills = { z10: 25 };
   const made = S; S = keep;
@@ -1293,6 +1369,8 @@ function renderChar() {
     ${S.lvl >= MAX_LEVEL ? `<button class="btn primary rebirth-btn" data-act="rebirth">🌟 Renascer (${(S.rebirths || 0) + 1}º)</button>` : ''}
     ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
     ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
+    ${specOf() ? `<p class="set-mini" style="--sc:#ffd060">${specOf().icon} Especialização: ${specOf().name}</p>` : (S.lvl >= SPEC_LVL ? '<p class="good">✨ Escolha sua especialização na janela Skills!</p>' : '')}
+    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button></div>
     <h3>Status</h3>
     <div class="stat-grid">
       <span>Ataque</span><b>${fmt(d.atkMin)} - ${fmt(d.atkMax)}</b>
@@ -1382,7 +1460,7 @@ function castSkill(id) {
 function useUtility(s, d, forced) {
   if (s.type === 'heal') {
     if (!forced && S.hp / d.maxHp >= 0.6) return false;
-    const h = Math.round(d.maxHp * s.mult);
+    const h = Math.round(d.maxHp * s.mult * (1 + d.healMult));
     S.hp = Math.min(d.maxHp, S.hp + h);
     floatText('player', '+' + fmt(h), 'heal'); Scene.heal(s.id); Sfx.play('heal');
     log(`💚 ${esc(s.name)} restaurou ${fmt(h)} de vida.`, 'heal');
@@ -1391,7 +1469,7 @@ function useUtility(s, d, forced) {
   if (s.type === 'summon') {
     if (R.pet && !forced) return false;
     const P = PETS[s.pet];
-    R.pet = { kind: s.pet, name: P.name, icon: P.icon, t: s.dur, mult: s.mult, timer: 1, hp: Math.round(d.maxHp * (P.hp || 0)), maxHp: Math.round(d.maxHp * (P.hp || 0)), sid: uid() };
+    R.pet = { kind: s.pet, name: P.name, icon: P.icon, t: s.dur, mult: s.mult * (1 + d.petMult), timer: 1, hp: Math.round(d.maxHp * (P.hp || 0)), maxHp: Math.round(d.maxHp * (P.hp || 0)), sid: uid() };
     log(`${P.icon} Você invocou <b>${P.name}</b>!`, 'skill'); Scene.buff(s.id); Sfx.play('portal');
     return true;
   }
@@ -1403,7 +1481,7 @@ function useUtility(s, d, forced) {
   }
   if (s.type === 'buff') {
     if (R.buffs.some((b) => b.id === s.id)) { if (!forced) return false; R.buffs = R.buffs.filter((b) => b.id !== s.id && b.id !== s.id + '+'); }
-    R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur });
+    R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur * (1 + d.buffDur) });
     if (s.also) R.buffs.push({ id: s.id + '+', name: '', stat: s.also.stat, val: s.also.val, t: s.dur, hidden: true });
     log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff(s.id); Sfx.play('buff');
     return true;
@@ -1751,7 +1829,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -1771,7 +1849,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -1844,7 +1922,11 @@ function isUpgrade(it) {
 
 function tabSkills() {
   const free = skillPointsFree();
-  return `<p class="muted">Você ganha 1 ponto de habilidade a cada ~2 níveis. Cada nível aumenta o dano, a duração e o efeito, e reduz a recarga. Toque em "Ligada" para controlar o uso automático.</p>
+  const sp = specOf(), specs = SPECS[S.cls] || [];
+  const specHtml = `<div class="q-sec">Especialização ${S.lvl < SPEC_LVL ? `<small class="muted">(libera no nível ${SPEC_LVL})</small>` : ''}</div>
+    <div class="spec-grid">${specs.map((x) => `<div class="spec-card ${sp && sp.id === x.id ? 'on' : ''}"><b>${x.icon} ${x.name}</b><small>${x.desc}</small>
+      ${S.lvl >= SPEC_LVL ? (sp && sp.id === x.id ? '<span class="good">Ativa</span>' : `<button class="btn small ${sp ? '' : 'primary'}" data-spec="${x.id}">${sp ? `Trocar (${fmt(20000 * S.lvl)} ouro)` : 'Escolher'}</button>`) : ''}</div>`).join('')}</div>`;
+  return specHtml + `<p class="muted">Você ganha 1 ponto de habilidade a cada ~2 níveis. Cada nível aumenta o dano, a duração e o efeito, e reduz a recarga. Toque em "Ligada" para controlar o uso automático.</p>
   <div class="sk-points">Pontos de habilidade: <b>${free}</b> <label class="check" style="display:inline-flex;margin-left:10px"><input type="checkbox" data-set="autoSkill" ${S.settings.autoSkill ? 'checked' : ''}> distribuir automaticamente</label></div>
   <div class="skill-list">${classSkills().map((s) => {
     const locked = S.lvl < s.lvl, on = !S.skillOff[s.id], max = s.lv >= SKILL_MAX;
@@ -1864,7 +1946,7 @@ function tabShop() {
   const row = (p) => {
     const unique = p.type === 'mount' || p.type === 'pet', own = unique && S.owned[p.id];
     const active = (p.type === 'mount' && S.mount === p.id) || (p.type === 'pet' && S.companion === p.id);
-    const have = p.type === 'mat' ? S.stones : p.type === 'scroll' ? (xpBoostOn() ? `ativo (${Math.ceil((S.xpBoostUntil - Date.now()) / 60000)} min)` : '-') : p.type === 'gembag' ? Object.values(gemBag()).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0) + ' gemas' : unique ? (own ? (active ? 'em uso' : 'guardado') : 'não tem') : S.pots[p.id];
+    const have = p.type === 'pet' && S.owned[p.id] ? `nível ${petLevel(p.id)}/10 (bônus ×${petMult(p.id).toFixed(2)})` : p.type === 'mat' ? S.stones : p.type === 'scroll' ? (xpBoostOn() ? `ativo (${Math.ceil((S.xpBoostUntil - Date.now()) / 60000)} min)` : '-') : p.type === 'gembag' ? Object.values(gemBag()).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0) + ' gemas' : unique ? (own ? (active ? 'em uso' : 'guardado') : 'não tem') : S.pots[p.id];
     const desc = p.desc || (p.type === 'mat' ? 'Usada para refinar e forjar equipamentos' : `Restaura ${p.heal * 100}% de ${p.type === 'hp' ? 'vida' : 'mana'}`);
     return `<div class="shop-row"><span class="shop-ico">${p.icon}</span>
       <div><b>${p.name}</b><br><small class="muted">${desc} · Você tem: <b>${have}</b></small></div>
@@ -2048,7 +2130,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-dun],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2096,6 +2178,7 @@ document.addEventListener('click', (e) => {
   if (ds.ach) { S.title = ds.ach === '-' ? '' : ds.ach; renderHeader(); return renderTab(); }
   if (ds.tutskip !== undefined) { S.tut = 99; renderTut(); return; }
   if (ds.dclaim !== undefined) { claimDaily(+ds.dclaim); return; }
+  if (ds.spec) { chooseSpec(ds.spec); return; }
   if (ds.skup) { upgradeSkill(ds.skup); return; }
   if (ds.qacc) { acceptQuest(ds.qacc); renderTab(); return; }
   if (ds.qturn) { turnInQuest(ds.qturn); renderTab(); return; }
@@ -2136,6 +2219,7 @@ document.addEventListener('click', (e) => {
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
     case 'equip-best': equipBest(); break;
+    case 'meter-reset': R.meter = null; renderTab(); break;
     case 'acct-login': accountAction('login'); break;
     case 'acct-register': accountAction('register'); break;
     case 'acct-logout': accountAction('logout'); break;
@@ -2206,7 +2290,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   const k = e.key.toLowerCase();
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
-  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking' };
+  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats' };
   if (wins[k]) { openWin(wins[k]); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');

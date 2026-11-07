@@ -469,3 +469,17 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .rank-row.me { border: 1px solid var(--gold); }
 .pl-label b { color: #9ad0ff; }
 .pl-label small { display: block; color: #ffd060; font-size: 9px; text-shadow: 0 1px 2px #000; }
+
+/* ---------- especialização, bestiário, estatísticas ---------- */
+.spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.spec-card { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.spec-card.on { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 210, 90, .3); }
+.spec-card small { color: #bdb9ad; }
+.best-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.best-card { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 2px; font-size: 11px; text-align: center; }
+.best-card.unknown { opacity: .5; }
+.best-ico { font-size: 24px; }
+.stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stat-cards div { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; }
+.stat-cards b { font-size: 20px; color: var(--gold); }
+.dmg-row { display: grid; grid-template-columns: 120px 1fr 36px; gap: 6px; align-items: center; font-size: 12px; }

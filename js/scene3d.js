@@ -1914,11 +1914,13 @@ const Scene3D = (() => {
   function slotPos(i, boss) { const b = monBaseX(boss), o = SLOTS[i % 4]; return { x: b + o[0], z: o[1] }; }
 
   // ---------- efeitos próprios de cada habilidade ----------
+  let FXS = 1; // tamanho dos efeitos conforme o nível da habilidade (1 a 1,63)
   const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
   function heroPos(y = 0) { const p = st.hero ? st.hero.root.position : V3(0, 0, 0); return V3(p.x, y, p.z); }
   function heroHand() { const p = heroPos(1.2), f = R.face || 0; return V3(p.x + Math.cos(f) * 0.5, 1.2, p.z + Math.sin(f) * 0.5); }
   // redemoinho de lâminas girando em volta de um ponto
   function fxWhirl(c, color, life = 0.7, r = 1.6) {
+    r *= FXS;
     for (let k = 0; k < 2; k++) {
       const m = new THREE.Mesh(G.torus(r * (1 - k * 0.25), 0.07 - k * 0.02, Math.PI * 1.5), fxMat(color, 0.9));
       m.position.set(c.x, 0.7 + k * 0.5, c.z); m.rotation.x = Math.PI / 2 + (k ? 0.25 : -0.1);
@@ -1927,9 +1929,11 @@ const Scene3D = (() => {
   }
   const rgb = (c) => { const cc = col(c); return { r: cc.r, gg: cc.g, b: cc.b }; };
   // ondas de choque no chão
-  function fxShock(c, color, n = 3, size = 4) { for (let i = 0; i < n; i++) later(i * 0.1, () => ring(V3(c.x, 0, c.z), color, size * (1 + i * 0.3), 0.55)); }
+  function fxShock(c, color, n = 3, size = 4) {
+    size *= FXS; for (let i = 0; i < n; i++) later(i * 0.1, () => ring(V3(c.x, 0, c.z), color, size * (1 + i * 0.3), 0.55)); }
   // rachaduras no chão
   function fxCracks(c, color, n = 7, len = 2.2) {
+    len *= FXS; n = Math.round(n * FXS);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + Math.random() * 0.4, L = len * (0.6 + Math.random() * 0.6);
       const m = new THREE.Mesh(G.box(L, 0.02, 0.09), fxMat(color, 1));
@@ -1940,6 +1944,7 @@ const Scene3D = (() => {
   }
   // espetos saindo do chão
   function fxSpikes(c, color, n = 5, r = 0.6, h = 1.3) {
+    h *= FXS; n = Math.round(n * FXS);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2, m = new THREE.Mesh(G.cone(0.13, h, 5), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, flatShading: true }));
       m.position.set(c.x + Math.cos(a) * r * Math.random(), 0, c.z + Math.sin(a) * r * Math.random()); m.rotation.set(rand(-0.3, 0.3), 0, rand(-0.3, 0.3));
@@ -1949,6 +1954,7 @@ const Scene3D = (() => {
   }
   // feixe de luz caindo do céu
   function fxBeam(c, color, w = 0.5) {
+    w *= FXS;
     const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w, 12, 16, 1, true), fxMat(color, 0.8));
     m.position.set(c.x, 6, c.z);
     addFx({ obj: m, life: 0.55, upd: (f, p) => { m.material.opacity = 0.8 * (1 - p); m.scale.set(1 + p, 1, 1 + p); }, dispose: true });
@@ -1965,6 +1971,7 @@ const Scene3D = (() => {
   }
   // cruz de luz no chão
   function fxCross(c, color, s0 = 1) {
+    s0 *= FXS;
     for (const rot of [0, Math.PI / 2]) {
       const m = new THREE.Mesh(G.box(6 * s0, 0.03, 0.55 * s0), fxMat(color, 0.9));
       m.position.set(c.x, 0.05, c.z); m.rotation.y = rot + 0.785;
@@ -2000,6 +2007,7 @@ const Scene3D = (() => {
   function fxNova(c) { ['#ff6020', '#80d8ff', '#e0b0ff'].forEach((cc, i) => later(i * 0.12, () => { ring(V3(c.x, 0, c.z), cc, 6 + i, 0.6); burst(V3(c.x, 0.8, c.z), cc, 30, 6); })); st.shake = 0.3; }
   // chuva de projéteis numa área
   function fxRain(c, kind, color, n, r, onEach) {
+    n = Math.round(n * FXS); r *= FXS;
     for (let i = 0; i < n; i++) later(i * 0.04, () => { const to = V3(c.x + rand(-r, r), 0.2, c.z + rand(-r, r)); projectile(kind, V3(to.x - 1.5, 8, to.z - 1), to, color, true, 0.35, () => { burst(to, color, 6, 2); onEach && onEach(to); }); });
   }
 
@@ -2110,6 +2118,9 @@ const Scene3D = (() => {
     };
     const special = o.skillId && SFX[o.skillId];
     if (special && !o.miss) {
+      const lv = o.skillLv || 1;
+      FXS = 1 + (lv - 1) * 0.07;
+      if (lv >= 10) later(0.35, () => { const c0 = monCenter(); if (c0) { burst(c0, '#ffe680', 40, 5, 0.12, 2); ring(V3(c0.x, 0, c0.z), '#ffe680', 3, 0.5); } }); // nível máximo: brilho dourado extra
       const sd = Math.max(st.hero.model ? attackDur() * 1.25 : 0.6, 0.6);
       if (st.hero.model && special.anim) playAnim(st.hero, special.anim, { loop: false, dur: sd, fade: 0.05 });
       if (special.motion) st.hero.motion = Object.assign({}, special.motion, { start: now(), dur: sd, target: st.mon.root.position.clone() });

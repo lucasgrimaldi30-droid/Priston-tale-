@@ -45,6 +45,13 @@ const startServer = require('./server.cjs');
     // renascimento
     S.lvl = 100; const hp100 = derived().maxHp; S.rebirths = 0;
     S.rebirths = 1; S.lvl = 1; S.attr = { ...CLASSES[S.cls].base }; S.skillLv = {}; ok('Renascimento dá bônus', derived().atkMin > 0 && (S.rebirths === 1));
+    // especialização, bestiário, mascote e medidor (bloco 1 das melhorias)
+    novo('gladiador', 60, { tut: 99 }); const atk0 = derived().atkMin; chooseSpec('berserker');
+    ok('Especialização no nível 50', S.spec === 'berserker' && derived().atkMin > atk0);
+    S.best = {}; for (let i = 0; i < 50; i++) { const m = makeMonster('Lobo Filhote', '🐺', 5, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); }
+    ok('Bestiário conta e dá marco', S.best['Lobo Filhote'] === 50 && bestTiers() === 1);
+    S.owned = { pet1: true }; S.companion = 'pet1'; S.petXp = { pet1: 6000 }; ok('Mascote evolui', petLevel('pet1') === 10);
+    ok('Medidor de dano registra', meter().kills >= 50 && meter().dmg >= 0 && tabStats().includes('por hora'));
     return out;
   });
   const pwa = await p.evaluate(async () => { try { const m = await (await fetch('manifest.webmanifest')).json(); const sw = await fetch('sw.js'); return m.icons.length === 3 && sw.ok; } catch (e) { return false; } });

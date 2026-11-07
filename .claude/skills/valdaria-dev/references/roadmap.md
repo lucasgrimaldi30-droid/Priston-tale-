@@ -11,11 +11,11 @@
 - **Fase 5 (multiplayer):** servidor Node.js com contas, saves na nuvem, presença em tempo real por mapa, chat global e do mapa, ranking,
   Docker + Caddy (HTTPS) e guia `DEPLOY.md`. Falta: anti-trapaça (servidor calcular combate), PostgreSQL, guildas, trocas, PvP.
 - **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
-  renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA).
+  renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA), especialização no nível 50, mascotes que evoluem,
+  bestiário com bônus, medidor de dano e estatísticas, efeito das habilidades crescendo com o nível.
 
 ## Ideias sugeridas e ainda não feitas
-Torre infinita · chefe mundial e eventos de hora em hora · especialização de classe no nível 50 · bestiário com bônus · coleta e profissões ·
-mascotes que evoluem · dia/noite e clima · efeito das habilidades crescendo com o nível · mais mapas e biomas · medidor de dano e estatísticas.
+Torre infinita · chefe mundial e eventos · coleta e profissões · dia/noite e clima · mais mapas e biomas · grupos e guildas.
 
 ## Pendente com o dono
 - Revisão **golpe por golpe** das 8 classes (ele vai jogar e mandar os ajustes, um por vez).
