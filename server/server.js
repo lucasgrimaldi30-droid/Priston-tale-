@@ -34,6 +34,22 @@ setInterval(() => {
 }, 2000);
 
 db.guilds = db.guilds || {};
+db.gw = db.gw || { cur: null, result: null };   // Cerco da Coroa (guerra de clãs aos domingos)
+db.sod = db.sod || { week: null, best: null, prev: null }; // Arena da Sobrevivência (recorde semanal de grupo)
+
+// ---------- relógio dos eventos semanais (horário de Brasília) ----------
+const TZ = process.env.EVENT_TZ || 'America/Sao_Paulo';
+function tzParts(t = Date.now()) {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  const o = {}; for (const p of f.formatToParts(new Date(t))) o[p.type] = p.value;
+  return { wd: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(o.weekday), y: +o.year, mo: +o.month, d: +o.day, h: +o.hour % 24, mi: +o.minute };
+}
+// Cerco: domingo das 17h às 18h (GW_FORCE=1 deixa aberto, para testes)
+function gwState(t = Date.now()) {
+  const p = tzParts(t), active = process.env.GW_FORCE === '1' || (p.wd === 0 && p.h === 17);
+  return { active, id: `${p.y}-${p.mo}-${p.d}`, endsIn: active ? (60 - p.mi) * 60000 : 0 };
+}
+function weekKey(t = Date.now()) { const p = tzParts(t); const dt = Date.UTC(p.y, p.mo - 1, p.d) / 864e5; return Math.floor((dt + 3) / 7); } // semana que vira na segunda
 // sessões ficam no banco (sobrevivem a reinícios) e valem 30 dias
 db.tokens = db.tokens || {};
 const sessions = { get: (t) => { const s = t && db.tokens[t]; if (!s) return null; if (s.exp < Date.now()) { delete db.tokens[t]; persist(); return null; } return s.user; } };
@@ -213,8 +229,8 @@ wss.on('connection', (ws, req) => {
       if (ch === 'party' && !pt) return sendTo(ws, { t: 'sys', text: 'Você não está em um grupo.' });
       if (ch === 'guild' && !U.guild) return sendTo(ws, { t: 'sys', text: 'Você não está em uma guilda.' });
       broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || (ch === 'zone' && roomOf(o) === room) || (ch === 'party' && pt && pt.members.has(o)) || (ch === 'guild' && db.users[o.key] && db.users[o.key].guild === U.guild));
-    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel|pvphit|pvpdead)$/.test(m.t)) {
-      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : m.t.startsWith('pvp') ? ['pv:', 60] : ['soc:', 20];
+    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel|pvphit|pvpdead|gwscore|sodscore)$/.test(m.t)) {
+      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : m.t.startsWith('pvp') ? ['pv:', 60] : m.t === 'gwscore' ? ['gw:', 80] : ['soc:', 20];
       if (!p.ready || limited(lk[0] + p.key, lk[1], 10e3)) return;
       social(ws, p, U, m);
     }
@@ -222,7 +238,13 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { endTrade(p, 'O outro jogador saiu.'); leaveParty(p); if (U.guild) setTimeout(() => pushGuild(U.guild), 50); if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
 });
 
+const guildOf = (o) => (o && db.users[o.key] ? db.users[o.key].guild || null : null);
+function gwPk(a, b) { // na Fortaleza durante o Cerco, clãs diferentes lutam sem precisar do Modo PK
+  const ga = guildOf(a), gb = guildOf(b);
+  return a.zone === 'gw' && b.zone === 'gw' && gwState().active && ga && gb && ga !== gb && !b.prot;
+}
 function canPk(a, b) {
+  if (a && b && a !== b && a.ready && b.ready && gwPk(a, b) && roomOf(a) === roomOf(b) && Math.hypot((a.x || 0) - (b.x || 0), (a.z || 0) - (b.z || 0)) <= 11) return true;
   if (!a || !b || a === b || !a.ready || !b.ready || !a.pk || !b.pk || b.prot) return false;
   if (a.town || b.town || a.dun || b.dun || !PK_ZONES.has(a.zone) || roomOf(a) !== roomOf(b)) return false;
   if ((a.lvl || 0) < PK_MIN || (b.lvl || 0) < PK_MIN) return false;
@@ -230,6 +252,30 @@ function canPk(a, b) {
   const ga = db.users[a.key] && db.users[a.key].guild; if (ga && db.users[b.key] && db.users[b.key].guild === ga) return false;
   return Math.hypot((a.x || 0) - (b.x || 0), (a.z || 0) - (b.z || 0)) <= 11;
 }
+
+// ---------- Cerco da Coroa e Arena: pontos, resultado e bônus da semana ----------
+function gwRoll() { // começa um Cerco novo ou fecha o que acabou
+  const g = gwState();
+  if (g.active && (!db.gw.cur || db.gw.cur.id !== g.id || db.gw.cur.done)) { if (!db.gw.cur || db.gw.cur.id !== g.id) { db.gw.cur = { id: g.id, scores: {} }; persist(); broadcast({ t: 'sys', text: '🏰 O Cerco da Coroa começou! Guildas, à Fortaleza da Coroa!' }); } }
+  if (!g.active && db.gw.cur && !db.gw.cur.done) {
+    const top = Object.entries(db.gw.cur.scores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k).filter((k) => db.guilds[k]);
+    db.gw.result = { id: db.gw.cur.id, top, scores: db.gw.cur.scores, at: Date.now() }; db.gw.cur.done = true; persist();
+    if (top[0]) broadcast({ t: 'sys', text: `👑 ${db.guilds[top[0]].name} é o Rei da Semana! (+10% de XP e drop para o clã)` });
+  }
+}
+function gwAdd(p, pts) { gwRoll(); const k = guildOf(p); if (!k || !db.gw.cur || db.gw.cur.done) return; db.gw.cur.scores[k] = (db.gw.cur.scores[k] || 0) + pts; persist(); }
+function sodRoll() { const w = weekKey(); if (db.sod.week !== w) { db.sod.prev = db.sod.best ? { week: db.sod.week, ...db.sod.best } : null; db.sod.week = w; db.sod.best = null; persist(); } }
+function weeklyBonus(p) {
+  const k = guildOf(p), top = (db.gw.result && db.gw.result.top) || [], i = k ? top.indexOf(k) : -1;
+  return { gwB: [10, 6, 3][i] || 0, gwRank: i + 1, sod: db.sod.prev && db.sod.prev.members.includes(p.key) ? 2 : 0 };
+}
+function gwBoard() { const sc = (db.gw.cur && !db.gw.cur.done && db.gw.cur.scores) || {}; return Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => ({ name: db.guilds[k] ? db.guilds[k].name : '?', pts: v })); }
+setInterval(() => { // a cada 5 s: fecha/abre o Cerco e manda o placar e os bônus
+  gwRoll(); sodRoll(); const g = gwState(), board = gwBoard();
+  for (const [ws, p] of clients) if (p.ready) sendTo(ws, { t: 'wk', gw: g.active, endsIn: g.endsIn, board, mine: guildOf(p) && db.gw.cur && !db.gw.cur.done ? db.gw.cur.scores[guildOf(p)] || 0 : 0,
+    king: db.gw.result && db.gw.result.top[0] && db.guilds[db.gw.result.top[0]] ? db.guilds[db.gw.result.top[0]].name : '', sodBest: db.sod.best ? { rounds: db.sod.best.rounds, names: db.sod.best.names } : null,
+    sodPrev: db.sod.prev ? { rounds: db.sod.prev.rounds, names: db.sod.prev.names } : null, ...weeklyBonus(p), guild: guildOf(p) && db.guilds[guildOf(p)] ? db.guilds[guildOf(p)].name : '' });
+}, 5000);
 
 // ---------- trocas entre jogadores (o servidor guarda as ofertas e só fecha quando os dois confirmam) ----------
 const trades = new Map(); let nextTrade = 1;
@@ -265,6 +311,20 @@ function social(ws, p, U, m) {
     const KU = db.users[k.key]; KU.honor = (KU.honor || 0) + 1; persist();
     sendTo(kw, { t: 'pvpkill', name: p.name, honor: KU.honor });
     broadcast({ t: 'sys', text: `⚔️ ${k.name} derrotou ${p.name} em combate!` }, (o) => roomOf(o) === roomOf(p));
+    if (p.zone === 'gw') gwAdd(k, 20);
+    return;
+  }
+  if (m.t === 'gwscore') { // abate na Fortaleza durante o Cerco: cristal 50, monstro 1
+    if (p.zone !== 'gw' || !gwState().active || !guildOf(p)) return;
+    return gwAdd(p, m.k === 'c' ? 50 : 1);
+  }
+  if (m.t === 'sodscore') { // o líder do grupo manda o resultado da Arena; vale o maior da semana
+    const pt = partyOf(p); if (!pt || pt.leader !== p || pt.members.size < 2) return;
+    const rounds = Math.max(0, Math.min(200, m.rounds | 0)); sodRoll();
+    if (!db.sod.best || rounds > db.sod.best.rounds) {
+      db.sod.best = { rounds, members: [...pt.members].map((o) => o.key), names: [...pt.members].map((o) => o.name), at: Date.now() }; persist();
+      broadcast({ t: 'sys', text: `🏟️ Novo recorde da Arena da Sobrevivência: ${rounds} rodadas (${db.sod.best.names.join(', ')})!` });
+    }
     return;
   }
   if (m.t === 'tinvite') {
@@ -360,7 +420,7 @@ setInterval(() => {
     const room = roomOf(p);
     const list = [];
     if (room) for (const o of clients.values()) if (o !== p && o.ready && roomOf(o) === room) {
-      list.push({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb, title: o.title, x: o.x, z: o.z, face: o.face, moving: o.moving, atk: o.atk, look: o.look, pk: o.pk, prot: o.prot, pd: o.pd, pe: o.pe, hp: o.hp });
+      list.push({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb, title: o.title, x: o.x, z: o.z, face: o.face, moving: o.moving, atk: o.atk, look: o.look, pk: o.pk, prot: o.prot, pd: o.pd, pe: o.pe, hp: o.hp, g: guildOf(o) && db.guilds[guildOf(o)] ? db.guilds[guildOf(o)].name : '' });
       if (list.length >= 40) break;
     }
     const pt = partyOf(p), gk = db.users[p.key] && db.users[p.key].guild;

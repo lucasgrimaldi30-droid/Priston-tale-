@@ -9,7 +9,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   fs.mkdirSync(OUT, { recursive: true });
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'valdaria-'));
   const port = 18000 + Math.floor(Math.random() * 1000);
-  const srv = spawn('node', [path.join(ROOT, 'server/server.js')], { env: { ...process.env, PORT: port, DATA_DIR: data }, stdio: 'pipe' });
+  const srv = spawn('node', [path.join(ROOT, 'server/server.js')], { env: { ...process.env, PORT: port, DATA_DIR: data, GW_FORCE: '1' }, stdio: 'pipe' });
   await new Promise((r) => srv.stdout.on('data', (d) => { if (/rodando/.test(d)) r(); }));
   const url = `http://localhost:${port}/`;
   const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -139,6 +139,30 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   ok('Quem desliga o PK não pode ser atacado', why.includes('desligado'), why);
   await A.evaluate(() => { S.settings.pk = true; S.zone = 'z2'; R.worldZone = null; });
   ok('Fora dos mapas de PK ninguém ataca', await A.evaluate(() => pkWhyNot({ name: 'X', pk: true, lvl: 60 }).includes('não é mapa de PK')));
+  // Cerco da Coroa (o servidor de teste deixa aberto)
+  await B.evaluate(() => { S.gold = 100000; R.win = null; openWin('social'); $('#guild-name').value = 'Clã Beta'; socialAction('gcreate'); });
+  ok('Segundo clã fundado', await until(B, () => Net.st.guild && Net.st.guild.name === 'Clã Beta'));
+  ok('Cerco aberto aparece para os dois', await until(A, () => gwOpen(), null, 7000) && await until(B, () => gwOpen(), null, 7000));
+  for (const P of [A, B]) await P.evaluate(() => { S.settings.pk = false; R.dead = 0; S.hp = derived().maxHp; R.pvpProt = 0; enterGW(); });
+  ok('Os dois entram na Fortaleza', (await A.evaluate(() => S.zone)) === 'gw' && (await B.evaluate(() => S.zone)) === 'gw');
+  await A.waitForTimeout(500);
+  const gwDbg = await A.evaluate(() => { R.mons = []; R.pos = { x: 0, z: 0 }; let c; for (let i = 0; i < 200 && !c; i++) { const m = spawnWorldMonster(); if (m && m.crystal) c = m; } if (!c) return 'sem cristal: zona ' + S.zone + ' mons ' + R.mons.length; c.hp = 0; killMonster(c); return 'ok'; });
+  if (gwDbg !== 'ok') ok('Cristal na Fortaleza', false, gwDbg);
+  await B.evaluate(() => { R.mons = []; R.pos = { x: 1.5, z: 0 }; });
+  ok('Cristal dá 50 pontos ao clã', await until(A, () => wk() && wk().board.some((b) => b.name === 'Lobos de Ferro' && b.pts >= 50), null, 8000));
+  ok('No Cerco clãs diferentes lutam sem Modo PK', await until(A, () => { const o = [...Net.st.others.values()].find((x) => x.name === 'Lumen'); return !!o && o.g === 'Clã Beta' && pkWhyNot(o) === ''; }, null, 6000));
+  // Arena da Sobrevivência em grupo
+  await B.evaluate(() => { window._inv = null; window._coop = null; });
+  await A.evaluate(() => { S.zone = 'z5'; R.worldZone = null; chatCommand('/convidar Lumen'); });
+  await B.evaluate(() => { S.zone = 'z5'; R.worldZone = null; });
+  await until(B, () => !!window._inv); await B.evaluate(() => Net.soc('paccept', { fid: window._inv.fid }));
+  await until(A, () => Net.st.party && Net.st.party.members.length === 2);
+  await A.evaluate(() => { S.arenaWk = null; S.settings.auto = false; enterArena(true); for (const m of R.mons) m.atk = 0; });
+  ok('Convite da Arena chega ao colega', await until(B, () => !!window._coop && window._coop.d.arena));
+  await B.evaluate(() => { S.arenaWk = null; joinCoop(window._coop.d.zone, window._coop.from); R.dungeon.arena = true; R.dungeon.floors = Infinity; });
+  await A.evaluate(() => { for (let r = 0; r < 3; r++) { for (const m of aliveMons()) { m.hp = 0; killMonster(m); } for (let i = 0; i < 30; i++) tick(); } R.dungeon.t = 0.05; tick(); tick(); });
+  ok('Recorde da Arena em grupo vai para o ranking da semana', await until(A, () => wk() && wk().sodBest && wk().sodBest.rounds === 3, null, 8000));
+  ok('Colega sai junto com o resultado', await until(B, () => !R.dungeon && (S.arenaWk && S.arenaWk.best === 3), null, 6000));
   await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });
   await B.waitForTimeout(800);
   await B.reload(); await B.waitForSelector('.acct-on', { timeout: 10000 });

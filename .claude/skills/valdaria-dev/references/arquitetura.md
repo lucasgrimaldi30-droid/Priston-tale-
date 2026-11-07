@@ -196,6 +196,19 @@ Atalhos no `keydown` do fim de `game.js`.
   distância ≤ 11) antes de repassar `pvphit`; `pvpdead` dá Honra (`db.users[].honor`) a quem bateu nos últimos 15 s e avisa o mapa.
   Estado manda `pk`, `prot`, `pd` (defesa) e `pe` (esquiva). Caixa `pkBox()` na janela Social, `/pk` no chat, etiqueta "⚔️ PK" no título do mapa,
   nome vermelho e barra de vida do alvo na cena, Honra no ranking.
+- **Cerco da Coroa (clã × clã):** inspirado em guerra de castelo, com nome próprio. Domingo das 17h às 18h, horário de Brasília (`EVENT_TZ`;
+  `GW_FORCE=1` deixa aberto para testes). Mapa especial `GW_ZONE` (`gw`, Fortaleza da Coroa, `special`, monstros no nível de quem entra,
+  25% são **Cristais da Coroa** parados, `m.crystal`/`m.static`, visual `crystal`). Entrar só com guilda (`enterGW`); no fim volta para `S.gwBack`
+  (`gwTick`). Pontos no servidor (`gwscore`: cristal 50, monstro 1; PK no Cerco 20 via `pvpdead`). Lá, clãs diferentes lutam **sem** Modo PK
+  (`gwPk` no servidor, `pkWhyNot`/`pkActive` no cliente; a lista de jogadores manda a guilda em `g`). `gwRoll` abre e fecha; o resultado
+  (`db.gw.result.top`) dá +10% / +6% / +3% de XP e drop ao 1º/2º/3º clã até o próximo Cerco. Teste do fim: `tools/test/cerco.cjs`.
+- **Arena da Sobrevivência:** inspirada em arena de sobrevivência, com nome próprio. `enterArena(grupo)`, `R.dungeon.arena`, rodadas
+  (`arenaFloor`: monstros no nível do herói, mais fortes a cada rodada, chefe a cada 5, tempo `D.t`), `arenaClear` (ouro; item e pedra da
+  Alma), `arenaFinish` ao sair (pedras pelo total; o líder do grupo manda `sodscore`). 3 entradas por semana (`S.arenaWk`). Em grupo usa a
+  infra da masmorra em grupo (`crelay start` com `arena: true`). O servidor guarda o recorde semanal de grupo (`db.sod.best`, só grupos de
+  2+); os campeões da semana passada (`db.sod.prev`) ganham +2% de XP e drop.
+- **Bônus da semana:** mensagem `wk` a cada 5 s (aberto/placar/rei/recordes e `gwB` + `sod`); `wkBonus()` soma no XP (`derived`) e
+  `dropMult()` multiplica as chances de item, gema e pedra da Alma. Caixas `gwBox()` e `arenaBox()` na janela de Mapas.
 - **Trocas:** `tinvite`/`taccept` abrem a sessão no servidor (`trades`), `toffer` (até 8 itens + ouro; mudar destrava os dois), `tlock`, `tconfirm`;
   com os dois confirmados o servidor manda `tdone` a cada lado (`tradeDone` tira o que deu e põe o que recebeu com uid novo). Janela `troca`,
   botão 🤝 na janela Social e `/trocar Nome`. Sair do jogo cancela a troca.

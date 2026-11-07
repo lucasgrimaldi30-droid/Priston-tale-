@@ -64,6 +64,7 @@ const Scene2D = (() => {
     'Serpente Ancestral': ['serpent', '#30a060'],
     'Harpia': ['flyer', '#8a80a0', 'beak'], 'Golem Rúnico': ['golem', '#6080c0'], 'Guerreiro da Tempestade': ['humanoid', '#a0c0ff', 'horns'],
     'Senhor do Trovão': ['golem', '#4060ff', 'flame'],
+    'Cristal da Coroa': ['crystal', '#ffd040'], 'Guardião da Coroa': ['golem', '#8a8a96'], 'Arqueiro da Muralha': ['skeleton', '#c0b090'], 'Cavaleiro Sitiante': ['humanoid', '#c09040', 'helmet'],
     'Sentinela do Vazio': ['eye', '#7030c0'], 'Colosso Partido': ['golem', '#3a2a5a', 'flame'], 'Ceifador Astral': ['skeleton', '#9080ff'],
     'Avatar da Fenda': ['eye', '#a020ff', 'crown'], 'Vaelor, o Arauto do Vazio': ['skeleton', '#5020a0', 'crown'],
   };
@@ -85,6 +86,7 @@ const Scene2D = (() => {
     b3:  { sky: ['#2a6a40', '#a8e0a0'], far: '#1e5a30', mid: '#2a7a3a', g: ['#4a6e34', '#2a4620'], deco: 'palm', dc: '#2a8a30', amb: 'firefly' },
     b4:  { sky: ['#3a4250', '#8a94a4'], far: '#4a5060', mid: '#5a6070', g: ['#6a6e78', '#3e424c'], deco: 'rock', dc: '#5a5e6a', amb: 'dust' },
     e1:  { sky: ['#05010c', '#30104a'], far: '#200a38', mid: '#2c0e48', g: ['#2a1a3a', '#0e0618'], deco: 'crystal', dc: '#ff40c0', amb: 'star' },
+    gw:  { sky: ['#6a3a20', '#e8b070'], far: '#6a5a50', mid: '#5a4a40', g: ['#8a7a60', '#5a4a38'], deco: 'rock', dc: '#7a6a58', amb: 'ember' },
     town_ferro: { sky: ['#a8502a', '#f2c08a'], far: '#6a5a50', mid: '#4a4240', g: ['#6e665e', '#3e3a36'], deco: 'house', dc: '#3a3a44', amb: 'ember' },
     town_luz: { sky: ['#5aa8f0', '#eaf6ff'], far: '#c8d8ec', mid: '#e0ecf8', g: ['#d8dce4', '#a8b0bc'], deco: 'house', dc: '#3a6ad0', amb: 'wisp' },
   };

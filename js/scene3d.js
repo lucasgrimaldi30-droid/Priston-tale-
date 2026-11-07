@@ -374,6 +374,14 @@ const Scene3D = (() => {
     inner.rotation.y = 0.45;
     const body = group(inner);
     const P = { legs: [], arms: [], wings: [], segs: [], tent: [], float: 0, bob: 0 };
+    if (kind === 'crystal') { // cristal da Fortaleza: pedra flutuante que gira, sem membros
+      const cm = M(color, { e: color, ei: 0.8, r: 0.2, op: 0.92 });
+      const cr = mk(G.oct(0.55), cm, body, 0, 0, 0); cr.scale.set(0.8, 1.9, 0.8); P.spin = cr; P.float = 1.1;
+      for (let i = 0; i < 3; i++) { const sh = mk(G.oct(0.16), cm, body, Math.cos(i * 2.1) * 0.75, -0.2, Math.sin(i * 2.1) * 0.75); sh.scale.y = 1.6; P.segs.push(sh); }
+      mk(G.cyl(0.7, 0.85, 0.25, 8), M('#6a6058'), root, 0, 0.12, 0);
+      const gl = glowSprite(color, 3, 0.55); gl.position.y = 1.1; body.add(gl);
+      return { root, inner, body, P, mats, kind, extra, boss, color, seed: Math.random() * 10, hurt: -9, atk: 0 };
+    }
     const red = () => M('#ff3030', { e: '#ff2020', ei: 1.5 });
     const eyes = (parent, x, y, z, r = 0.06, glow = false) => {
       for (const s of [-1, 1]) {
@@ -557,6 +565,7 @@ const Scene3D = (() => {
     const atkA = m.atk ? clamp((t - m.atk) / 0.4, 0, 1) : 0;
     P.arms.forEach((a, i) => { a.rotation.z = atkA ? -Math.sin(atkA * Math.PI) * 2.2 : -0.15 + Math.sin(ph + i * Math.PI) * 0.15; });
     for (const wg of P.wings) wg.rotation.x = wg.userData.side * (0.2 + Math.sin(t * (m.kind === 'dragon' ? 4 : 14)) * 0.6);
+    if (P.spin) { P.spin.rotation.y += dt * 1.2; P.segs.forEach((s, i) => { s.position.y = -0.2 + Math.sin(t * 2 + i * 2) * 0.15; }); return; }
     P.segs.forEach((s, i) => {
       if (m.kind === 'serpent') s.position.y = 0.2 + Math.max(0, Math.sin(t * 5 - i * 0.7)) * 0.15;
       else if (m.kind === 'bug' || m.kind === 'dragon') s.rotation.y = Math.sin(t * 3 + i * 0.5) * 0.15;
@@ -995,6 +1004,8 @@ const Scene3D = (() => {
     'Pirata Afogado':     { m: 'Skeleton_Rogue', tint: '#90d0c8', r: 'Skeleton_Blade' },
     'Capitão Abissal':    { m: 'Skeleton_Warrior', tint: '#70b0c8', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A', s: 1.15 },
     'Xamã Tribal':        { m: 'Skeleton_Mage', tint: '#b0e080', r: 'Skeleton_Staff', mage: true },
+    'Arqueiro da Muralha': { m: 'Skeleton_Rogue', tint: '#d8c8a0', r: 'Skeleton_Blade' },
+    'Cavaleiro Sitiante': { m: 'Skeleton_Warrior', tint: '#e0b060', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A' },
     'Ceifador Astral':    { m: 'Skeleton_Warrior', tint: '#a090ff', r: 'Skeleton_Axe', s: 1.2 },
     'Guerreiro da Tempestade': { m: 'Skeleton_Warrior', tint: '#a8c8ff', r: 'Skeleton_Blade', l: 'Skeleton_Shield_Small_A' },
   };
@@ -1386,7 +1397,7 @@ const Scene3D = (() => {
   }
 
   function buildDungeon(zid, th, M, root) {
-    const floor = R.dungeon ? R.dungeon.floor : 1, bossF = R.dungeon && (R.dungeon.tower ? R.dungeon.boss : floor === 3), tower = R.dungeon && R.dungeon.tower;
+    const floor = R.dungeon ? R.dungeon.floor : 1, bossF = R.dungeon && (R.dungeon.tower || R.dungeon.arena ? R.dungeon.boss : floor === 3), tower = R.dungeon && R.dungeon.tower, arena = R.dungeon && R.dungeon.arena;
     scene.background = skyTex('#05040a', '#120e1c');
     scene.fog = new THREE.Fog('#120e1c', 12, 36);
     root.add(new THREE.HemisphereLight('#8a80b0', '#1a1420', 0.6));
@@ -1397,7 +1408,7 @@ const Scene3D = (() => {
     const gtex = groundTex(new THREE.Color(th.g[0]).multiplyScalar(0.55).getStyle(), new THREE.Color(th.g[1]).multiplyScalar(0.45).getStyle()); gtex.repeat.set(14, 14);
     const ground = new THREE.Mesh(new THREE.CircleGeometry(17, 48), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; root.add(ground);
-    const wallM = M(tower ? '#4a4038' : '#3a3444'), capM = M(tower ? '#6a5a40' : '#4e4658');
+    const wallM = M(arena ? '#5a3030' : tower ? '#4a4038' : '#3a3444'), capM = M(arena ? '#7a4038' : tower ? '#6a5a40' : '#4e4658');
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * Math.PI * 2, h = 3.2 + (i % 3) * 0.6;
       const w = mk(G.box(3.9, h, 1), wallM, root, Math.cos(a) * 16.5, h / 2, Math.sin(a) * 16.5); w.rotation.y = -a + Math.PI / 2; w.receiveShadow = true;
@@ -1405,7 +1416,7 @@ const Scene3D = (() => {
     }
     const r = seeded(ALL_ZONES.findIndex((z) => z.id === zid) * 53 + floor * 7);
     for (let i = 0; i < 18; i++) { const a = r() * 6.28, d = 6 + r() * 8; const p = buildProp(th.deco === 'crystal' || th.deco === 'spike' || th.deco === 'tomb' ? th.deco : 'rock', th, M); p.position.set(Math.cos(a) * d, 0, Math.sin(a) * d - 2); p.scale.setScalar(0.9 + r() * 0.6); root.add(p); }
-    const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: bossF ? '#ff4060' : tower ? '#e0b040' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, bossF ? -7 : -3, false);
+    const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: bossF ? '#ff4060' : arena ? '#ff8040' : tower ? '#e0b040' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, bossF ? -7 : -3, false);
     rune.rotation.x = -Math.PI / 2;
     scene.add(root);
     env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th: { amb: 'dust' }, stars: null, world: true, sun, rune };

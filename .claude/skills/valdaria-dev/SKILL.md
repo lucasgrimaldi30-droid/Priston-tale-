@@ -22,7 +22,7 @@ isométrica (tipo Eldevin), com mecânicas de MMORPGs clássicos — mas sempre 
 ## Regras de conteúdo
 Pode reproduzir *mecânicas* de outros jogos (funções de classe, área, invocação, furtividade, bloqueio, missões, renascimento...), mas nunca nomes,
 classes, tribos, cidades, mapas, monstros, arte ou música de jogos existentes, nem renomeados. Se pedirem "uma cópia de X", explique e proponha a
-versão original com as mesmas mecânicas.
+versão original com as mesmas mecânicas (ex.: guerra de castelo virou "Cerco da Coroa" e arena de sobrevivência virou "Arena da Sobrevivência").
 
 ## Referências (leia a certa antes de mexer)
 - `references/arquitetura.md` — arquivos, estado salvo (`S`) e de execução (`R`), laço do jogo e funções de cada sistema.
@@ -54,6 +54,7 @@ node tools/test/features.cjs         # sistemas (tutorial, habilidades, loja, fo
 node tools/test/smoke.cjs            # navegador: 8 classes, cidade, NPC, janelas, Conta Full em iframe, celular (~3 min); --rapido para ~1 min
 node tools/test/balance.cjs 24       # simulação de 24 h por classe (ou: node tools/test/balance.cjs 12 lanceiro,arcanista)
 node tools/test/danger.cjs           # Fenda Primordial: médio solo × médio em equipe × muito forte (5 min cada)
+node tools/test/cerco.cjs            # fim do Cerco da Coroa: Rei da Semana e bônus (sobe o servidor duas vezes)
 node tools/test/multiplayer.cjs      # sobe o servidor e testa 2 jogadores: presença, chat, save na nuvem, ranking, segurança (cd server && npm install antes)
 cd server && npm install && node server.js   # jogar online localmente em http://localhost:8080
 node --check js/*.js                 # sintaxe

@@ -149,6 +149,16 @@ const startServer = require('./server.cjs');
     R.killTimes = Array(40).fill(Date.now()); checkTitles(); ok('Fúria Sangrenta é temporária', titleOwned(titleById('furia')) && S.titles.furia.until > Date.now());
     S.titles.furia.until = Date.now() - 1; R.killTimes = []; checkTitles(); ok('Título temporário acaba com o tempo', !titleOwned(titleById('furia')));
     ok('Coleção dá bônus e janela abre', titleBonus().xpb >= 0.5 && (R.achTab = 'titulos', tabAch().includes('Casa de Títulos')));
+    // arena da sobrevivência e fortaleza do cerco
+    novo('valquiria', 40, { tut: 99 }); S.settings.auto = false; enterArena(false);
+    ok('Entrar na Arena', !!R.dungeon && R.dungeon.arena && R.mons.length >= 5 && arenaWeek().tries === 1);
+    for (let r = 0; r < 3; r++) { for (const m of aliveMons()) { m.hp = 0; killMonster(m); } ticks(30); }
+    ok('Rodadas avançam', R.dungeon && R.dungeon.floor === 4 && R.dungeon.cleared === 3, R.dungeon && R.dungeon.floor);
+    R.dungeon.t = 0.05; ticks(2); ok('Tempo acaba e encerra com o recorde', !R.dungeon && arenaWeek().best === 3 && S.stats.arenaBest === 3);
+    S.arenaWk.tries = ARENA_TRIES; enterArena(false); ok('Limite de entradas por semana', !R.dungeon);
+    S.zone = 'gw'; initWorld(); for (let i = 0; i < 60; i++) spawnWorldMonster();
+    ok('Fortaleza tem cristais parados', R.mons.some((m) => m.crystal && m.static && m.atk === 0) && R.mons.every((m) => Math.abs(m.lvl - S.lvl) <= 3 || m.crystal));
+    ok('Sem servidor o bônus semanal é zero', wkBonus() === 0 && dropMult() === 1 && tabMaps().includes('Cerco da Coroa') && tabMaps().includes('Arena da Sobrevivência'));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

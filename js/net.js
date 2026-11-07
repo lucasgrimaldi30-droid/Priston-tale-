@@ -68,6 +68,7 @@ const Net = (() => {
       else if (m.t === 'sys' && api.onSys) api.onSys(m.text);
       else if (m.t === 'party') { st.party = m.party; if (api.onSocial) api.onSocial(m); }
       else if (m.t === 'guild') { st.guild = m.guild; if (api.onSocial) api.onSocial(m); }
+      else if (m.t === 'wk') { st.wk = m; if (api.onSocial) api.onSocial(m); }
       else if (m.t === 'trade') { st.trade = m.trade; if (api.onSocial) api.onSocial(m); }
       else if (['pinvite', 'ginvite', 'pshare', 'gcreated', 'coop', 'tinvite', 'tdone', 'pvphit', 'pvpkill'].includes(m.t) && api.onSocial) api.onSocial(m);
     };

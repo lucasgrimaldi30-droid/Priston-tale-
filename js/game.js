@@ -267,7 +267,7 @@ function setBonus(b) {
 function gemBag() { if (!S.gems) S.gems = {}; for (const k in GEMS) if (!S.gems[k]) S.gems[k] = [0, 0, 0, 0, 0]; return S.gems; }
 function sockets(it) { return Math.max(0, RARITIES.findIndex((r) => r.id === it.rarity)); }
 function dropGem(chance, lvl) {
-  if (Math.random() >= chance) return;
+  if (Math.random() >= chance * (chance < 1 ? dropMult() : 1)) return;
   const types = Object.keys(GEMS), t = types[rint(0, types.length - 1)];
   const l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 40)));
   gemBag()[t][l]++;
@@ -352,7 +352,7 @@ function derived() {
   const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
   for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
   const TB = titleBonus(); for (const k of ['atkp', 'defp', 'hpp', 'crit', 'spd', 'absorb']) if (TB[k]) SO[k] = (SO[k] || 0) + TB[k];
-  bonus.xpb += TB.xpb || 0; bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
+  bonus.xpb += (TB.xpb || 0) + wkBonus(); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
@@ -397,7 +397,7 @@ function derived() {
 function zoneById(id) { return ALL_ZONES.find((z) => z.id === id); }
 function zoneSpan(z) { if (z.span) return z.span; const i = ZONES.indexOf(z); return i < ZONES.length - 1 ? ZONES[i + 1].min - z.min : 18; }
 // nível de recompensa do mapa (desvio usa o do mapa de onde sai, +1)
-function zoneTier(z) { return z.parent ? ZONES.findIndex((q) => q.id === z.parent) + 2 : ZONES.indexOf(z) + 1; }
+function zoneTier(z) { if (z.tier) return z.tier; return z.parent ? ZONES.findIndex((q) => q.id === z.parent) + 2 : ZONES.indexOf(z) + 1; }
 const zoneIdx = (zid) => ALL_ZONES.findIndex((z) => z.id === zid);
 
 function makeMonster(name, icon, lvl, boss, groupN) {
@@ -473,6 +473,7 @@ const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
 const DANGER = { hp: 3, atk: 9, xp: 2.4, bossHp: 4, bossAtk: 4 };
 function spawnSource() {
   const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
+  if (z.special) { const cr = Math.random() < 0.25, camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)]; return { mon: cr ? z.boss : z.monsters[rint(0, 2)], lvl: clamp(S.lvl + rint(-2, 2), z.min, 100), center: c, spread: 3.5, crystal: cr }; }
   if (exits.length && Math.random() < BORDER_CHANCE) {
     const ex = exits[rint(0, exits.length - 1)], nz = zoneById(ex.to), ns = zoneSpan(nz), mi = rint(0, 2);
     const lvl = ex.side === 'prev' ? nz.min + ns - rint(1, 3) : nz.min + rint(0, 2);
@@ -509,6 +510,7 @@ function spawnWorldMonster(initial = false) {
     const m = makeMonster(src.mon[0], src.mon[1], Math.max(1, src.lvl), false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
     if (src.border) m.border = src.border;
+    if (src.crystal) { m.crystal = true; m.static = true; m.atk = 0; m.maxHp = m.hp = Math.round(m.maxHp * 6); m.xp *= 3; m.gold *= 2; }
     if (zoneById(S.zone).danger && !src.border) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.hp); m.atk = Math.round(m.atk * DANGER.atk); m.def = Math.round(m.def * 1.3); m.xp = Math.round(m.xp * DANGER.xp); m.gold = Math.round(m.gold * 1.6); m.danger = true; }
     if (!initial && !R.dungeon && Math.random() < ROAM_CHANCE && !R.mons.some((o) => o.roamer)) { // errante raro: elite forte que cruza o mapa
       m.roamer = true; m.elite = true; m.skin = m.name; m.name = m.name + ' Errante';
@@ -560,7 +562,7 @@ function eventNow(t = Date.now()) {
   return { id: null, slot, next: ne, nextIn: EV_SLOT - into };
 }
 function eventTick() {
-  storyTick();
+  storyTick(); gwTick();
   { const c = storyCur(); if (c && c.obj.k === 'sboss' && S.lvl >= c.lvl && S.zone === c.zone && !R.inTown && !R.dungeon && R.pos && (R.sbossT = (R.sbossT || 0) - 1) <= 0) { R.sbossT = 20; spawnStoryBoss(); } }
   const ev = eventNow();
   if (ev.id !== R.lastEv) {
@@ -681,6 +683,7 @@ function enterDungeon(zid) {
 }
 function dungeonFloor() {
   if (R.dungeon.tower) return towerFloor();
+  if (R.dungeon.arena) return arenaFloor();
   const D = R.dungeon, z = zoneById(D.zone), span = zoneSpan(z);
   R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 0, z: 11 }; R.playerTimer = 0.3;
   const lvl = z.min + span;
@@ -706,8 +709,9 @@ function dungeonFloor() {
 }
 function dungeonTick(dt) {
   const D = R.dungeon;
+  if (D.arena && aliveMons().length) { D.t -= dt; if (D.t <= 0) { log('⏰ O tempo da rodada acabou!', 'death'); exitDungeon(false); } return; }
   if (aliveMons().length) return;
-  if (!D.next) { D.next = 2.5; if (D.tower) towerClear(); else if (D.floor < D.floors) log(`✅ Andar ${D.floor} limpo! Descendo...`, 'lvl'); else dungeonReward(); }
+  if (!D.next) { D.next = 2.5; if (D.arena) arenaClear(); else if (D.tower) towerClear(); else if (D.floor < D.floors) log(`✅ Andar ${D.floor} limpo! Descendo...`, 'lvl'); else dungeonReward(); }
   D.next -= dt;
   if (D.next <= 0) {
     if (D.floor < D.floors) { D.floor++; D.next = 0; if (D.tower) D.zone = towerZone(D.floor).id; Sfx.play('portal'); dungeonFloor(); }
@@ -725,7 +729,9 @@ function dungeonReward() {
 }
 function exitDungeon(failed) {
   if (!R.dungeon) return;
-  if (R.coop) { Net.soc('crelay', { k: R.coop.lead ? 'end' : 'leave', d: { done: !!R.dungeon.done } }); R.coop = null; }
+  if (R.dungeon.arena && R.coop && !R.coop.lead) { /* colega: o resultado vem do líder */ }
+  else if (R.dungeon.arena && !R.dungeon.ended) { R.dungeon.ended = true; arenaFinish(); }
+  if (R.coop) { Net.soc('crelay', { k: R.coop.lead ? 'end' : 'leave', d: { done: !!R.dungeon.done, arena: R.dungeon.arena ? (R.dungeon.cleared || 0) : null } }); R.coop = null; }
   if (R.dungeon.tower) { log(`🗼 Você saiu da Torre no andar ${R.dungeon.floor}. Recorde: andar ${S.towerBest || 0}.`, 'boss'); if ((R.dungeon.cleared || 0) >= 3) dailyProgress('dungeons'); }
   R.dungeon = null; R.worldZone = null; R.mons = []; R.mon = null; R.tele = [];
   if (failed) log('💀 Você foi expulso da masmorra.', 'death');
@@ -793,7 +799,7 @@ function eventsBox() {
 }
 function tabTower() {
   const best = S.towerBest || 0, st = towerStart();
-  return eventsBox() + `<div class="tower-box"><h3>🗼 Torre Infinita</h3>
+  return eventsBox() + gwBox() + arenaBox() + `<div class="tower-box"><h3>🗼 Torre Infinita</h3>
     <p>Andares sem fim. Cada andar é mais forte que o anterior e a cada 5 andares há um guardião. Morrer só te tira da torre, sem perder nada.</p>
     <p>Primeira vez em cada andar: <b>ouro triplo</b>. Guardiões vencidos pela primeira vez dão <b>pedras, item e gema</b>.</p>
     <div class="stat-cards"><div><small>Seu recorde</small><b>Andar ${best}</b></div><div><small>Monstros no próximo</small><b>Nv. ${towerMonLvl(best + 1)}</b></div></div>
@@ -927,6 +933,7 @@ function killMonster(m) {
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
+  if (S.zone === 'gw' && online() && !m.dun) Net.soc('gwscore', { k: m.crystal ? 'c' : 'm' });
   titleState(); S.streak.kills++; (R.killTimes = R.killTimes || []).push(Date.now()); if (R.killTimes.length > 80) R.killTimes.splice(0, R.killTimes.length - 80);
   if (!m.tower && !m.dun) storyProgress('kill', S.zone);
   if (m.sboss) { storyProgress('sboss', S.zone); S.stats.vaelor = 1; }
@@ -952,7 +959,7 @@ function killMonster(m) {
     dropGem(0.35, m.lvl); dropSoul(0.06, m.lvl);
     if (Math.random() < 0.25) { addMat('essencia', 1); log('✨ O elite deixou uma Essência!', 'loot'); }
   } else {
-    if (Math.random() < 0.09) dropItem(genItem(m.lvl));
+    if (Math.random() < 0.09 * dropMult()) dropItem(genItem(m.lvl));
     dropGem(0.025, m.lvl); dropSoul(m.danger ? 0.03 : 0.004, m.lvl);
     if (Math.random() < 0.012) { S.stones++; log('💎 Você encontrou uma Pedra de Refino!', 'loot'); }
   }
@@ -1254,6 +1261,7 @@ function monstersAI(dt) {
   const live = aliveMons();
   for (const m of live) {
     m.moving = false;
+    if (m.static) continue; // cristal: não anda nem ataca
     if (m.stun > 0) { m.stun -= dt; continue; }
     if (m.slow > 0) m.slow -= dt;
     const sp = m.slow > 0 ? 0.5 : 1, dp = dist2(m, R.pos);
@@ -1534,12 +1542,12 @@ function joinCoop(zone, leader) {
 function coopLeaderTick(dt) {
   R.coop.syncT -= dt; if (R.coop.syncT > 0) return; R.coop.syncT = 0.2;
   const r2 = (v) => Math.round((v || 0) * 100) / 100;
-  Net.soc('crelay', { k: 'sync', d: { f: R.dungeon.floor, m: aliveMons().slice(0, 24).map((m) => ({ sid: m.sid, name: m.name, icon: m.icon, lvl: m.lvl, type: m.type, x: r2(m.x), z: r2(m.z), hp: m.hp, maxHp: m.maxHp, atk: m.atk, def: m.def,
+  Net.soc('crelay', { k: 'sync', d: { f: R.dungeon.floor, at: R.dungeon.arena ? Math.round(R.dungeon.t) : undefined, m: aliveMons().slice(0, 24).map((m) => ({ sid: m.sid, name: m.name, icon: m.icon, lvl: m.lvl, type: m.type, x: r2(m.x), z: r2(m.z), hp: m.hp, maxHp: m.maxHp, atk: m.atk, def: m.def,
     boss: m.boss ? 1 : 0, elite: m.elite ? 1 : 0, face: r2(m.face), mv: m.moving ? 1 : 0, ag: m.aggro ? 1 : 0, en: m.enraged ? 1 : 0 })) } });
 }
 function coopApplySync(d) {
   if (!isMember() || !R.dungeon) return;
-  R.coop.seen = Date.now();
+  R.coop.seen = Date.now(); if (d.at != null) R.dungeon.t = d.at;
   if (d.f !== R.dungeon.floor) { R.dungeon.floor = d.f; R.pos = { x: 1.5, z: 11 }; R.mon = null; R.dirty.all = true; log(`🕳️ Andar ${d.f}/3.`, 'boss'); }
   const old = new Map(R.mons.map((m) => [m.sid, m])), out = [];
   for (const x of d.m || []) {
@@ -1561,12 +1569,18 @@ function coopMemberTick(dt) {
 }
 function onCoop(m) {
   const d = m.d || {};
-  if (m.k === 'start') { if (!R.dungeon && !(R.dead > 0)) uiConfirm('Masmorra em grupo', `${m.from} abriu a masmorra de ${(zoneById(d.zone) || {}).name || ''}. Entrar junto?`, 'Entrar').then((y) => { if (y) joinCoop(d.zone, m.from); }); }
+  if (m.k === 'start') { if (!R.dungeon && !(R.dead > 0)) uiConfirm(d.arena ? 'Arena da Sobrevivência' : 'Masmorra em grupo', d.arena ? `${m.from} abriu a Arena da Sobrevivência para o grupo. Entrar junto? (gasta 1 das suas ${ARENA_TRIES} entradas da semana)` : `${m.from} abriu a masmorra de ${(zoneById(d.zone) || {}).name || ''}. Entrar junto?`, 'Entrar').then((y) => {
+    if (!y) return; if (d.arena) { const W = arenaWeek(); if (W.tries >= ARENA_TRIES) { toast('Suas entradas da semana acabaram.', 'bad'); return; } W.tries++; }
+    joinCoop(d.zone, m.from); if (d.arena && R.dungeon) { R.dungeon.arena = true; R.dungeon.floors = Infinity; R.dungeon.lvl = d.lvl; }
+  }); }
   else if (m.k === 'sync') coopApplySync(d);
   else if (m.k === 'hit' && R.coop && R.coop.lead) {
     for (const [sid, dmg] of (d.h || []).slice(0, 60)) { const mo = aliveMons().find((x) => x.sid === sid); if (mo) { mo.hp -= Math.max(0, Math.min(+dmg || 0, 1e9)); mo.aggro = true; if (mo.hp <= 0) killMonster(mo); } }
   } else if (m.k === 'kill' && isMember()) killMonster(Object.assign({}, d, { coopKill: true, hp: 0, dun: true }));
-  else if (m.k === 'end' && isMember()) { if (d.done) dungeonReward(); R.coop = null; exitDungeon(false); }
+  else if (m.k === 'end' && isMember()) {
+    if (d.arena != null) { R.dungeon.cleared = d.arena; R.dungeon.ended = true; R.coop = null; arenaFinish(); exitDungeon(false); }
+    else { if (d.done) dungeonReward(); R.coop = null; exitDungeon(false); }
+  }
   else if (m.k === 'leave' && R.coop && R.coop.lead) log(`👥 ${esc(m.from)} saiu da masmorra.`, 'muted');
 }
 
@@ -1652,7 +1666,7 @@ function awkPanel() {
 // ---------- PK (combate entre jogadores): só com o Modo PK ligado, nos mapas de nível alto, a partir do nível 40 ----------
 const PK_ZONES = ['z8', 'z9', 'z10', 'b4', 'e1'], PK_MIN = 40, PVP_SCALE = 0.5, PVP_RESPAWN = 6, PVP_PROT = 12000;
 const pkZone = () => PK_ZONES.includes(S.zone) && !R.inTown && !R.dungeon;
-function pkActive() { return !!(online() && S.settings.pk && pkZone() && S.lvl >= PK_MIN); }
+function pkActive() { if (S.zone === 'gw' && !R.inTown && !R.dungeon) return !!(online() && myGuildName() && gwOpen()); return !!(online() && S.settings.pk && pkZone() && S.lvl >= PK_MIN); }
 function pkProtected() { return (R.pvpProt || 0) > Date.now(); }
 function sameSide(o) { // grupo e guilda não se atacam
   const pt = Net.st.party, g = Net.st.guild;
@@ -1660,6 +1674,11 @@ function sameSide(o) { // grupo e guilda não se atacam
 }
 function pkWhyNot(o) {
   if (!online()) return 'O PK precisa do servidor.';
+  if (S.zone === 'gw' && !R.inTown && !R.dungeon) { // Cerco: clãs diferentes lutam sem Modo PK
+    if (!gwOpen()) return 'O Cerco não está aberto.'; if (!myGuildName()) return 'Você precisa de uma guilda.';
+    if (!o) return 'Jogador não encontrado.'; if (!o.g) return `${o.name} não tem guilda.`; if (o.g === myGuildName()) return 'É do seu clã.';
+    if (o.prot) return `${o.name} acabou de voltar e está protegido.`; return '';
+  }
   if (!S.settings.pk) return 'Ligue o Modo PK na janela Social.';
   if (!pkZone()) return 'Aqui não é mapa de PK.';
   if (S.lvl < PK_MIN) return `O PK libera no nível ${PK_MIN}.`;
@@ -1720,6 +1739,97 @@ function pkBox() {
     <small>Com o Modo PK ligado, você pode atacar e ser atacado por quem também ligou. Só nos mapas ${PK_ZONES.map((id) => esc(zoneById(id).name)).join(', ')}, a partir do nível ${PK_MIN}. Grupo e guilda não se atacam.
     Morrer no PK não tira XP nem itens; vencer dá Honra (aparece no ranking). Toque num jogador com ⚔️ para atacar.</small>
     <small>${S.lvl < PK_MIN ? `Libera no nível ${PK_MIN}.` : z ? (S.settings.pk ? '🔴 Você está vulnerável neste mapa.' : 'Este mapa é de PK.') : 'Este mapa não é de PK: aqui você está seguro.'} Vitórias: ${S.stats.pvpKills || 0} · Derrotas: ${S.stats.pvpDeaths || 0}</small></div>`;
+}
+
+// ============================================================
+//  EVENTOS SEMANAIS: 🏰 Cerco da Coroa (clã × clã, domingo 17h) e 🏟️ Arena da Sobrevivência (grupo, rodadas)
+// ============================================================
+const wk = () => (online() && Net.st.wk) || null;
+function wkBonus() { const w = wk(); return w ? (w.gwB || 0) + (w.sod || 0) : 0; } // % de XP e drop da semana
+function dropMult() { return 1 + wkBonus() / 100; }
+const gwOpen = () => !!(wk() && wk().gw);
+function myGuildName() { return online() && Net.st.guild ? Net.st.guild.name : ''; }
+function nextSundayText() {
+  const now = new Date(), f = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', hour: '2-digit' });
+  for (let h = 0; h < 24 * 8; h++) { const t = new Date(now.getTime() + h * 3600e3); const p = f.formatToParts(t); const wd = p.find((x) => x.type === 'weekday').value, hr = +p.find((x) => x.type === 'hour').value; if (wd === 'domingo' && hr === 17) return h === 0 ? 'agora' : h < 24 ? `em ${h} h` : `em ${Math.round(h / 24)} dia(s)`; }
+  return 'domingo às 17h';
+}
+function enterGW() {
+  if (!gwOpen()) { toast('O Cerco abre domingo às 17h (Brasília).'); return; }
+  if (!myGuildName()) { toast('Precisa estar em uma guilda.', 'bad'); return; }
+  if (S.lvl < GW_ZONE.min) { toast(`Nível ${GW_ZONE.min} necessário.`, 'bad'); return; }
+  if (R.dungeon) exitDungeon(false);
+  if (S.zone !== 'gw') S.gwBack = S.zone;
+  S.zone = 'gw'; R.worldZone = null; R.mon = null; R.pvp = null; if (R.inTown) setTown(false);
+  closeWin && closeWin(); Sfx.play('portal');
+  log('🏰 <b>Fortaleza da Coroa!</b> Destrua cristais (50 pontos), monstros (1) e derrube jogadores de outros clãs (20). Aqui clãs diferentes lutam sem precisar do Modo PK.', 'boss');
+}
+function gwTick() { // fim do Cerco: volta para o mapa de antes
+  if (S.zone === 'gw' && !gwOpen()) { S.zone = S.gwBack && zoneById(S.gwBack) ? S.gwBack : 'z1'; R.worldZone = null; R.pvp = null; log('🏰 O Cerco acabou. Você voltou ao mapa anterior.', 'muted'); }
+}
+function gwBox() {
+  const w = wk();
+  if (!online()) return `<div class="ev-box gw-box"><b>🏰 Cerco da Coroa</b><small>Guerra de clãs todo domingo às 17h (Brasília), por 1 hora. Precisa do servidor e de uma guilda.</small></div>`;
+  const board = w && w.board && w.board.length ? `<div class="gw-board">${w.board.map((b, i) => `<span>${['🥇', '🥈', '🥉', '4º', '5º'][i]} ${esc(b.name)} <b>${fmt(b.pts)}</b></span>`).join('')}</div>` : '';
+  return `<div class="ev-box gw-box"><b>🏰 Cerco da Coroa</b>
+    <small>Todo domingo às 17h (Brasília), por 1 hora, abre a Fortaleza da Coroa. Cristal = 50 pontos, monstro = 1, derrubar alguém de outro clã = 20. A guilda com mais pontos vira <b>Rei da Semana</b>: +10% de XP e drop para todo o clã; 2º lugar +6%; 3º lugar +3%.</small>
+    <small>${w && w.king ? `👑 Rei da Semana: <b>${esc(w.king)}</b>` : 'Ainda não há Rei da Semana.'}${w && w.gw ? '' : ` · Próximo Cerco ${nextSundayText()}`}${w && w.gwRank ? ` · Seu clã ficou em ${w.gwRank}º: +${w.gwB}% XP e drop` : ''}</small>
+    ${w && w.gw ? `<small>🔥 <b>Aberto agora!</b> Acaba em ${Math.ceil(w.endsIn / 60000)} min. ${myGuildName() ? `Pontos do seu clã: <b>${fmt(w.mine)}</b>` : 'Entre numa guilda para lutar.'}</small>${board}<button class="btn small primary" data-gw="1" ${myGuildName() && S.lvl >= GW_ZONE.min ? '' : 'disabled'}>Entrar na Fortaleza</button>` : ''}</div>`;
+}
+// ---------- Arena da Sobrevivência ----------
+const ARENA_TRIES = 3;
+function arenaWeek() { if (!S.arenaWk || S.arenaWk.week !== weekId()) S.arenaWk = { week: weekId(), tries: 0, best: 0 }; return S.arenaWk; }
+function arenaZone() { return ZONES.filter((z) => z.min <= S.lvl).pop() || ZONES[0]; }
+function enterArena(group) {
+  const W = arenaWeek();
+  if (R.dead > 0) { toast('Espere renascer.', 'bad'); return; }
+  if (W.tries >= ARENA_TRIES) { toast(`Você já usou as ${ARENA_TRIES} entradas desta semana.`, 'bad'); return; }
+  if (group && !canCoop()) { toast('Só o líder de um grupo pode abrir a Arena em grupo.', 'bad'); return; }
+  W.tries++; const z = arenaZone();
+  if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
+  closeWin && closeWin();
+  R.inTown = false; R.dungeon = { arena: true, zone: z.id, floor: 1, floors: Infinity, next: 0, t: 0, lvl: S.lvl, group: !!group }; R.worldZone = 'dun';
+  if (group) { R.coop = { lead: true, syncT: 0 }; R.dungeon.coop = true; Net.soc('crelay', { k: 'start', d: { zone: z.id, arena: true, lvl: S.lvl } }); }
+  Sfx.play('portal'); log(`🏟️ <b>Arena da Sobrevivência</b>${group ? ' em grupo' : ' (treino sozinho: não conta no ranking)'}! Derrote cada rodada antes do tempo acabar.`, 'boss');
+  dungeonFloor(); R.dirty.all = true;
+}
+function arenaFloor() {
+  const D = R.dungeon, z = zoneById(D.zone), r = D.floor, lvl = Math.min(110, D.lvl + Math.floor(r / 2));
+  D.boss = r % 5 === 0; D.t = 50 + Math.min(40, r * 2);
+  R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 0, z: 11 }; R.playerTimer = 0.3;
+  const n = D.boss ? 3 : Math.min(14, 5 + Math.floor(r / 2)), grow = 1 + r * 0.06;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, rr = 3 + Math.random() * 6, mi = rint(0, 2), m = makeMonster(z.monsters[mi][0], z.monsters[mi][1], lvl, false, 2);
+    Object.assign(m, { x: Math.cos(a) * rr, z: -3 + Math.sin(a) * rr, wp: null, wait: 0.5, dun: true, arena: true, aggro: true });
+    m.home = { x: m.x, z: m.z }; m.maxHp = m.hp = Math.round(m.maxHp * grow); m.atk = Math.round(m.atk * (1 + r * 0.03));
+    if (R.coop && R.coop.lead) m.maxHp = m.hp = Math.round(m.maxHp * coopScale());
+    if (D.boss || Math.random() < 0.1) { m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 2.4); m.atk = Math.round(m.atk * 1.3); m.xp *= 3; m.gold *= 3; }
+    R.mons.push(m);
+  }
+  if (D.boss) { const b = makeMonster(z.boss[0], z.boss[1], lvl + 3, true, 1); Object.assign(b, { x: 0, z: -7, home: { x: 0, z: -7 }, wp: null, wait: 1, dun: true, arena: true }); b.maxHp = b.hp = Math.round(b.maxHp * grow * (R.coop && R.coop.lead ? coopScale() : 1)); R.mons.push(b); }
+  log(`🏟️ Rodada ${r}${D.boss ? ' — chefe!' : ''}: ${Math.round(D.t)} s para vencer.`, 'boss');
+  if (S.settings.auto) R.mon = R.mons[0];
+}
+function arenaClear() {
+  const r = R.dungeon.floor, gold = Math.round(40 * r * (1 + S.lvl / 10));
+  S.gold += gold; R.dungeon.cleared = r;
+  if (r % 5 === 0) { dropItem(genItem(Math.min(MAX_LEVEL, S.lvl + 3), 5)); dropSoul(1, S.lvl + r); }
+  else if (r % 3 === 0) dropSoul(0.6, S.lvl + r);
+  log(`✅ Rodada ${r} vencida! +${fmt(gold)} ouro.`, 'lvl');
+}
+function arenaFinish() { // chamado ao sair da Arena (tempo acabou, morte ou saída)
+  const D = R.dungeon, rounds = D.cleared || 0, W = arenaWeek();
+  W.best = Math.max(W.best || 0, rounds); S.stats.arenaBest = Math.max(S.stats.arenaBest || 0, rounds);
+  const st = Math.floor(rounds / 4); if (st) dropSoul(1, S.lvl + rounds, st);
+  log(`🏟️ Fim da Arena: <b>${rounds} rodada(s)</b>.${st ? ` +${st} pedra(s) da Alma.` : ''}`, 'boss');
+  if (D.group && R.coop && R.coop.lead && online()) Net.soc('sodscore', { rounds });
+}
+function arenaBox() {
+  const W = arenaWeek(), w = wk();
+  return `<div class="ev-box arena-box"><b>🏟️ Arena da Sobrevivência</b>
+    <small>Rodadas cada vez mais fortes, com tempo para vencer. Dá ouro, itens e pedras da Alma. ${ARENA_TRIES} entradas por semana (você usou ${W.tries}). O grupo com mais rodadas na semana ganha <b>+2% de XP e drop</b> para cada jogador na semana seguinte.</small>
+    <small>Seu recorde da semana: <b>${W.best || 0}</b>${w && w.sodBest ? ` · Recorde do servidor: <b>${w.sodBest.rounds}</b> (${w.sodBest.names.map(esc).join(', ')})` : ''}${w && w.sodPrev ? ` · Campeões da semana passada: ${w.sodPrev.names.map(esc).join(', ')}` : ''}${w && w.sod ? ' · <b>Você tem o bônus de +2%!</b>' : ''}</small>
+    <div class="tower-btns"><button class="btn small" data-arena="solo" ${W.tries >= ARENA_TRIES ? 'disabled' : ''}>Treinar sozinho</button>${canCoop() ? `<button class="btn small primary" data-arena="grupo" ${W.tries >= ARENA_TRIES ? 'disabled' : ''}>👥 Entrar com o grupo (vale ranking)</button>` : '<small class="muted">Para valer no ranking, entre como líder de um grupo.</small>'}</div></div>`;
 }
 
 // ---------- grupo e guilda (precisam do servidor) ----------
@@ -1847,7 +1957,7 @@ function drawMinimap() {
     for (const id in npc) { const [px, py] = PT(npc[id][0], npc[id][1]); g.fillText(ic[id], px, py); }
     const [hx, hy] = PT(0, 1.4); g.beginPath(); g.arc(hx, hy, 4, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
   } else {
-    label = R.dungeon ? (R.dungeon.tower ? `Torre ${R.dungeon.floor}` : `Masmorra ${R.dungeon.floor}/3`) : zoneById(S.zone).name;
+    label = R.dungeon ? (R.dungeon.arena ? `Arena ${R.dungeon.floor}` : R.dungeon.tower ? `Torre ${R.dungeon.floor}` : `Masmorra ${R.dungeon.floor}/3`) : zoneById(S.zone).name;
     if (R.dungeon) { g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, 16 * k, 0, Math.PI * 2); g.stroke(); }
     if (!R.dungeon) for (const c of zoneCamps(S.zone)) dot(c.x, c.z, 4, 'rgba(120,80,40,.6)');
     if (!R.dungeon) { const [ax, ay] = P(WORLD.arena.x, WORLD.arena.z); g.beginPath(); g.arc(ax, ay, 6 * k, 0, Math.PI * 2); g.strokeStyle = '#b060ff'; g.lineWidth = 2; g.stroke(); }
@@ -1911,7 +2021,8 @@ function renderLive() {
   // chefe
   const z = zoneById(S.zone);
   const k = S.zoneKills[S.zone] || 0;
-  if (R.dungeon && R.dungeon.tower) $('#zone-title').innerHTML = `🗼 Torre Infinita <span class="muted">(andar ${R.dungeon.floor} · recorde ${S.towerBest || 0})</span>`;
+  if (R.dungeon && R.dungeon.arena) $('#zone-title').innerHTML = `🏟️ Arena da Sobrevivência <span class="muted">(rodada ${R.dungeon.floor} · ⏱️ ${Math.max(0, Math.ceil(R.dungeon.t || 0))} s)</span>`;
+  else if (R.dungeon && R.dungeon.tower) $('#zone-title').innerHTML = `🗼 Torre Infinita <span class="muted">(andar ${R.dungeon.floor} · recorde ${S.towerBest || 0})</span>`;
   else if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
   else if (!R.inTown) { const w = worldSky(S.zone), ev = eventNow();
     $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> ${pkZone() ? `<span class="pk-tag" title="Mapa de PK">${S.settings.pk && S.lvl >= PK_MIN ? '⚔️ PK ligado' : '⚔️ PK'}</span> ` : ''}<span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} <span class="ev-name">${ev.name} </span>${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
@@ -2203,7 +2314,7 @@ function soulBonus() { // soma em chaves: atkp, crit, hpp, defp, absorb
   return B;
 }
 function dropSoul(chance, lvl, n = 1) {
-  if (Math.random() >= chance) return;
+  if (Math.random() >= chance * (chance < 1 ? dropMult() : 1)) return;
   const b = soulState().bag, ts = Object.keys(SOUL);
   for (let i = 0; i < n; i++) {
     const t = ts[rint(0, ts.length - 1)], l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 45)));
@@ -2613,6 +2724,8 @@ const TITLES = [
   { id: 'duelista', name: 'Mestre Duelista', icon: '🤺', desc: 'Vença 10 jogadores no PK', prog: () => S.stats.pvpKills || 0, need: 10, b: { atkp: 3, evadep: 2 } },
   { id: 'senhor_guerra', name: 'Conquistador', icon: '🏴', desc: 'Vença 100 jogadores no PK', prog: () => S.stats.pvpKills || 0, need: 100, b: { atkp: 5, defp: 5 } },
   // provisórios: perdem ao morrer ou com o tempo
+  { id: 'rei_semana', name: 'Coroa do Cerco', icon: '👑', desc: 'Seu clã ser Rei da Semana no Cerco da Coroa', prog: () => (wk() && wk().gwRank === 1 ? 1 : 0), need: 1, b: { atkp: 4, defp: 4 } },
+  { id: 'sobrevivente', name: 'Sobrevivente', icon: '🏟️', desc: 'Chegue à rodada 30 da Arena da Sobrevivência', prog: () => S.stats.arenaBest || 0, need: 30, b: { hpp: 5, defp: 3 } },
   { id: 'imortal', name: 'IMORTAL', icon: '💠', temp: 'death', desc: 'Fique 2 horas jogando sem morrer (perde ao morrer)', prog: () => Math.floor((S.streak ? S.streak.alive : 0) / 60), need: 120, unit: 'min', b: { evadep: 8 } },
   { id: 'invicto', name: 'Invicto', icon: '🛡️', temp: 'death', desc: 'Derrote 1.000 monstros seguidos sem morrer (perde ao morrer)', prog: () => (S.streak ? S.streak.kills : 0), need: 1000, b: { atkp: 5, defp: 3 } },
   { id: 'furia', name: 'Fúria Sangrenta', icon: '🩸', temp: 600, desc: 'Derrote 40 monstros em 1 minuto (vale 10 min)', prog: () => (R.killTimes || []).filter((t) => Date.now() - t < 60000).length, need: 40, b: { spd: 0.12 } },
@@ -3160,7 +3273,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3205,6 +3318,8 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.gw) { enterGW(); return; }
+  if (ds.arena) { enterArena(ds.arena === 'grupo'); return; }
   if (ds.achtab) { R.achTab = ds.achtab; return renderTab(); }
   if (ds.teq) { if (ds.teq === '-') S.title = ''; else { const t = titleById(ds.teq); if (t && titleOwned(t)) S.title = t.name; } Sfx.play('click'); R.dirty.all = true; return renderTab(); }
   if (ds.story) { storyClick(ds.story); return; }
@@ -3378,6 +3493,7 @@ if (typeof Net !== 'undefined') {
     else if (m.t === 'tdone') tradeDone(m);
     else if (m.t === 'closed') { if (R.coop && R.dungeon) { R.coop = null; exitDungeon(false); } }
     else if (m.t === 'gcreated') { S.gold = Math.max(0, S.gold - GUILD_COST); log(`🛡️ Guilda <b>${esc(m.name)}</b> fundada! (-${fmt(GUILD_COST)} ouro)`, 'lvl'); toast('Guilda fundada!', 'good'); S.stats.guild = 1; }
+    if (m.t === 'wk') { if (R.win === 'mapas' && (m.gw !== R.lastGw)) renderTab(); R.lastGw = m.gw; return; }
     if (R.win === 'social' || R.win === 'troca') renderTab();
     renderPartyHud();
   };
