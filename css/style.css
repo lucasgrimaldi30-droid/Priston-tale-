@@ -249,3 +249,24 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
   .inv-grid { grid-template-columns: repeat(6, 1fr); }
   .slot-card { flex-wrap: wrap; }
 }
+
+/* ---------- cidade / NPCs ---------- */
+.arena-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn.town { background: linear-gradient(#3a6a4a, #284a34); border-color: #5a9a6a; }
+.npc-bar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; z-index: 3; width: calc(100% - 16px); }
+.npc-bar .btn { background: rgba(20,24,34,.85); backdrop-filter: blur(3px); }
+.npc-labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.npc-label { position: absolute; transform: translate(-50%, -100%); text-align: center; pointer-events: none; white-space: nowrap; }
+.npc-label b { display: block; font-size: 12px; color: #ffe8a0; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+.npc-label span { display: inline-block; font-size: 18px; animation: bob 1.4s ease-in-out infinite; filter: drop-shadow(0 2px 3px #000); }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+.small-hud { font-size: 11px; }
+.modal-box.wide { max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.npc-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.npc-ico { font-size: 40px; }
+.npc-head b { font-family: Cinzel, serif; font-size: 17px; color: var(--gold); }
+.npc-head p { margin: 4px 0 0; color: #c8c4b8; font-style: italic; font-size: 13px; }
+.npc-body { margin: 10px 0; }
+.arena canvas#scene3d { touch-action: pan-y; cursor: grab; }
+.arena canvas#scene3d.dragging { cursor: grabbing; }
+.arena canvas#scene3d.hover-npc { cursor: pointer; }

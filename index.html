@@ -42,6 +42,7 @@
         <span class="chip" id="hdr-lvl"></span>
         <span class="chip gold">💰 <b id="hdr-gold"></b></span>
         <span class="chip">💎 <b id="hdr-stones"></b></span>
+        <button class="btn small" id="mute-btn" title="Som">🔊</button>
         <button class="btn small" id="btn-exit">Trocar herói</button>
       </div>
       <div id="xp-bar" class="xp-wrap"></div>
@@ -57,12 +58,20 @@
         <div class="panel arena-panel">
           <div class="arena-head">
             <div id="zone-title"></div>
-            <button class="btn small boss" id="boss-btn"></button>
+            <span class="arena-btns"><button class="btn small town" id="town-btn">🏰 Cidade</button><button class="btn small boss" id="boss-btn"></button></span>
           </div>
           <div class="arena">
             <canvas id="scene"></canvas>
             <canvas id="scene3d"></canvas>
             <div id="floats3d" class="floats3d"></div>
+            <div id="npc-labels" class="npc-labels"></div>
+            <div id="npc-bar" class="npc-bar hidden">
+              <button class="btn small" data-npc="mercador">🛒 Mercadora</button>
+              <button class="btn small" data-npc="ferreiro">🔨 Ferreiro</button>
+              <button class="btn small" data-npc="portal">🌀 Portais</button>
+              <button class="btn small" data-npc="mestra">📜 Mestra</button>
+              <button class="btn small" data-npc="bau">🧰 Baú</button>
+            </div>
             <div class="hud hud-left" id="player-card">
               <div class="f-name" id="p-name"></div>
               <div id="p-bars"></div>
@@ -99,6 +108,7 @@
 
   <script src="js/data.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/scene3d.js"></script>
   <script src="js/game.js"></script>

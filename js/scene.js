@@ -70,7 +70,9 @@ const Scene2D = (() => {
     z8:  { sky: ['#2a0606', '#a03010'], far: '#4a1010', mid: '#380c0c', g: ['#3a1a14', '#1a0806'], deco: 'spike', dc: '#1a0a0a', amb: 'ember' },
     z9:  { sky: ['#b89878', '#f0e0c0'], far: '#9a8070', mid: '#786654', g: ['#8a7860', '#5a4a3a'], deco: 'rock', dc: '#6a5a4a', amb: 'dust' },
     z10: { sky: ['#06020f', '#2a1048'], far: '#1a0a30', mid: '#260e3c', g: ['#1a1028', '#08040f'], deco: 'crystal', dc: '#c060ff', amb: 'star' },
+    town: { sky: ['#f0a878', '#ffe2b8'], far: '#a89088', mid: '#8a7a70', g: ['#a89a88', '#7a6e60'], deco: 'house', dc: '#b05a3a', amb: 'leaf' },
   };
+  const zkey = () => (typeof R !== 'undefined' && R && R.inTown ? 'town' : S.zone);
 
   // ---------- desenho básico ----------
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
@@ -106,7 +108,7 @@ const Scene2D = (() => {
         ctx.fillStyle = '#4a3020'; ctx.fillRect(-4, -18, 8, 18);
         ctx.fillStyle = col;
         for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-28 + i * 6, -14 - i * 22); ctx.lineTo(28 - i * 6, -14 - i * 22); ctx.lineTo(0, -50 - i * 24); ctx.fill(); }
-        if (THEMES[S.zone].amb === 'snow') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-8, -88); ctx.lineTo(8, -88); ctx.lineTo(0, -98); ctx.fill(); }
+        if (THEMES[zkey()].amb === 'snow') { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-8, -88); ctx.lineTo(8, -88); ctx.lineTo(0, -98); ctx.fill(); }
         break;
       case 'dead':
         ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.lineWidth = 7;
@@ -126,6 +128,11 @@ const Scene2D = (() => {
         ctx.fillStyle = col;
         ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-6, -70 - v * 30); ctx.lineTo(4, 0); ctx.moveTo(0, 0); ctx.lineTo(14, -40); ctx.lineTo(24, 0); ctx.fill();
         ctx.fillStyle = 'rgba(255,90,20,.5)'; ctx.fillRect(-8, -6, 18, 6); break;
+      case 'house':
+        ctx.fillStyle = '#e8dcc0'; ctx.fillRect(-30, -50, 60, 50);
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-38, -48); ctx.lineTo(0, -82); ctx.lineTo(38, -48); ctx.fill();
+        ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-8, -26, 16, 26);
+        ctx.fillStyle = '#ffd880'; ctx.fillRect(-24, -40, 10, 10); ctx.fillRect(14, -40, 10, 10); break;
       case 'rock':
         ctx.fillStyle = col; ell(0, -14, 30, 18); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.1)'; ell(-8, -20, 12, 6); ctx.fill(); break;
     }
@@ -133,7 +140,7 @@ const Scene2D = (() => {
   }
 
   function drawBackground(t) {
-    const th = THEMES[S.zone] || THEMES.z1;
+    const th = THEMES[zkey()] || THEMES.z1;
     const gy = H * 0.84;
     const sky = ctx.createLinearGradient(0, 0, 0, gy);
     sky.addColorStop(0, th.sky[0]); sky.addColorStop(1, th.sky[1]);
@@ -175,7 +182,7 @@ const Scene2D = (() => {
   }
 
   function ambient(dt, t) {
-    const th = THEMES[S.zone] || THEMES.z1;
+    const th = THEMES[zkey()] || THEMES.z1;
     if (st.amb.length < 40 && Math.random() < dt * 20) {
       const a = th.amb;
       const p = { x: Math.random() * W, y: Math.random() * H * 0.85, vx: 0, vy: 0, life: 4 + Math.random() * 3, t: 0, a };
@@ -671,7 +678,7 @@ const Scene2D = (() => {
       st.mon = null;
     }
     const busy = st.dying.some((d) => t < d.dieAt + 0.3);
-    st.hero.state = !st.mon && !(R.dead > 0) && !busy ? 'run' : 'idle';
+    st.hero.state = !st.mon && !(R.dead > 0) && !busy && !R.inTown ? 'run' : 'idle';
   }
 
   // ---------- loop ----------

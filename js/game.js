@@ -57,7 +57,7 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d' },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
     lastSave: Date.now(),
   };
@@ -190,16 +190,31 @@ function log(msg, cls = '') {
 
 function floatText(target, text, cls) { Scene.float(target, text, cls); }
 
+function attackSound(skillName, crit, miss) {
+  const wt = CLASSES[S.cls].weapon;
+  const ranged = { arco: 1, dardo: 1, cajado: 1, cetro: 1 }[wt];
+  const delay = ranged ? 0.5 : 0.22;
+  if (wt === 'arco') Sfx.play('bow');
+  else if (wt === 'dardo') Sfx.play('throw');
+  else if (wt === 'cajado' || wt === 'cetro') Sfx.play('magic', { fire: /Fogo|Meteoro/.test(skillName || '') });
+  else Sfx.play('slash', { gap: 30 });
+  if (miss) return;
+  if (skillName && (wt === 'cajado' || /Meteoro|Sísmico|Rodopio|Chuva|Tempestade|Tormenta|Nova|Julgamento|Executar/.test(skillName))) Sfx.play('boom', { delay, gap: 200 });
+  else if (skillName && wt === 'cetro') Sfx.play('holy', { delay });
+  Sfx.play(crit ? 'crit' : 'hit', { delay, gap: 30 });
+}
+
 function playerHit(mult = 1, skillName = null) {
   const d = derived();
   const m = R.mon;
   const hitChance = clamp(0.85 + (d.A.des - m.lvl * 2.5) * 0.003, 0.6, 0.98);
-  if (!skillName && Math.random() > hitChance) { Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true }); return; }
+  if (!skillName && Math.random() > hitChance) { attackSound(skillName, false, true); Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true }); return; }
   let dmg = rnd(d.atkMin, d.atkMax) * mult;
   const crit = Math.random() * 100 < d.crit;
   if (crit) dmg *= 1.75;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
   m.hp -= dmg;
+  attackSound(skillName, crit, false);
   Scene.playerAttack({ text: fmt(dmg) + (crit ? '!' : ''), cls: crit ? 'crit' : (skillName ? 'skill' : 'dmg'), crit, skill: !!skillName, skillName });
   if (skillName) log(`Você usou <b>${esc(skillName)}</b> causando ${fmt(dmg)} de dano.`, 'skill');
   if (m.hp <= 0) killMonster();
@@ -208,10 +223,11 @@ function playerHit(mult = 1, skillName = null) {
 function monsterHit() {
   const d = derived();
   const m = R.mon;
-  if (Math.random() < d.evade) { Scene.monsterAttack({ text: 'Esquiva', cls: 'miss' }); return; }
+  if (Math.random() < d.evade) { Sfx.play('whiff'); Scene.monsterAttack({ text: 'Esquiva', cls: 'miss' }); return; }
   let dmg = m.atk * rnd(0.85, 1.15) * 150 / (150 + d.def);
   dmg = Math.max(1, Math.round(dmg));
   S.hp -= dmg;
+  Sfx.play('hurt', { gap: 80 });
   Scene.monsterAttack({ text: '-' + fmt(dmg), cls: 'hurt' });
   if (S.hp <= 0) die();
 }
@@ -224,6 +240,7 @@ function killMonster() {
   const gold = Math.round(m.gold * (1 + d.goldb / 100));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++;
   S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
+  Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
     S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.stats.bosses++;
@@ -256,6 +273,7 @@ function dropItem(it) {
     return;
   }
   S.inv.push(it);
+  Sfx.play('loot', { rarity: ri, gap: 100 });
   log(`🎁 Drop: <span style="color:${rarityOf(it).color}">${esc(it.name)}</span> (${rarityOf(it).name})`, 'loot');
 }
 
@@ -268,7 +286,7 @@ function gainXp(xp) {
     S.pts += POINTS_PER_LEVEL;
     const d = derived();
     S.hp = d.maxHp; S.mp = d.maxMp;
-    Scene.levelUp();
+    Scene.levelUp(); Sfx.play('levelup');
     log(`⭐ <b>LEVEL UP!</b> Você alcançou o nível ${S.lvl}! (+${POINTS_PER_LEVEL} pontos de atributo)`, 'lvl');
     const sk = CLASSES[S.cls].skills.find((s) => s.lvl === S.lvl);
     if (sk) log(`📜 Nova habilidade: <b>${esc(sk.name)}</b>`, 'lvl');
@@ -293,6 +311,7 @@ function die() {
   S.stats.deaths++;
   const loss = Math.floor(xpNeed(S.lvl) * 0.03);
   S.xp = Math.max(0, S.xp - loss);
+  Sfx.play('death');
   log(`☠️ Você foi derrotado por ${esc(R.mon.name)}! Perdeu ${fmt(loss)} XP. Renascendo...`, 'death');
   if (R.mon.boss) { S.zoneKills[S.zone] = 0; log('O chefe venceu desta vez. Derrote mais 25 monstros para desafiá-lo de novo.', 'muted'); }
   R.dead = 5;
@@ -309,7 +328,7 @@ function trySkills(d) {
     if (S.hp / d.maxHp < 0.6) {
       const h = Math.round(d.maxHp * s.mult);
       S.hp = Math.min(d.maxHp, S.hp + h); S.mp -= s.mp; R.cds[s.id] = s.cd;
-      floatText('player', '+' + fmt(h), 'heal'); Scene.heal();
+      floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); Sfx.play('heal');
       log(`💚 ${esc(s.name)} restaurou ${fmt(h)} de vida.`, 'heal');
       return null;
     }
@@ -319,7 +338,7 @@ function trySkills(d) {
     if (!R.buffs.some((b) => b.id === s.id)) {
       R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur });
       S.mp -= s.mp; R.cds[s.id] = s.cd;
-      log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff();
+      log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff(); Sfx.play('buff');
       return null;
     }
   }
@@ -336,7 +355,7 @@ function usePotions(d) {
     if (id) {
       const p = SHOP.find((x) => x.id === id);
       const h = Math.round(d.maxHp * p.heal);
-      S.hp = Math.min(d.maxHp, S.hp + h); S.pots[id]--; R.potCd = 1.5;
+      S.hp = Math.min(d.maxHp, S.hp + h); S.pots[id]--; R.potCd = 1.5; Sfx.play('potion');
       floatText('player', '+' + fmt(h), 'heal'); Scene.heal();
       R.dirty.shop = true;
       return;
@@ -346,7 +365,7 @@ function usePotions(d) {
     const id = S.pots.mp1 > 0 ? 'mp1' : (S.pots.mp2 > 0 ? 'mp2' : null);
     if (id) {
       const p = SHOP.find((x) => x.id === id);
-      S.mp = Math.min(d.maxMp, S.mp + Math.round(d.maxMp * p.heal)); S.pots[id]--; R.potCd = 1.5;
+      S.mp = Math.min(d.maxMp, S.mp + Math.round(d.maxMp * p.heal)); S.pots[id]--; R.potCd = 1.5; Sfx.play('potion');
       R.dirty.shop = true;
     }
   }
@@ -369,6 +388,12 @@ function tick() {
   R.buffs = R.buffs.filter((b) => (b.t -= dt) > 0);
   if (R.potCd > 0) R.potCd -= dt;
 
+  if (R.inTown) { // cidade: zona segura, recuperação rápida
+    S.hp = Math.min(d.maxHp, S.hp + d.maxHp * 0.06 * dt);
+    S.mp = Math.min(d.maxMp, S.mp + d.maxMp * 0.06 * dt);
+    R.mon = null; R.dead = 0; R.bossFight = false;
+    return;
+  }
   if (R.dead > 0) {
     R.dead -= dt;
     if (R.dead <= 0) { S.hp = d.maxHp; S.mp = d.maxMp; log('Você renasceu na cidade e voltou ao campo de caça.', 'muted'); spawnMonster(); }
@@ -380,7 +405,7 @@ function tick() {
       const boss = R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25);
       R.bossFight = false;
       spawnMonster(boss);
-      if (boss) log(`👑 O chefe <b>${esc(R.mon.name)}</b> apareceu!`, 'boss');
+      if (boss) { log(`👑 O chefe <b>${esc(R.mon.name)}</b> apareceu!`, 'boss'); Sfx.play('boss'); }
     }
     return;
   }
@@ -573,7 +598,18 @@ function renderLive() {
   $('#p-buffs').innerHTML = R.buffs.map((b) => `<span class="buff">${esc(b.name)} ${Math.ceil(b.t)}s</span>`).join('');
   // monstro
   const m = R.mon;
-  if (R.dead > 0) {
+  Sfx.music(R.inTown ? 'town' : (m && m.boss ? 'boss' : S.zone));
+  $('#npc-bar').classList.toggle('hidden', !R.inTown);
+  $('#town-btn').textContent = R.inTown ? '⚔️ Voltar a caçar' : '🏰 Cidade';
+  if (R.inTown) {
+    $('#mon-name').innerHTML = '🏰 Cidade de Valdária';
+    $('#mon-bars').innerHTML = '<span class="muted small-hud">Zona segura · recuperação rápida</span>';
+    $('#zone-title').innerHTML = `🏰 Cidade de Valdária <span class="muted">(zona segura)</span>`;
+    $('#boss-btn').classList.add('hidden');
+  } else $('#boss-btn').classList.remove('hidden');
+  if (R.inTown) {
+    // nada de combate na cidade
+  } else if (R.dead > 0) {
     $('#mon-name').innerHTML = `Renascendo em ${Math.ceil(R.dead)}s...`;
     $('#mon-bars').innerHTML = '';
   } else if (m) {
@@ -586,7 +622,8 @@ function renderLive() {
   // chefe
   const z = zoneById(S.zone);
   const k = S.zoneKills[S.zone] || 0;
-  $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span>`;
+  if (!R.inTown) $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span>`;
+  $('#mute-btn').textContent = S.settings.muted ? '🔇' : '🔊';
   const bb = $('#boss-btn');
   bb.disabled = k < 25 || R.bossFight || (m && m.boss) || R.dead > 0;
   bb.textContent = k < 25 ? `👑 Chefe: ${k}/25 abates` : (m && m.boss ? '👑 Lutando contra o chefe!' : `👑 Desafiar ${z.boss[0]}`);
@@ -692,11 +729,49 @@ function renderLog() {
   $('#log').innerHTML = R.log.slice(0, 40).map((l) => `<div class="log-line lg-${l.cls}">${l.msg}</div>`).join('');
 }
 
+const NPCS = {
+  mercador: { name: 'Bruna, a Mercadora', icon: '🛒', tab: 'loja', line: 'Poções fresquinhas e Pedras de Refino! Ninguém sobrevive lá fora sem estoque.' },
+  ferreiro: { name: 'Torvak, o Ferreiro', icon: '🔨', tab: 'refino', line: 'Traga suas armas e armaduras. Com pedras e ouro, deixo tudo mais forte... quase sempre.' },
+  portal:   { name: 'Elyon, Mestre dos Portais', icon: '🌀', tab: 'mapas', line: 'Para onde deseja viajar, aventureiro? Meus portais levam a todos os cantos de Valdária.' },
+  mestra:   { name: 'Sábia Mirela', icon: '📜', tab: 'habilidades', line: 'Domine suas técnicas. Se quiser recomeçar seu treino, posso redistribuir seus pontos.' },
+  bau:      { name: 'Baú do Aventureiro', icon: '🧰', tab: 'inventario', line: 'Seus equipamentos e espólios guardados com segurança.' },
+};
+
+function openNpc(id) {
+  if (!S || !NPCS[id]) return;
+  R.npc = id;
+  Sfx.play('open');
+  renderNpc();
+  $('#modal').classList.remove('hidden');
+}
+window.openNpc = openNpc;
+
+function renderNpc() {
+  if (!R.npc) return;
+  const n = NPCS[R.npc];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine }[n.tab];
+  $('#modal-body').innerHTML = `<div class="npc-head"><span class="npc-ico">${n.icon}</span><div><b>${n.name}</b><p>“${n.line}”</p></div></div>
+    ${R.npc === 'mestra' ? `<button class="btn small" data-act="reset-pts">Redistribuir pontos (${fmt(resetCost())} ouro)</button>` : ''}
+    <div class="npc-body">${fn()}</div>
+    <button class="btn" id="modal-close">Fechar</button>`;
+  $('#modal-body').classList.add('wide');
+}
+
+function setTown(on) {
+  if (!!R.inTown === on) return;
+  R.inTown = on;
+  Sfx.play('portal');
+  if (on) { R.mon = null; R.buffs = []; log('🏰 Você chegou à <b>Cidade de Valdária</b>. Fale com os moradores!', 'lvl'); }
+  else { R.respawn = 0.8; log(`⚔️ Você partiu para ${zoneById(S.zone).name}.`, 'muted'); }
+  R.dirty.all = true;
+}
+
 function renderTab() {
   for (const b of document.querySelectorAll('.tab-btn')) b.classList.toggle('active', b.dataset.tab === R.tab);
   const el = $('#tab-content');
   const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig }[R.tab];
   el.innerHTML = fn();
+  if (R.npc) renderNpc();
 }
 
 function tabMaps() {
@@ -810,6 +885,8 @@ function tabConfig() {
         <option value="nenhum" ${st.autoSell === 'nenhum' ? 'selected' : ''}>Não vender</option>
         ${RARITIES.slice(0, 3).map((r) => `<option value="${r.id}" ${st.autoSell === r.id ? 'selected' : ''}>${r.name}</option>`).join('')}
       </select></label>
+    <label>Volume dos efeitos <b>${st.sfxVol ?? 70}%</b><input type="range" min="0" max="100" step="5" value="${st.sfxVol ?? 70}" data-set="sfxVol"></label>
+    <label>Volume da música <b>${st.musVol ?? 45}%</b><input type="range" min="0" max="100" step="5" value="${st.musVol ?? 45}" data-set="musVol"></label>
     <label>Gráficos da batalha:
       <select data-set="gfx">
         <option value="3d" ${st.gfx !== '2d' ? 'selected' : ''}>3D (Three.js)</option>
@@ -858,7 +935,7 @@ function sellItem(id) {
   const idx = S.inv.findIndex((i) => i.uid === id);
   if (idx < 0) return;
   const v = itemValue(S.inv[idx]);
-  S.gold += v;
+  S.gold += v; Sfx.play('coin');
   S.inv.splice(idx, 1);
   R.sel = null;
 }
@@ -869,7 +946,7 @@ function sellUpTo(maxIdx) {
     if (ri <= maxIdx && !it.refine) { total += itemValue(it); return false; }
     return true;
   });
-  S.gold += total;
+  S.gold += total; if (total) Sfx.play('coin');
   log(`Itens vendidos por ${fmt(total)} ouro.`, 'muted');
   R.sel = null;
 }
@@ -883,11 +960,11 @@ function doRefine() {
   if (Math.random() * 100 < r.chance) {
     it.refine++;
     log(`🔨 Refino bem-sucedido! ${esc(it.name)} agora é <b>+${it.refine}</b>.`, 'lvl');
-    toast(`Sucesso! ${it.name} +${it.refine}`, 'good');
+    toast(`Sucesso! ${it.name} +${it.refine}`, 'good'); Sfx.play('refineOk');
   } else {
     if (r.risk) it.refine--;
     log(`💔 O refino falhou${r.risk ? ` e ${esc(it.name)} caiu para +${it.refine}` : ''}.`, 'death');
-    toast('O refino falhou...', 'bad');
+    toast('O refino falhou...', 'bad'); Sfx.play('refineFail');
   }
   R.dirty.all = true;
 }
@@ -902,7 +979,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],#create-btn,#create-back,#boss-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],#create-btn,#create-back,#boss-btn,#town-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -924,19 +1001,25 @@ document.addEventListener('click', (e) => {
     return startGame(slot);
   }
   if (t.id === 'btn-exit') { save(); return renderSelect(); }
-  if (t.id === 'modal-close') { $('#modal').classList.add('hidden'); return; }
+  if (t.id === 'modal-close') { $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); if (R) R.npc = null; return; }
   if (!S) return;
   if (ds.attr) {
     const n = Math.min(+ds.n, S.pts);
     if (n > 0) { S.attr[ds.attr] += n; S.pts -= n; renderChar(); }
     return;
   }
+  if (t.id === 'town-btn') { setTown(!R.inTown); return; }
+  if (t.id === 'mute-btn') { S.settings.muted = !S.settings.muted; Sfx.init(); Sfx.applyVolume(); renderLive(); return; }
+  if (ds.npc) { if (R.inTown) { if (Scene.walkToNpc && Scene.walkToNpc(ds.npc)) return; openNpc(ds.npc); } return; }
   if (t.id === 'boss-btn') { if ((S.zoneKills[S.zone] || 0) >= 25) { R.bossFight = true; R.mon = null; R.respawn = 0.3; log('Você desafiou o chefe do mapa!', 'boss'); } return; }
   if (ds.zone) {
-    if (ds.zone !== S.zone) { S.zone = ds.zone; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
+    const changed = ds.zone !== S.zone;
+    if (changed) { S.zone = ds.zone; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
+    if (R.inTown) setTown(false); else if (changed) Sfx.play('portal');
+    if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
     return renderTab();
   }
-  if (ds.tab) { R.tab = ds.tab; return renderTab(); }
+  if (ds.tab) { R.tab = ds.tab; Sfx.play('click'); return renderTab(); }
   if (ds.item) { R.sel = ds.item; R.selEq = null; return renderTab(); }
   if (ds.eq) { R.selEq = ds.eq; R.sel = null; R.tab = 'inventario'; return renderTab(); }
   if (ds.ref) { R.refSel = ds.ref; return renderTab(); }
@@ -944,7 +1027,7 @@ document.addEventListener('click', (e) => {
   if (ds.skill) { if (S.lvl >= CLASSES[S.cls].skills.find((s) => s.id === ds.skill).lvl) { S.skillOff[ds.skill] = !S.skillOff[ds.skill]; renderSkillBar(); if (R.tab === 'habilidades') renderTab(); } return; }
   if (ds.buy) {
     const p = SHOP.find((x) => x.id === ds.buy), n = +ds.n;
-    if (S.gold >= p.price * n) { S.gold -= p.price * n; if (p.type === 'mat') S.stones += n; else S.pots[p.id] += n; }
+    if (S.gold >= p.price * n) { Sfx.play('coin'); S.gold -= p.price * n; if (p.type === 'mat') S.stones += n; else S.pots[p.id] += n; }
     return renderTab();
   }
   switch (ds.act) {
@@ -994,6 +1077,7 @@ document.addEventListener('input', (e) => {
   const v = e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' ? +e.target.value : e.target.value);
   S.settings[k] = v;
   if (k === 'gfx') Scene.start();
+  if (k === 'sfxVol' || k === 'musVol') Sfx.applyVolume();
   if (e.target.type === 'range') e.target.previousElementSibling.textContent = v + '%';
 });
 

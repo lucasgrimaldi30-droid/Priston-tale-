@@ -214,64 +214,135 @@ const Scene3D = (() => {
     }
   }
 
-  // ---------- herói ----------
-  function buildHero(cls) {
-    const L = LOOK[cls], wt = CLASSES[cls].weapon, mats = [];
+  // ---------- herói / personagens ----------
+  const TIER_COL = ['#7a5a3a', '#8a9098', '#c4cad4', '#3a5aa0', '#a02a2a', '#f0e2b0'];
+  const tierOf = (it) => clamp(Math.floor((it.ilvl || 1) / 17), 0, 5);
+  const rarOf = (it) => RARITIES.find((r) => r.id === it.rarity) || RARITIES[0];
+  const rarIdx = (it) => RARITIES.indexOf(rarOf(it));
+  const mixCol = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getStyle();
+  const ONE_HAND = { machado: 1, martelo: 1, espada: 1, dardo: 1, cetro: 1 };
+
+  function buildHelmet(head, it, M) {
+    const tier = tierOf(it), tc = TIER_COL[tier], rc = rarIdx(it) > 0 ? rarOf(it).color : '#d0b060';
+    const metal = M(tc, { m: 0.2, r: tier ? 0.4 : 0.8 }), trim = M(rc, { e: rarIdx(it) > 1 ? rc : '#000000', ei: 0.4 });
+    const dome = mk(G.sph(0.34, 14), metal, head, 0, 0.32, 0);
+    dome.scale.set(1, tier === 0 ? 0.6 : 0.85, 1);
+    mk(G.cyl(0.345, 0.345, 0.06, 16), trim, head, 0, tier === 0 ? 0.36 : 0.3, 0);
+    if (tier >= 1) mk(G.box(0.06, 0.2, 0.05), metal, head, 0.31, 0.24, 0);
+    if (tier >= 2) { mk(G.box(0.05, 0.04, 0.3), M('#111111'), head, 0.33, 0.32, 0); mk(G.box(0.4, 0.08, 0.05), trim, head, -0.02, 0.66, 0); }
+    if (tier === 3) for (const z of [-1, 1]) { const h = mk(G.cone(0.06, 0.32, 6), M('#e8e0c8'), head, 0, 0.5, 0.28 * z); h.rotation.x = 0.9 * z; }
+    if (tier === 4) { for (let i = 0; i < 4; i++) mk(G.cone(0.05, 0.22 - i * 0.03, 4), trim, head, 0.12 - i * 0.12, 0.66, 0); for (const z of [-1, 1]) { const h = mk(G.cone(0.05, 0.4, 6), M('#2a1010'), head, -0.2, 0.45, 0.22 * z); h.rotation.z = 1.2; } }
+    if (tier === 5) {
+      mk(G.torus(0.24, 0.025), M('#fff0a0', { e: '#ffd860', ei: 1.4 }), head, 0, 0.82, 0).rotation.x = Math.PI / 2;
+      for (const z of [-1, 1]) { const w = mk(G.box(0.34, 0.18, 0.02), M('#ffffff', { e: '#ffffff', ei: 0.3 }), head, -0.1, 0.5, 0.32 * z); w.rotation.z = 0.6; }
+    }
+  }
+
+  function buildShield(hand, it, M) {
+    const sh = group(hand, 0.12, 0, 0);
+    const tier = it ? tierOf(it) : 2, tc = it ? TIER_COL[tier] : '#c8ccd8', rc = it && rarIdx(it) > 0 ? rarOf(it).color : '#e0b040';
+    const face = M(tier === 0 ? '#8a6038' : tc, { m: 0.2, r: tier === 0 ? 0.9 : 0.4 }), emb = M(rc, { e: it && rarIdx(it) > 1 ? rc : '#000000', ei: 0.5 });
+    if (tier === 0) { const c = mk(G.cyl(0.3, 0.3, 0.06, 14), face, sh, 0, 0, 0); c.rotation.z = Math.PI / 2; mk(G.sph(0.07, 8), emb, sh, 0.04, 0, 0); }
+    else if (tier <= 2) { mk(G.box(0.06, 0.55, 0.42), face, sh, 0, 0, 0); mk(G.box(0.07, 0.42, 0.07), emb, sh, 0.01, 0, 0); mk(G.box(0.07, 0.07, 0.3), emb, sh, 0.01, 0.07, 0); }
+    else { mk(G.box(0.07, 0.8, 0.5), face, sh, 0, -0.05, 0); mk(G.box(0.08, 0.6, 0.06), emb, sh, 0.01, -0.05, 0); mk(G.oct(0.1), M(rc, { e: rc, ei: 1 }), sh, 0.06, 0.12, 0); }
+    return sh;
+  }
+
+  // L = aparência, wt = tipo de arma (ou null), eq = equipamentos
+  function buildCharacter(L, wt, eq = {}) {
+    const mats = [];
     const M = matFactory(mats);
     const root = group(null);
-    const inner = group(root);            // rotacionado para a câmera
+    const inner = group(root);
     inner.rotation.y = -0.45;
     const hips = group(inner, 0, 0.72, 0);
-    const pants = M(L.pants), boots = M(new THREE.Color(L.pants).multiplyScalar(0.55).getStyle());
+    const arm = eq.armadura, boot = eq.botas, glove = eq.luvas;
+    const aT = arm ? tierOf(arm) : -1;
+    const bodyCol = arm ? (L.robe ? mixCol(L.body, TIER_COL[aT], 0.4) : TIER_COL[aT]) : L.body;
+    const trimCol = arm && rarIdx(arm) > 0 ? rarOf(arm).color : L.trim;
+    const pants = M(arm && !L.robe ? mixCol(L.pants, TIER_COL[aT], 0.35) : L.pants);
+    const boots = M(boot ? TIER_COL[tierOf(boot)] : new THREE.Color(L.pants).multiplyScalar(0.55).getStyle(), { m: boot ? 0.2 : 0 });
     const legs = [];
     for (const z of [-0.12, 0.12]) {
       const lg = group(hips, 0, 0, z);
       mk(G.box(0.17, 0.62, 0.18), pants, lg, 0, -0.31, 0);
-      mk(G.box(0.24, 0.12, 0.22), boots, lg, 0.04, -0.66, 0);
+      mk(G.box(0.24, 0.12 + (boot ? 0.06 : 0), 0.22), boots, lg, 0.04, -0.64, 0);
+      if (boot && tierOf(boot) >= 3) mk(G.box(0.2, 0.12, 0.2), M(rarOf(boot).color), lg, 0.03, -0.36, 0);
       legs.push(lg);
     }
     const torso = group(hips, 0, 0, 0);
-    const bodyM = M(L.body, { m: L.robe ? 0 : 0.35, r: 0.55 }), trimM = M(L.trim, { m: 0.6, r: 0.35 });
+    const bodyM = M(bodyCol, { m: arm && !L.robe ? 0.2 : 0, r: arm && aT > 0 && !L.robe ? 0.4 : 0.6 }), trimM = M(trimCol, { m: 0.2, r: 0.35, e: arm && rarIdx(arm) > 2 ? trimCol : '#000000', ei: 0.35 });
     mk(G.box(0.46, 0.56, 0.34), bodyM, torso, 0, 0.3, 0);
     mk(G.box(0.48, 0.08, 0.36), trimM, torso, 0, 0.06, 0);
+    if (arm && aT >= 2 && !L.robe) mk(G.box(0.1, 0.4, 0.3), trimM, torso, 0.2, 0.32, 0);
     if (L.robe) {
       mk(G.cyl(0.25, 0.44, 0.78, 12), bodyM, torso, 0, -0.33, 0);
       mk(G.cyl(0.445, 0.445, 0.06, 12), trimM, torso, 0, -0.69, 0);
       mk(G.box(0.05, 0.8, 0.02), trimM, torso, 0.27, -0.1, 0).rotation.z = -0.15;
     }
-    for (const z of [-0.27, 0.27]) mk(G.sph(0.13, 8), trimM, torso, 0, 0.55, z);
-    const armM = L.bare ? M(L.skin, { flat: false }) : M(new THREE.Color(L.body).multiplyScalar(0.85).getStyle(), { m: 0.3 });
+    const pS = 1 + Math.max(0, aT) * 0.12;
+    for (const z of [-0.27, 0.27]) {
+      const p = mk(G.sph(0.13, 8), trimM, torso, 0, 0.55, z); p.scale.setScalar(pS);
+      if (aT >= 4) mk(G.cone(0.05, 0.22, 5), M(aT === 5 ? '#fff0b0' : '#2a1414'), torso, 0, 0.72, z * 1.05);
+    }
+    let cape = null;
+    if (arm && aT >= 3) {
+      cape = group(torso, -0.2, 0.55, 0);
+      mk(G.box(0.03, 0.95, 0.44), M(new THREE.Color(rarIdx(arm) > 0 ? rarOf(arm).color : '#5a2020').multiplyScalar(0.7).getStyle(), { flat: false }), cape, 0, -0.47, 0);
+    }
+    if (arm && rarIdx(arm) >= 2) mk(G.oct(0.06), M(rarOf(arm).color, { e: rarOf(arm).color, ei: 1.2 }), torso, 0.24, 0.36, 0);
+    if (eq.amuleto) {
+      const ac = rarOf(eq.amuleto).color;
+      mk(G.oct(0.05), M(ac, { e: ac, ei: 1.4 }), torso, 0.25, 0.47, 0.08);
+      const gl = glowSprite(ac, 0.35, 0.8); gl.position.set(0.26, 0.47, 0.08); torso.add(gl);
+    }
+    const armM = L.bare ? M(L.skin, { flat: false }) : M(new THREE.Color(bodyCol).multiplyScalar(0.85).getStyle(), { m: 0.1 });
     const skinM = M(L.skin, { flat: false });
+    const gloveM = glove ? M(TIER_COL[tierOf(glove)], { m: 0.2, r: 0.45 }) : null;
     const arms = [];
     for (const z of [-0.3, 0.3]) {
       const a = group(torso, 0, 0.5, z);
       mk(G.box(0.14, 0.5, 0.14), armM, a, 0, -0.25, 0);
-      mk(G.sph(0.085, 8), skinM, a, 0, -0.52, 0);
+      if (glove) { mk(G.box(0.17, 0.2, 0.17), gloveM, a, 0, -0.44, 0); mk(G.box(0.15, 0.04, 0.15), M(rarOf(glove).color), a, 0, -0.33, 0); }
+      mk(G.sph(0.085, 8), glove ? gloveM : skinM, a, 0, -0.52, 0);
       const hand = group(a, 0, -0.52, 0);
       a.userData.hand = hand;
       arms.push(a);
     }
     const head = group(torso, 0, 0.6, 0);
-    buildHead(head, L, M);
-    // arma na mão da frente
-    const weapon = buildWeapon(wt, L, M);
-    arms[1].userData.hand.add(weapon);
-    if (wt === 'arco') weapon.rotation.y = 0;
-    // escudo do paladino
-    if (wt === 'espada') {
-      const sh = group(arms[0].userData.hand, 0.12, 0, 0);
-      mk(G.box(0.06, 0.55, 0.42), M('#c8ccd8', { m: 0.6, r: 0.35 }), sh, 0, 0, 0);
-      mk(G.box(0.07, 0.42, 0.07), M('#e0b040', { m: 0.7 }), sh, 0.01, 0, 0);
-      mk(G.box(0.07, 0.07, 0.3), M('#e0b040', { m: 0.7 }), sh, 0.01, 0.07, 0);
+    if (eq.elmo) {
+      const skin = M(L.skin, { flat: false });
+      mk(G.sph(0.3, 16), skin, head, 0, 0.28, 0);
+      const eye = M('#1a1010');
+      mk(G.sph(0.04, 6), eye, head, 0.27, 0.3, 0.1); mk(G.sph(0.04, 6), eye, head, 0.27, 0.3, -0.1);
+      buildHelmet(head, eq.elmo, M);
+    } else buildHead(head, L, M);
+    let weapon = group(null);
+    if (wt) {
+      weapon = buildWeapon(wt, L, M);
+      if (eq.arma) {
+        const tier = tierOf(eq.arma), rc = rarOf(eq.arma).color;
+        weapon.scale.setScalar(1 + tier * 0.07);
+        if (tier >= 3 && wt !== 'arco') for (const y of [-0.25, -0.45]) mk(G.sph(0.04, 6), M(rc, { e: rc, ei: 1.5 }), weapon, 0.04, y, 0);
+        if (tier >= 5) { const gl = glowSprite(rc, 0.9, 0.6); gl.position.set(0, wt === 'lanca' ? -1.5 : -0.9, 0); weapon.add(gl); }
+      }
     }
+    arms[1].userData.hand.add(weapon);
+    if (ONE_HAND[wt] && (eq.escudo || wt === 'espada')) buildShield(arms[0].userData.hand, eq.escudo, M);
     // aura de buff
     const aura = mk(new THREE.RingGeometry(0.55, 0.7, 32), new THREE.MeshBasicMaterial({ color: '#ffd860', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), root, 0, 0.03, 0, false);
     aura.rotation.x = -Math.PI / 2;
     const auraGlow = glowSprite('#ffd860', 2.4, 0); auraGlow.position.set(0, 1, 0); root.add(auraGlow);
     root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     aura.castShadow = false;
-    return { root, inner, hips, legs, torso, arms, head, weapon, mats, wt, aura, auraGlow, atk: null, hurt: -9, x: 0 };
+    return { root, inner, hips, legs, torso, arms, head, weapon, mats, wt, aura, auraGlow, cape, atk: null, hurt: -9, x: 0 };
   }
+  function buildHero(cls) {
+    const eq = {};
+    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto']) if (S.equip[k] && (k !== 'arma' || S.equip[k].wtype === CLASSES[cls].weapon)) eq[k] = S.equip[k];
+    return buildCharacter(LOOK[cls], CLASSES[cls].weapon, eq);
+  }
+  const equipSig = () => S.cls + '|' + ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto'].map((k) => S.equip[k] ? S.equip[k].uid + ':' + S.equip[k].refine : '-').join(',');
 
   function updateWeaponLook() {
     const h = st.hero; if (!h || !S.equip.arma) return;
@@ -537,7 +608,7 @@ const Scene3D = (() => {
   }
 
   function buildEnv(zid) {
-    if (env) { scene.remove(env.root); env.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== GLOW) o.material.map.dispose(); o.material.dispose(); } }); }
+    disposeEnv();
     const th = THEMES[zid] || THEMES.z1;
     const M = matFactory(null);
     const root = group(null);
@@ -606,6 +677,261 @@ const Scene3D = (() => {
     env.gtex.offset.x += dx / (90 / 12);
     const wrap = (arr, f, span) => { for (const o of arr) { o.position.x -= dx * f; if (o.position.x < -span) o.position.x += span * 2; } };
     wrap(env.far, 0.08, 46); wrap(env.mid, 0.3, 42); wrap(env.props, 1, 22.5); wrap(env.scatter, 1, 20); wrap(env.ceil, 1, 21);
+  }
+
+  // ---------- cidade ----------
+  const NPC_LOOK = {
+    mercador: { L: { body: '#3a7a5a', trim: '#e0c050', pants: '#4a3a2a', skin: '#e8b890', head: 'ponytail', hair: '#6a3a1a', robe: true }, wt: null, pos: [-3.5, -0.3] },
+    ferreiro: { L: { body: '#5a3a2a', trim: '#8a8a8a', pants: '#3a3030', skin: '#d8a070', head: 'goggles', hair: '#2a1a10', bare: true }, wt: 'martelo', pos: [-2.1, -3.3] },
+    portal:   { L: { body: '#2a3a8a', trim: '#80c0ff', pants: '#1a2050', skin: '#f0d0b0', head: 'wizard', hair: '#e0e0f0', robe: true }, wt: 'cajado', pos: [2.1, -3.3] },
+    mestra:   { L: { body: '#f0e8d8', trim: '#a070d0', pants: '#c8c0a8', skin: '#f6d6bc', head: 'hood', hair: '#f0d080', robe: true }, wt: 'cetro', pos: [3.5, -0.3] },
+    bau:      { chest: true, pos: [1.3, 0.5] },
+  };
+  const NPC_NAMES = { mercador: 'Mercadora', ferreiro: 'Ferreiro', portal: 'Portais', mestra: 'Mestra', bau: 'Baú' };
+  const NPC_ICON = { mercador: '🛒', ferreiro: '🔨', portal: '🌀', mestra: '📜', bau: '🧰' };
+  const HERO_TOWN = new THREE.Vector3(0, 0, 1.4);
+
+  function buildTown() {
+    disposeEnv();
+    const M = matFactory(null);
+    const root = group(null);
+    const th = { amb: 'leaf', sky: ['#f0a070', '#ffe2b8'] };
+    scene.background = skyTex('#e88a60', '#ffe2b8');
+    scene.fog = new THREE.Fog('#ffe2b8', 16, 46);
+    root.add(new THREE.HemisphereLight('#ffe8c8', '#6a5a48', 0.85));
+    const sun = new THREE.DirectionalLight('#ffe0b0', 1.0);
+    sun.position.set(4, 10, 8); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -6, near: 1, far: 30 });
+    sun.shadow.bias = -0.0015; root.add(sun); root.add(sun.target);
+    const fill = new THREE.DirectionalLight('#ffffff', 0.35); fill.position.set(0, 3, 10); root.add(fill);
+    const gtex = groundTex('#b0a290', '#6e6458'); gtex.repeat.set(20, 10);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 45), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2; ground.position.z = -10; ground.receiveShadow = true; root.add(ground);
+    // praça circular
+    const plaza = mk(new THREE.CircleGeometry(5.2, 40), M('#c8bca8', { flat: false }), root, 0, 0.01, -1.4, false);
+    plaza.rotation.x = -Math.PI / 2; plaza.receiveShadow = true;
+    const ringStone = mk(new THREE.RingGeometry(5.1, 5.4, 40), M('#8a7e6c'), root, 0, 0.02, -1.4, false); ringStone.rotation.x = -Math.PI / 2;
+    // fonte
+    const fz = -1.5;
+    mk(G.cyl(1.1, 1.2, 0.45, 20), M('#a8a090'), root, 0, 0.22, fz);
+    const water = mk(G.cyl(0.98, 0.98, 0.05, 20), M('#60b8e8', { e: '#3080c0', ei: 0.35, flat: false, r: 0.1 }), root, 0, 0.44, fz, false);
+    mk(G.cyl(0.18, 0.25, 1.1, 10), M('#a8a090'), root, 0, 0.9, fz);
+    mk(G.cyl(0.5, 0.35, 0.15, 14), M('#a8a090'), root, 0, 1.45, fz);
+    // casas
+    const houses = [];
+    const roofCols = ['#b05a3a', '#4a6a9a', '#7a4a6a', '#5a7a3a', '#a0702a'];
+    for (let i = 0; i < 9; i++) {
+      const x = -13 + i * 3.3 + rand(-0.4, 0.4), z = -8.5 - (i % 2) * 1.5 - rand(0, 0.8), w = rand(2.2, 3), h = rand(2, 3);
+      const hg = group(root, x, 0, z);
+      mk(G.box(w, h, 2.2), M(i % 3 ? '#e8dcc0' : '#d8c8a8'), hg, 0, h / 2, 0);
+      const roof = mk(G.cone(w * 0.85, 1.4, 4), M(roofCols[i % 5]), hg, 0, h + 0.7, 0); roof.rotation.y = Math.PI / 4; roof.scale.z = 0.75;
+      mk(G.box(0.5, 0.9, 0.05), M('#6a4a2a'), hg, 0, 0.45, 1.11);
+      for (const wx of [-w / 3, w / 3]) mk(G.box(0.36, 0.36, 0.05), M('#ffd880', { e: '#ffb040', ei: 0.6 }), hg, wx, h * 0.62, 1.11, false);
+      hg.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    }
+    // árvores e postes
+    for (const [x, z] of [[-7, -4], [7, -4.5], [-9, 1], [9.5, 0.5], [-5.5, -7], [5.8, -7]]) {
+      const p = buildProp('tree', { dc: '#4a8a3a' }, M); p.position.set(x, 0, z); p.scale.setScalar(rand(0.9, 1.2)); root.add(p);
+    }
+    const lamps = [];
+    for (const [x, z] of [[-5, 1.5], [5, 1.5], [-5.4, -4.6], [5.4, -4.6]]) {
+      mk(G.cyl(0.05, 0.07, 2.2, 6), M('#3a3a3a'), root, x, 1.1, z);
+      mk(G.box(0.22, 0.28, 0.22), M('#ffe0a0', { e: '#ffc060', ei: 1.2 }), root, x, 2.3, z);
+      const gl = glowSprite('#ffc060', 1.6, 0.6); gl.position.set(x, 2.3, z); root.add(gl); lamps.push(gl);
+    }
+    // estandartes da facção
+    const fc = FACTIONS[CLASSES[S.cls].faction].color;
+    for (const x of [-1.2, 1.2]) {
+      mk(G.cyl(0.04, 0.04, 3, 6), M('#5a4a3a'), root, x, 1.5, -5.6);
+      mk(G.box(0.7, 1.1, 0.03), M(fc, { flat: false }), root, x, 2.35, -5.58);
+    }
+    // NPCs
+    const npcs = {};
+    for (const [id, d] of Object.entries(NPC_LOOK)) {
+      const g = group(root, d.pos[0], 0, d.pos[1]);
+      let ch = null;
+      if (d.chest) {
+        mk(G.box(0.9, 0.5, 0.6), M('#7a4a22'), g, 0, 0.25, 0);
+        const lid = mk(G.cyl(0.3, 0.3, 0.9, 10, 1), M('#8a5a2a'), g, 0, 0.5, 0); lid.rotation.z = Math.PI / 2; lid.scale.set(1, 1, 1);
+        mk(G.box(0.95, 0.08, 0.65), M('#e0b040', { e: '#806010', ei: 0.3 }), g, 0, 0.5, 0);
+        mk(G.box(0.14, 0.18, 0.05), M('#e0b040'), g, 0, 0.4, 0.31);
+        const gl = glowSprite('#ffd860', 1.4, 0.35); gl.position.y = 0.8; g.add(gl);
+        g.rotation.y = -0.4;
+      } else {
+        ch = buildCharacter(d.L, d.wt, {});
+        ch.inner.rotation.y = Math.atan2(-(4 - d.pos[1]), 0 - d.pos[0]);
+        g.add(ch.root);
+      }
+      // cenário de cada NPC
+      if (id === 'mercador') {
+        const st2 = group(g, -0.9, 0, -0.6);
+        mk(G.box(1.6, 0.8, 0.8), M('#8a5a2a'), st2, 0, 0.4, 0);
+        for (const x of [-0.75, 0.75]) mk(G.cyl(0.04, 0.04, 1.8, 6), M('#5a3a1a'), st2, x, 0.9, 0.35);
+        const aw = mk(G.box(1.8, 0.05, 1.1), M('#d04a3a'), st2, 0, 1.8, 0.2); aw.rotation.x = 0.25;
+        for (let i = 0; i < 4; i++) mk(G.sph(0.1, 8), M(['#e04040', '#4060e0', '#40c060', '#e0c040'][i], { e: ['#a01010', '#1030a0', '#108030', '#a08010'][i], ei: 0.5 }), st2, -0.5 + i * 0.33, 0.9, 0.1);
+        st2.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      }
+      if (id === 'ferreiro') {
+        const an = group(g, 0.75, 0, 0.25);
+        mk(G.box(0.25, 0.4, 0.25), M('#3a3a40'), an, 0, 0.2, 0);
+        mk(G.box(0.6, 0.18, 0.3), M('#4a4a52', { m: 0.2, r: 0.4 }), an, 0, 0.48, 0);
+        const forge = group(g, -0.6, 0, -0.9);
+        mk(G.box(1, 0.9, 0.8), M('#5a4a44'), forge, 0, 0.45, 0);
+        mk(G.box(0.6, 0.25, 0.1), M('#ff7020', { e: '#ff5010', ei: 2 }), forge, 0, 0.55, 0.41);
+        const gl = glowSprite('#ff7020', 1.8, 0.7); gl.position.set(0, 0.6, 0.5); forge.add(gl);
+        g.userData.anvil = new THREE.Vector3(d.pos[0] + 0.75, 0.6, d.pos[1] + 0.25);
+      }
+      if (id === 'portal') {
+        const pr = group(g, 1.1, 1.3, -0.3);
+        const ring = mk(G.torus(0.85, 0.09), M('#80c0ff', { e: '#4090ff', ei: 1.4 }), pr, 0, 0, 0, false);
+        const disc = mk(new THREE.CircleGeometry(0.8, 32), new THREE.MeshBasicMaterial({ color: '#6aa8ff', transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }), pr, 0, 0, 0, false);
+        const gl = glowSprite('#70b0ff', 3, 0.5); pr.add(gl);
+        pr.rotation.y = -0.5;
+        g.userData.portal = { pr, ring, disc };
+        mk(G.cyl(0.9, 1.0, 0.12, 20), M('#8a8aa0'), g, 1.1, 0.06, -0.3);
+      }
+      if (id === 'mestra') {
+        const pd = group(g, -0.8, 0, -0.4);
+        mk(G.cyl(0.18, 0.28, 0.9, 8), M('#8a7a6a'), pd, 0, 0.45, 0);
+        const bk = mk(G.box(0.45, 0.06, 0.35), M('#7a3a6a'), pd, 0, 0.94, 0); bk.rotation.x = -0.3;
+        const gl = glowSprite('#c090ff', 1, 0.6); gl.position.set(0, 1.1, 0); pd.add(gl);
+        pd.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      }
+      const hit = new THREE.Mesh(G.box(1.2, 2.2, 1.2), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.y = 1.1; hit.userData.npc = id; g.add(hit);
+      g.traverse((o) => { if (o.isMesh && o !== hit && o.material && o.material.visible !== false && !(o.material.blending === THREE.AdditiveBlending)) o.castShadow = true; });
+      npcs[id] = { g, ch, hit, id, pos: new THREE.Vector3(d.pos[0], 0, d.pos[1]) };
+    }
+    scene.add(root);
+    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, town: true, npcs, water, lamps, fountainZ: fz };
+    // rótulos
+    const lab = document.getElementById('npc-labels');
+    if (lab) lab.innerHTML = Object.keys(npcs).map((id) => `<div class="npc-label" id="lbl-${id}"><span>${NPC_ICON[id]}</span><b>${NPC_NAMES[id]}</b></div>`).join('');
+  }
+
+  function disposeEnv() {
+    if (env) { scene.remove(env.root); env.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== GLOW) o.material.map.dispose(); o.material.dispose(); } }); }
+    env = null;
+    const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = '';
+  }
+
+  function animTown(t, dt) {
+    if (!env || !env.town) return;
+    const n = env.npcs;
+    for (const id in n) {
+      const ch = n[id].ch; if (!ch) continue;
+      ch.hips.position.y = 0.72 + Math.sin(t * 2 + id.length) * 0.012;
+      ch.arms[0].rotation.z = 0.1 + Math.sin(t * 1.5 + id.length) * 0.08;
+      if (id === 'ferreiro') {
+        const ph = (t * 1.3) % 1;
+        ch.arms[1].rotation.z = ph < 0.6 ? lerp(0.4, 2.8, ease(ph / 0.6)) : lerp(2.8, 0.6, (ph - 0.6) / 0.12);
+        if (ph >= 0.72 && !n[id].hit2) { n[id].hit2 = true; const a = n[id].g.userData.anvil; for (let i = 0; i < 14; i++) spawnP({ x: a.x, y: a.y, z: a.z, vx: rand(-2, 2), vy: rand(1, 3.5), vz: rand(-2, 2), life: rand(0.3, 0.7), r: 1, gg: 0.6, b: 0.2, size: 0.07, g: -9 }); }
+        if (ph < 0.5) n[id].hit2 = false;
+      } else if (id === 'portal') {
+        ch.arms[1].rotation.z = 1.6 + Math.sin(t * 2) * 0.15;
+      } else ch.arms[1].rotation.z = 0.3 + Math.sin(t * 1.7) * 0.1;
+    }
+    const p = n.portal && n.portal.g.userData.portal;
+    if (p) {
+      p.ring.rotation.z += dt * 1.5; p.disc.material.opacity = 0.35 + Math.sin(t * 3) * 0.12;
+      const wp = new THREE.Vector3(); p.pr.getWorldPosition(wp);
+      if (Math.random() < 0.6) { const a = Math.random() * 6.28; spawnP({ x: wp.x + Math.cos(a) * 0.8, y: wp.y + Math.sin(a) * 0.8, z: wp.z, vx: -Math.cos(a) * 0.6, vy: -Math.sin(a) * 0.6, vz: 0, life: 1, r: 0.5, gg: 0.75, b: 1, size: 0.1 }); }
+    }
+    // fonte
+    for (let i = 0; i < 3; i++) spawnP({ x: rand(-0.1, 0.1), y: 1.55, z: env.fountainZ + rand(-0.1, 0.1), vx: rand(-0.7, 0.7), vy: rand(1.5, 2.3), vz: rand(-0.7, 0.7), life: 0.8, r: 0.6, gg: 0.85, b: 1, size: 0.07, g: -5 });
+    for (const l of env.lamps) l.material.opacity = 0.5 + Math.sin(t * 7 + l.position.x) * 0.05;
+    // rótulos
+    for (const id in n) {
+      const el = document.getElementById('lbl-' + id); if (!el) continue;
+      tmpV.copy(n[id].pos); tmpV.y = id === 'bau' ? 1.1 : 2.35;
+      tmpV.project(camera);
+      if (tmpV.z > 1) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      el.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; el.style.top = ((1 - tmpV.y) / 2 * H) + 'px';
+    }
+  }
+
+  function walkToNpc(id) {
+    if (!running || !R.inTown || !st.hero || !env || !env.town || !env.npcs[id]) return false;
+    const np = env.npcs[id].pos, h = st.hero.root.position;
+    const dir = new THREE.Vector3(h.x - np.x, 0, h.z - np.z); const len = dir.length() || 1;
+    dir.multiplyScalar(1 / len);
+    const stop = id === 'bau' ? 0.9 : 1.15;
+    const tx = np.x + dir.x * stop, tz = np.z + dir.z * stop;
+    const pts = [];
+    // contorna a fonte se o caminho passar por ela
+    const fx = 0, fz = env.fountainZ, sx = tx - h.x, sz = tz - h.z, sl = Math.hypot(sx, sz) || 1;
+    const u = clamp(((fx - h.x) * sx + (fz - h.z) * sz) / (sl * sl), 0, 1);
+    const cx = h.x + sx * u - fx, cz = h.z + sz * u - fz;
+    if (Math.hypot(cx, cz) < 1.6 && u > 0 && u < 1) {
+      let px = -sz / sl, pz = sx / sl;
+      if (px * (tx - fx) + pz * (tz - fz) < 0) { px = -px; pz = -pz; }
+      pts.push({ x: fx + px * 2.0, z: fz + pz * 2.0 });
+    }
+    pts.push({ x: tx, z: tz });
+    st.hero.walk = { pts, id };
+    if (len <= stop + 0.15) { st.hero.walk = null; window.openNpc(id); }
+    return true;
+  }
+
+  // ---------- câmera livre ----------
+  const cam = { yaw: 0, pitch: 0, zoom: 1, ptrs: new Map(), drag: false, moved: 0, pinch: 0 };
+  const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  function pickNpc(cx, cy) {
+    if (!env || !env.town) return null;
+    const r = cv.getBoundingClientRect();
+    ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(Object.values(env.npcs).map((n) => n.hit), false);
+    return hits.length ? hits[0].object.userData.npc : null;
+  }
+  function bindControls() {
+    cv.addEventListener('pointerdown', (e) => {
+      cam.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      cam.moved = 0;
+      if (cam.ptrs.size === 2) { const [a, b] = [...cam.ptrs.values()]; cam.pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+      if (e.pointerType === 'mouse') { cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); }
+    });
+    cv.addEventListener('pointermove', (e) => {
+      const p = cam.ptrs.get(e.pointerId);
+      if (!p) {
+        if (e.pointerType === 'mouse' && env && env.town) cv.classList.toggle('hover-npc', !!pickNpc(e.clientX, e.clientY));
+        return;
+      }
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      cam.moved += Math.abs(dx) + Math.abs(dy);
+      if (cam.ptrs.size === 2) {
+        const [a, b] = [...cam.ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (cam.pinch) cam.zoom = clamp(cam.zoom * cam.pinch / d, 0.55, 1.7);
+        cam.pinch = d; return;
+      }
+      cam.yaw = clamp(cam.yaw - dx * 0.008, -1.25, 1.25);
+      if (e.pointerType === 'mouse') cam.pitch = clamp(cam.pitch + dy * 0.005, -0.15, 0.85);
+    });
+    const end = (e) => {
+      const was = cam.ptrs.has(e.pointerId);
+      cam.ptrs.delete(e.pointerId); cv.classList.remove('dragging');
+      if (cam.ptrs.size < 2) cam.pinch = 0;
+      if (was && cam.moved < 6 && e.type === 'pointerup') {
+        const id = pickNpc(e.clientX, e.clientY);
+        if (id) { walkToNpc(id); }
+      }
+    };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !cam.ptrs.size) cv.classList.remove('hover-npc'); });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); cam.zoom = clamp(cam.zoom * (e.deltaY > 0 ? 1.08 : 0.93), 0.55, 1.7); }, { passive: false });
+    cv.addEventListener('dblclick', () => { cam.yaw = 0; cam.pitch = 0; cam.zoom = 1; });
+  }
+  function updateCamera(t, dt) {
+    const aspect = W / H, back = clamp(1.45 / aspect, 1, 1.9);
+    const town = env && env.town;
+    const target = town ? new THREE.Vector3(0, 1.0, -1.0) : new THREE.Vector3(0.2, 1.05, 0);
+    const dist = (town ? 10.5 : 7.6) * back * cam.zoom;
+    const pitch = clamp((town ? 0.36 : 0.19) + cam.pitch, 0.03, 1.15);
+    const yaw = cam.yaw + Math.sin(t * 0.25) * 0.03;
+    const sk = st.shake; st.shake = Math.max(0, st.shake - dt * 0.8);
+    camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist + (Math.random() - 0.5) * sk, target.y + Math.sin(pitch) * dist + (Math.random() - 0.5) * sk, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+    camera.lookAt(target);
   }
 
   // ---------- partículas (shader próprio) ----------
@@ -840,12 +1166,23 @@ const Scene3D = (() => {
   // ---------- sincronização ----------
   function disposeObj(o) { o.traverse((c) => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); }
   function sync(t) {
-    if (curZone !== S.zone) { curZone = S.zone; buildEnv(S.zone); }
-    if (curCls !== S.cls) {
-      if (st.hero) { scene.remove(st.hero.root); disposeObj(st.hero.root); }
-      curCls = S.cls; weaponKey = '';
+    const zk = R.inTown ? 'town' : S.zone;
+    if (curZone !== zk) {
+      curZone = zk;
+      if (R.inTown) buildTown(); else buildEnv(zk);
+      cam.yaw = 0; cam.pitch = 0;
+      if (st.hero) { st.hero.walk = null; st.hero.root.position.set(R.inTown ? HERO_TOWN.x : heroBaseX(), 0, R.inTown ? HERO_TOWN.z : 0); st.hero.inner.rotation.y = R.inTown ? -1.25 : -0.45; }
+      for (const d of st.dying) { scene.remove(d.root); disposeObj(d.root); }
+      st.dying = [];
+      if (st.mon) { scene.remove(st.mon.root); disposeObj(st.mon.root); st.mon = null; }
+    }
+    const sig = equipSig();
+    if (curCls !== sig) {
+      const old = st.hero;
+      curCls = sig; weaponKey = '';
       st.hero = buildHero(S.cls); scene.add(st.hero.root);
-      st.hero.root.position.x = heroBaseX();
+      if (old) { st.hero.root.position.copy(old.root.position); st.hero.inner.rotation.y = old.inner.rotation.y; st.hero.walk = old.walk; scene.remove(old.root); disposeObj(old.root); }
+      else { st.hero.root.position.set(R.inTown ? HERO_TOWN.x : heroBaseX(), 0, R.inTown ? HERO_TOWN.z : 0); if (R.inTown) st.hero.inner.rotation.y = -1.25; }
     }
     updateWeaponLook();
     const m = R.mon;
@@ -870,12 +1207,13 @@ const Scene3D = (() => {
       st.dying.push(dm); st.mon = null;
     }
     const busy = st.dying.some((d) => t < d.dieAt + 0.35);
-    st.run = !st.mon && !(R.dead > 0) && !busy;
+    st.run = !st.mon && !(R.dead > 0) && !busy && !R.inTown;
   }
 
   // ---------- animação do herói ----------
   function animHero(t, dt) {
     const h = st.hero, wt = h.wt, melee = !RANGED[wt];
+    if (R.inTown) return animHeroTown(t, dt);
     const a = h.atk ? clamp((t - h.atk.start) / h.atk.dur, 0, 1) : 1;
     if (h.atk && a >= 1) h.atk = null;
     let x = heroBaseX();
@@ -924,10 +1262,41 @@ const Scene3D = (() => {
     // dano
     setFlash(h.mats, t - h.hurt < 0.15 ? 0.9 : 0, '#ff6060');
     if (!(t - h.hurt < 0.15)) updateWeaponLook();
+    if (h.cape) h.cape.rotation.z = (st.run ? 0.4 : 0.06) + Math.sin(t * 3) * 0.05 + (h.atk ? 0.15 : 0);
     // aura de buff
     const buffOn = R.buffs && R.buffs.length > 0;
     h.aura.material.opacity = lerp(h.aura.material.opacity, buffOn ? 0.55 + Math.sin(t * 4) * 0.15 : 0, Math.min(1, dt * 6));
     h.aura.rotation.z += dt; h.auraGlow.material.opacity = h.aura.material.opacity * 0.35;
+  }
+
+  function animHeroTown(t, dt) {
+    const h = st.hero;
+    let moving = false;
+    if (h.walk) {
+      const tg = h.walk.pts[0];
+      const p = h.root.position, dx = tg.x - p.x, dz = tg.z - p.z, d = Math.hypot(dx, dz);
+      if (d < 0.06 && h.walk.pts.length > 1) h.walk.pts.shift();
+      else if (d < 0.06) { const id = h.walk.id; h.walk = null; const np = env.npcs[id].pos; h.inner.rotation.y = Math.atan2(-(np.z - p.z), np.x - p.x); window.openNpc(id); }
+      else {
+        const sp = Math.min(d, 3.2 * dt); p.x += dx / d * sp; p.z += dz / d * sp; moving = true;
+        const want = Math.atan2(-dz, dx);
+        let diff = want - h.inner.rotation.y; while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
+        h.inner.rotation.y += diff * Math.min(1, dt * 12);
+      }
+    }
+    h.inner.rotation.z = 0; h.inner.position.set(0, 0, 0);
+    const ph = t * 11;
+    h.hips.position.y = 0.72 + (moving ? Math.abs(Math.sin(ph)) * 0.07 : Math.sin(t * 2.5) * 0.012);
+    h.torso.rotation.z = moving ? -0.12 : 0;
+    const legA = moving ? Math.sin(ph) * 0.8 : 0;
+    h.legs[0].rotation.z = legA; h.legs[1].rotation.z = -legA;
+    h.arms[0].rotation.z = moving ? -Math.sin(ph) * 0.7 : 0.1 + Math.sin(t * 2.5) * 0.04;
+    h.arms[1].rotation.z = moving ? Math.sin(ph) * 0.6 + 0.2 : 0.35 + Math.sin(t * 2.5) * 0.04;
+    h.weapon.visible = true;
+    if (h.weapon.userData.arrow) h.weapon.userData.arrow.visible = false;
+    if (h.cape) h.cape.rotation.z = (moving ? 0.35 : 0.05) + Math.sin(t * 3) * 0.04;
+    setFlash(h.mats, 0);
+    h.aura.material.opacity = 0; h.auraGlow.material.opacity = 0;
   }
 
   // ---------- loop ----------
@@ -970,15 +1339,11 @@ const Scene3D = (() => {
       if (p >= 1 && f.end && !f.ended) { f.ended = true; f.end(); }
     }
     st.fx = st.fx.filter((f) => { const keep = f.t < f.life; if (!keep) { scene.remove(f.obj); if (f.dispose) disposeObj(f.obj); } return keep; });
+    animTown(t, dt);
     ambient(dt);
     updateParticles(dt);
-    if (env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
-    // câmera
-    const aspect = W / H;
-    const back = clamp(1.45 / aspect, 1, 1.9);
-    const sk = st.shake; st.shake = Math.max(0, st.shake - dt * 0.8);
-    camera.position.set(0.2 + Math.sin(t * 0.25) * 0.25 + (Math.random() - 0.5) * sk, 2.5 + (Math.random() - 0.5) * sk, 7.6 * back);
-    camera.lookAt(0.2, 1.05, 0);
+    if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
+    updateCamera(t, dt);
     renderer.render(scene, camera);
   }
 
@@ -1002,6 +1367,7 @@ const Scene3D = (() => {
       camera = new THREE.PerspectiveCamera(38, 2, 0.1, 120);
       GLOW = glowTex();
       initParticles();
+      bindControls();
     }
     // reinicia o estado visual
     if (st.hero) { scene.remove(st.hero.root); disposeObj(st.hero.root); }
@@ -1014,9 +1380,9 @@ const Scene3D = (() => {
     resize();
     if (!running) { running = true; lastT = 0; raf = requestAnimationFrame(frame); }
   }
-  function stop() { running = false; cancelAnimationFrame(raf); if (layer) layer.innerHTML = ''; }
+  function stop() { running = false; cancelAnimationFrame(raf); if (layer) layer.innerHTML = ''; const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp, walkToNpc };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -1038,5 +1404,6 @@ const Scene = (() => {
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
     float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
+    walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };
 })();

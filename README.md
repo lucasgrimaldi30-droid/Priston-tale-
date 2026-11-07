@@ -8,6 +8,10 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
   - Lumínia: Paladino (espada), Valquíria (dardo), Arcanista (cajado), Clériga (cetro)
 - **Batalha em 3D (Three.js)**: herói 3D montado por classe com esqueleto animado, 40 monstros em 12 tipos de corpo, cenários 3D por mapa com sombras, neblina e parallax, projéteis, partículas e números de dano. Versão 2D (canvas) disponível nas configurações para aparelhos mais fracos.
 - **Cena 2D alternativa**: o herói é desenhado de acordo com a classe e luta de verdade — investidas corpo a corpo, flechas, dardos e magias, efeitos de habilidades, partículas, números de dano, tremor de tela nos críticos e cenário com parallax para cada mapa.
+- **Cidade de Valdária** (botão 🏰 Cidade): zona segura em 3D com fonte, casas e NPCs clicáveis. O herói anda até eles: Mercadora (loja), Ferreiro (refino), Mestre dos Portais (mapas), Sábia Mirela (habilidades e redistribuição de pontos) e o Baú (inventário).
+- **Câmera livre**: arraste para girar, role a roda do mouse ou faça pinça para dar zoom, e dê dois cliques para voltar à posição padrão.
+- **Equipamento visível no corpo**: armadura (cor por tier, capa a partir do tier 3, ombreiras com espinhos), elmo (6 modelos), luvas, botas, escudo, amuleto brilhante e armas maiores e com runas nos tiers altos.
+- **Sons e música procedurais** (Web Audio): efeitos para golpes, flechas, magias, críticos, drops por raridade, level up e refino, e uma música para cada mapa, para a cidade e para os chefes. O volume fica nas configurações e o botão 🔊 tira o som.
 - O combate é automático. A cada nível você ganha **5 pontos** para Força, Intelecto, Destreza, Agilidade e Vitalidade (ou use o botão **Auto**).
 - **10 mapas** do nível 1 ao 100, cada um com um **chefe** (pode ser desafiado após 25 abates).
 - **6 habilidades por classe**, liberadas por nível e usadas automaticamente (ataques, buffs e curas).
@@ -20,6 +24,7 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - `index.html` — telas e layout
 - `css/style.css` — visual
 - `js/data.js` — classes, habilidades, mapas, itens e loja (fácil de editar)
-- `js/scene3d.js` — cena de batalha 3D (Three.js) e seletor 3D/2D
+- `js/scene3d.js` — batalha e cidade 3D (Three.js), câmera livre e seletor 3D/2D
+- `js/audio.js` — efeitos sonoros e música procedurais
 - `js/scene.js` — cena de batalha 2D (canvas)
 - `js/game.js` — motor do jogo (combate, drops, níveis, save, interface)
