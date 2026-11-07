@@ -17,7 +17,8 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - **Equipamento 100% visível**: cada tipo de arma tem 6 visuais por nível (foices e arcos novos inclusive). Elmo, armadura, luvas, botas, escudo, amuleto e anel mudam no modelo.
 - **Duas cidades iniciais**: Forja de Ferrovale (Clã de Ferrovale) e Santuário de Lumínia (Ordem de Lumínia).
 - **Conta Full de demonstração**: na tela de personagens, cria Engenheiro, Lanceiro e Arcanista no nível 100 com tudo lendário +10.
-- O combate é automático. A cada nível você ganha **5 pontos** para Força, Intelecto, Destreza, Agilidade e Vitalidade (ou use o botão **Auto**).
+- **Mundo aberto isométrico**: toque no chão para andar e num monstro para atacar. O botão **🤖 Auto** faz o herói caçar sozinho, e o progresso offline continua.
+- O combate pode ser automático ou manual. A cada nível você ganha **5 pontos** para Força, Intelecto, Destreza, Agilidade e Vitalidade (ou use o botão **Auto**).
 - **10 mapas** do nível 1 ao 100, cada um com um **chefe** (pode ser desafiado após 25 abates).
 - **6 habilidades por classe**, liberadas por nível e usadas automaticamente (ataques, buffs e curas).
 - Drops com raridade **Comum → Mágico → Raro → Épico → Lendário**, com atributos bônus.

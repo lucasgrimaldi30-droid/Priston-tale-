@@ -60,7 +60,7 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
     lastSave: Date.now(),
   };
@@ -187,23 +187,70 @@ function makeMonster(name, icon, lvl, boss, groupN) {
   };
 }
 // cria um grupo de monstros (chefe vem sozinho)
-function spawnMonster(boss = false) {
-  const z = zoneById(S.zone);
-  const span = zoneSpan(z);
-  R.mons = [];
-  if (boss) {
-    R.mons.push(makeMonster(z.boss[0], z.boss[1], z.min + span + 2, true, 1));
-  } else {
-    const n = ZONES.indexOf(z) === 0 ? rint(1, 2) : rint(2, 4);
-    for (let k = 0; k < n; k++) {
-      const i = rint(0, 2);
-      const lvl = z.min + Math.floor((i / 3) * span) + rint(0, Math.max(1, Math.floor(span / 3)));
-      R.mons.push(makeMonster(z.monsters[i][0], z.monsters[i][1], lvl, false, n));
-    }
+// ---------- mundo aberto ----------
+const WORLD = { size: 33, entry: { x: 0, z: 15 }, arena: { x: 0, z: -23 }, cap: 12 };
+const RANGED_W = { arco: 1, dardo: 1, cajado: 1, cetro: 1 };
+const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+function weaponRange() { return RANGED_W[curWeapon()] ? 7 : 1.8; }
+function seeded(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+// acampamentos de monstros fixos por mapa (mesma semente usada pela cena 3D)
+function zoneCamps(zid) {
+  const r = seeded(ZONES.findIndex((z) => z.id === zid) * 977 + 13), camps = [];
+  while (camps.length < 5) {
+    const a = r() * Math.PI * 2, d = 9 + r() * 18, c = { x: Math.cos(a) * d, z: Math.sin(a) * d * 0.9 };
+    if (dist2(c, WORLD.entry) > 9 && dist2(c, WORLD.arena) > 8 && camps.every((o) => dist2(o, c) > 8)) camps.push(c);
   }
-  R.mon = R.mons[0];
-  R.playerTimer = 0.3;
+  return camps;
 }
+function stepTo(o, t, max, stop = 0) {
+  const dx = t.x - o.x, dz = t.z - o.z, d = Math.hypot(dx, dz);
+  if (d <= stop || d < 1e-4) return true;
+  const k = Math.min(max, d - stop) / d;
+  o.x += dx * k; o.z += dz * k;
+  return d - stop <= max;
+}
+function spawnWorldMonster(initial = false) {
+  const z = zoneById(S.zone), span = zoneSpan(z), camps = zoneCamps(S.zone);
+  for (let tries = 0; tries < 12; tries++) {
+    const c = camps[rint(0, camps.length - 1)], a = Math.random() * Math.PI * 2, d = Math.random() * 3;
+    const pos = { x: c.x + Math.cos(a) * d, z: c.z + Math.sin(a) * d };
+    if (R.pos && dist2(pos, R.pos) < (initial ? 6 : 9)) continue;
+    const i = rint(0, 2), lvl = z.min + Math.floor((i / 3) * span) + rint(0, Math.max(1, Math.floor(span / 3)));
+    const m = makeMonster(z.monsters[i][0], z.monsters[i][1], lvl, false, 2);
+    Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
+    m.xp = Math.round(m.xp * 1.3); m.gold = Math.round(m.gold * 1.15); // compensa o tempo andando
+    R.mons.push(m);
+    return m;
+  }
+  return null;
+}
+function spawnBoss() {
+  if (R.mons.some((m) => m.boss)) return null;
+  const z = zoneById(S.zone);
+  const m = makeMonster(z.boss[0], z.boss[1], z.min + zoneSpan(z) + 2, true, 1);
+  Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2 });
+  R.mons.push(m);
+  log(`👑 O chefe <b>${esc(m.name)}</b> apareceu na arena ao norte!`, 'boss'); Sfx.play('boss');
+  if (S.settings.auto) { R.mon = m; R.move = null; }
+  return m;
+}
+function initWorld() {
+  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3;
+  R.pos = { ...WORLD.entry };
+  for (let i = 0; i < WORLD.cap; i++) spawnWorldMonster(true);
+}
+// compatibilidade: chamado ao renascer/desafiar
+function spawnMonster(boss = false) { if (boss) spawnBoss(); else if (!R.mons || !R.mons.length) initWorld(); }
+function aliveMons() { return (R.mons || []).filter((m) => m.hp > 0); }
+function retarget() { if (R.mon && R.mon.hp <= 0) R.mon = null; }
+function nearMons(c, r) { return aliveMons().filter((m) => dist2(m, c) <= r); }
+// ordens do jogador (toque/clique na cena)
+window.gameOrder = (o) => {
+  if (!S || !R || R.inTown || R.dead > 0) return;
+  if (o.type === 'move') { R.move = { x: clamp(o.x, -WORLD.size, WORLD.size), z: clamp(o.z, -WORLD.size, WORLD.size) }; R.mon = null; }
+  if (o.type === 'attack') { const m = aliveMons().find((x) => x.sid === o.sid); if (m) { R.mon = m; R.move = null; } }
+};
+
 function aliveMons() { return (R.mons || []).filter((m) => m.hp > 0); }
 function retarget() { R.mon = aliveMons()[0] || null; }
 
@@ -240,7 +287,7 @@ function hitMonster(m, mult, sk, d, forceCrit) {
   if (m.type === 'undead') dmg *= 1 + d.undead + (sk && sk.holy ? 0.5 : 0);
   if (m.boss && sk && sk.boss) dmg *= 1 + sk.boss;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def)));
-  m.hp -= dmg;
+  m.hp -= dmg; m.aggro = true;
   if (sk && sk.stun) m.stun = Math.max(m.stun, sk.stun * (m.boss ? 0.4 : 1));
   if (sk && sk.slow) m.slow = Math.max(m.slow, sk.slow);
   return { dmg, crit };
@@ -255,7 +302,7 @@ function playerHit(mult = 1, sk = null) {
   const hitChance = clamp(0.85 + (d.A.des - m.lvl * 2.5) * 0.003, 0.6, 0.98);
   if (!sk && !stealth && Math.random() > hitChance) { attackSound(null, false, true); Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true, hits: [{ sid: m.sid, text: 'Errou', cls: 'miss' }] }); return; }
   if (stealth) { R.stealth = 0; }
-  const targets = sk && sk.type === 'aoe' ? aliveMons().slice(0, sk.targets || 9) : [m];
+  const targets = sk && sk.type === 'aoe' ? [m, ...nearMons(m, 4.2).filter((x) => x !== m)].slice(0, sk.targets || 9) : [m];
   const hits = [];
   let total = 0, anyCrit = false;
   for (const t of targets) {
@@ -318,7 +365,6 @@ function killMonster(m) {
   gainXp(xp);
   R.mons = (R.mons || []).filter((x) => x.hp > 0);
   retarget();
-  if (!R.mon) { R.mons = []; R.respawn = 0.7; }
   R.dirty.inv = true;
 }
 
@@ -386,9 +432,10 @@ function die(killer) {
   S.xp = Math.max(0, S.xp - loss);
   Sfx.play('death');
   log(`☠️ Você foi derrotado por ${esc(killer ? killer.name : 'monstros')}! Perdeu ${fmt(loss)} XP. Renascendo...`, 'death');
-  if (killer && killer.boss) { S.zoneKills[S.zone] = 0; log('O chefe venceu desta vez. Derrote mais 25 monstros para desafiá-lo de novo.', 'muted'); }
+  if (killer && killer.boss) { S.zoneKills[S.zone] = 0; R.mons = R.mons.filter((m) => !m.boss); log('O chefe venceu desta vez e voltou para as sombras. Derrote mais 25 monstros para desafiá-lo de novo.', 'muted'); }
   R.dead = 5;
-  R.mons = []; R.mon = null; R.pet = null; R.stealth = 0;
+  for (const m of aliveMons()) { m.aggro = false; m.returning = true; }
+  R.mon = null; R.move = null; R.pet = null; R.stealth = 0;
   R.buffs = [];
   R.bossFight = false;
 }
@@ -436,7 +483,7 @@ function trySkills(d) {
     }
   }
   // dano: em grupo prefere área; sozinho prefere alvo único
-  const n = aliveMons().length;
+  const n = R.mon ? nearMons(R.mon, 4.2).length : 0;
   const dmgS = avail.filter((s) => s.type === 'dmg').sort((a, b) => b.mult - a.mult);
   const aoeS = avail.filter((s) => s.type === 'aoe' && s.mult >= 1).sort((a, b) => b.mult * Math.min(n, b.targets || 9) - a.mult * Math.min(n, a.targets || 9));
   const ctrl = avail.find((s) => s.type === 'aoe' && s.mult < 1);
@@ -492,30 +539,26 @@ function tick() {
   if (R.inTown) { // cidade: zona segura, recuperação rápida
     S.hp = Math.min(d.maxHp, S.hp + d.maxHp * 0.06 * dt);
     S.mp = Math.min(d.maxMp, S.mp + d.maxMp * 0.06 * dt);
-    R.mons = []; R.mon = null; R.dead = 0; R.bossFight = false; R.pet = null;
+    R.mon = null; R.dead = 0; R.bossFight = false; R.pet = null;
     return;
   }
+  if (R.worldZone !== S.zone || !R.pos) initWorld();
   if (R.dead > 0) {
     R.dead -= dt;
-    if (R.dead <= 0) { S.hp = d.maxHp; S.mp = d.maxMp; log('Você renasceu na cidade e voltou ao campo de caça.', 'muted'); spawnMonster(); }
+    if (R.dead <= 0) { S.hp = d.maxHp; S.mp = d.maxMp; R.pos = { ...WORLD.entry }; log('Você renasceu na entrada do mapa.', 'muted'); }
     return;
   }
-  if (!R.mon) {
-    R.respawn -= dt;
-    if (R.respawn <= 0) {
-      const boss = R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25);
-      R.bossFight = false;
-      spawnMonster(boss);
-      if (boss) { log(`👑 O chefe <b>${esc(R.mon.name)}</b> apareceu!`, 'boss'); Sfx.play('boss'); }
-    }
-    return;
-  }
+  // população do mapa
+  if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
+  if (R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25 && !R.mons.some((m) => m.boss))) { R.bossFight = false; spawnBoss(); }
   usePotions(d);
   if (S.hp <= 0) return;
+  monstersAI(dt);
+  if (R.dead > 0 || S.hp <= 0) return;
   // invocação
   if (R.pet) {
     R.pet.t -= dt; R.pet.timer -= dt;
-    if (R.pet.timer <= 0 && R.mon) {
+    if (R.pet.timer <= 0 && R.mon && dist2(R.mon, R.pos) < 9) {
       R.pet.timer = R.pet.kind === 'falcao' ? 0.8 : 1.1;
       const r = hitMonster(R.mon, R.pet.mult, null, d, false);
       Scene.petAttack({ sid: R.mon.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : 'pet' });
@@ -523,25 +566,75 @@ function tick() {
     }
     if (R.pet && R.pet.t <= 0) { log(`${R.pet.icon} ${R.pet.name} desapareceu.`, 'muted'); R.pet = null; }
   }
+  playerAI(dt, d);
+}
+
+function playerAI(dt, d) {
+  retarget();
+  const speed = 4.4 * (1 + Math.min(0.5, d.aps / 4 - 0.25));
+  R.moving = false;
+  if (R.move) {
+    if (stepTo(R.pos, R.move, speed * dt)) R.move = null;
+    R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
+    return;
+  }
+  if (!R.mon) {
+    const attackers = aliveMons().filter((m) => m.aggro && !m.returning);
+    const pool = attackers.length ? attackers : (S.settings.auto ? aliveMons().filter((m) => dist2(m, R.pos) < 40 && !m.boss) : []);
+    let best = null, bd = 1e9;
+    for (const m of pool) { const dd = dist2(m, R.pos); if (dd < bd) { bd = dd; best = m; } }
+    R.mon = best;
+  }
   if (!R.mon) return;
+  const range = weaponRange() + (R.mon.boss ? 0.8 : 0);
+  const dd = dist2(R.pos, R.mon);
+  R.face = Math.atan2(R.mon.z - R.pos.z, R.mon.x - R.pos.x);
+  if (dd > range) { stepTo(R.pos, R.mon, speed * dt, range * 0.85); R.moving = true; return; }
   // ataque do jogador
-  R.playerTimer -= dt;
+  R.playerTimer = (R.playerTimer || 0) - dt;
   if (R.playerTimer <= 0) {
     R.playerTimer = 1 / d.aps;
     const sk = trySkills(d);
-    if (sk) { S.mp -= sk.mp; R.cds[sk.id] = sk.cd; playerHit(sk.mult * (sk.hits ? 1 : 1), sk); }
+    if (sk) { S.mp -= sk.mp; R.cds[sk.id] = sk.cd; playerHit(sk.mult, sk); }
     else playerHit(1);
   }
-  // ataques dos monstros
-  for (const m of aliveMons()) {
+}
+
+function monstersAI(dt) {
+  const live = aliveMons();
+  for (const m of live) {
+    m.moving = false;
     if (m.stun > 0) { m.stun -= dt; continue; }
     if (m.slow > 0) m.slow -= dt;
-    m.timer -= dt * (m.slow > 0 ? 0.55 : 1);
-    if (m.timer <= 0) {
-      m.timer = (m.boss ? 1.1 : 1.3) + Math.random() * 0.3;
-      monsterHit(m);
-      if (R.dead > 0 || S.hp <= 0) break;
+    const sp = m.slow > 0 ? 0.5 : 1, dp = dist2(m, R.pos);
+    if (!m.aggro && !m.returning && dp < (m.boss ? 9 : 5) && !(R.stealth > 0)) {
+      m.aggro = true;
+      for (const o of live) if (!o.aggro && !o.boss && o !== m && o.name === m.name && dist2(o, m) < 4.5) o.aggro = true; // matilha
     }
+    if (m.aggro) {
+      if (dist2(m, m.home) > (m.boss ? 15 : 17) || (R.stealth > 0 && dp > 3)) { m.aggro = false; m.returning = true; if (R.mon === m && !S.settings.auto) R.mon = null; continue; }
+      const reach = m.boss ? 2.1 : 1.35;
+      m.face = Math.atan2(R.pos.z - m.z, R.pos.x - m.x);
+      if (dp > reach) { stepTo(m, R.pos, (m.boss ? 2.6 : 3.0) * sp * dt, reach * 0.9); m.moving = true; }
+      else {
+        m.timer -= dt * sp;
+        if (m.timer <= 0) { m.timer = (m.boss ? 1.1 : 1.3) + Math.random() * 0.3; monsterHit(m); if (R.dead > 0 || S.hp <= 0) return; }
+      }
+    } else if (m.returning) {
+      m.face = Math.atan2(m.home.z - m.z, m.home.x - m.x);
+      if (stepTo(m, m.home, 4 * dt)) { m.returning = false; m.hp = m.maxHp; }
+      m.moving = true;
+    } else {
+      // passeia perto do acampamento
+      m.wait -= dt;
+      if (!m.wp && m.wait <= 0) { const a = Math.random() * Math.PI * 2, r = Math.random() * 3.2; m.wp = { x: m.home.x + Math.cos(a) * r, z: m.home.z + Math.sin(a) * r }; }
+      if (m.wp) { m.face = Math.atan2(m.wp.z - m.z, m.wp.x - m.x); m.moving = true; if (stepTo(m, m.wp, 1.1 * dt)) { m.wp = null; m.wait = 2 + Math.random() * 4; } }
+    }
+  }
+  // evita monstros empilhados
+  for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
+    const a = live[i], b = live[j], dx = b.x - a.x, dz = b.z - a.z, dd = Math.hypot(dx, dz), min = (a.boss || b.boss) ? 1.8 : 0.9;
+    if (dd > 0.001 && dd < min) { const k = (min - dd) / dd * 0.5; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; }
   }
 }
 
@@ -688,7 +781,7 @@ function startGame(i) {
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
   S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, ...S.settings };
-  R = { mon: null, mons: [], pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, dirty: { all: true } };
+  R = { mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, dirty: { all: true } };
   const off = offlineProgress();
   const d = derived();
   S.hp = d.maxHp; S.mp = d.maxMp;
@@ -775,6 +868,7 @@ function renderLive() {
   Sfx.music(R.inTown ? 'town' : (m && m.boss ? 'boss' : S.zone));
   $('#npc-bar').classList.toggle('hidden', !R.inTown);
   $('#town-btn').textContent = R.inTown ? '⚔️ Voltar a caçar' : '🏰 Cidade';
+  const ab = $('#auto-btn'); ab.textContent = S.settings.auto ? '🤖 Auto: ON' : '🖐️ Auto: OFF'; ab.classList.toggle('on', !!S.settings.auto); ab.classList.toggle('hidden', !!R.inTown);
   if (R.inTown) {
     $('#mon-name').innerHTML = `${CITIES[CLASSES[S.cls].faction].icon} ${cityName()}`;
     $('#mon-bars').innerHTML = '<span class="muted small-hud">Zona segura · recuperação rápida</span>';
@@ -787,11 +881,11 @@ function renderLive() {
     $('#mon-name').innerHTML = `Renascendo em ${Math.ceil(R.dead)}s...`;
     $('#mon-bars').innerHTML = '';
   } else if (m) {
-    const others = aliveMons().length - 1;
+    const others = aliveMons().filter((x) => x.aggro && x !== m).length;
     $('#mon-name').innerHTML = `${m.boss ? '👑 ' : ''}${esc(m.name)} <span class="muted">Nv. ${m.lvl} · ${MON_TYPES[m.type]}</span>${m.stun > 0 ? ' 💫' : ''}${m.slow > 0 ? ' ❄️' : ''}${others > 0 ? ` <span class="grp">+${others}</span>` : ''}`;
     $('#mon-bars').innerHTML = bar(m.hp, m.maxHp, m.boss ? 'boss' : 'hp', `${fmt(Math.max(0, m.hp))} / ${fmt(m.maxHp)}`);
   } else {
-    $('#mon-name').innerHTML = '<span class="muted">Procurando monstros...</span>';
+    $('#mon-name').innerHTML = `<span class="muted">${S.settings.auto ? 'Procurando monstros...' : 'Toque em um monstro para atacar'}</span>`;
     $('#mon-bars').innerHTML = '';
   }
   // chefe
@@ -946,8 +1040,8 @@ function setTown(on) {
   if (!!R.inTown === on) return;
   R.inTown = on;
   Sfx.play('portal');
-  if (on) { R.mons = []; R.mon = null; R.buffs = []; R.pet = null; log(`🏰 Você chegou à <b>${cityName()}</b>. Fale com os moradores!`, 'lvl'); }
-  else { R.respawn = 0.8; log(`⚔️ Você partiu para ${zoneById(S.zone).name}.`, 'muted'); }
+  if (on) { R.mon = null; R.move = null; R.buffs = []; R.pet = null; log(`🏰 Você chegou à <b>${cityName()}</b>. Fale com os moradores!`, 'lvl'); }
+  else { R.worldZone = null; log(`⚔️ Você partiu para ${zoneById(S.zone).name}.`, 'muted'); }
   R.dirty.all = true;
 }
 
@@ -1164,7 +1258,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],#create-btn,#create-back,#boss-btn,#town-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -1195,12 +1289,13 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (t.id === 'town-btn') { setTown(!R.inTown); return; }
+  if (t.id === 'auto-btn') { S.settings.auto = !S.settings.auto; Sfx.play('click'); if (!S.settings.auto) { R.mon = null; } toast(S.settings.auto ? 'Modo automático ligado: o herói caça sozinho.' : 'Modo manual: toque no chão para andar e nos monstros para atacar.'); renderLive(); return; }
   if (t.id === 'mute-btn') { S.settings.muted = !S.settings.muted; Sfx.init(); Sfx.applyVolume(); renderLive(); return; }
   if (ds.npc) { if (R.inTown) { if (Scene.walkToNpc && Scene.walkToNpc(ds.npc)) return; openNpc(ds.npc); } return; }
-  if (t.id === 'boss-btn') { if ((S.zoneKills[S.zone] || 0) >= 25) { R.bossFight = true; R.mons = []; R.mon = null; R.respawn = 0.3; log('Você desafiou o chefe do mapa!', 'boss'); } return; }
+  if (t.id === 'boss-btn') { if ((S.zoneKills[S.zone] || 0) >= 25) { R.bossFight = true; log('Você desafiou o chefe do mapa!', 'boss'); } return; }
   if (ds.zone) {
     const changed = ds.zone !== S.zone;
-    if (changed) { S.zone = ds.zone; R.mons = []; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
+    if (changed) { S.zone = ds.zone; R.worldZone = null; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
     if (R.inTown) setTown(false); else if (changed) Sfx.play('portal');
     if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
     return renderTab();

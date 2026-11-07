@@ -22,6 +22,14 @@ mas **não** use nomes, personagens, mapas, monstros, arte ou música de jogos e
 | `assets/models/` | Modelos .glb otimizados (KayKit, CC0) + `anims.glb` (animações compartilhadas) + `skel_props.glb` |
 | `js/vendor/` | three.min.js r128, GLTFLoader, SkeletonUtils (sem CDN) |
 
+### Mundo aberto (Fase 1)
+Cada mapa é uma área de ~66×66 m com câmera isométrica. Lógica em `js/game.js`: `WORLD` (entrada, arena do chefe, limite de 12 monstros),
+`zoneCamps(zid)` (acampamentos fixos por semente, usados também pela cena), `spawnWorldMonster`, `spawnBoss`, `initWorld`, `playerAI` (ordem de
+movimento, alcance da arma, modo Auto), `monstersAI` (passear, aggro de 5 m, matilha, perseguir, voltar e curar ao se afastar 17 m).
+Ordens vêm da cena por `window.gameOrder({type:'move', x, z})` / `({type:'attack', sid})`. Na cena 3D: `buildWorld`, `heroFollowWorld`, `pickWorld`,
+`updateWorldUI` (anel do alvo e barrinhas de vida). `S.settings.auto` liga a caça automática. A área (aoe) atinge monstros a até 4,2 m do alvo.
+Próximas fases planejadas: 2 corpos humanos (MakeHuman + Mixamo, feito pelo usuário no PC), 3 interface de MMO, 4 equipamentos humanos, 5 multiplayer, 6 monstros novos.
+
 ### Habilidades (`CLASSES[x].skills`)
 Tipos: `dmg` (alvo único; `hits`, `boss`, `holy`), `aoe` (todos; `targets`, `stun`, `slow`, `healPct`), `buff` (`stat` + `also`), `heal`, `summon` (`pet`: golem/falcao/fera), `stealth`, `passive` (`stat`/`val` ou `revive`).
 Stats de buff aceitos em `derived()`: atk, def, crit, critdmg, spd, evade, block, absorb, reflect, hpmax, undead, mshield.

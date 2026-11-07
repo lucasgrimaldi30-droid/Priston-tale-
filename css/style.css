@@ -284,3 +284,15 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 #dialog { z-index: 40; }
 .dialog-box textarea { width: 100%; background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 12px monospace; margin: 8px 0 12px; resize: vertical; }
 .dialog-box .row-btns { justify-content: flex-end; }
+.btn.auto { background: linear-gradient(#3a3f4f, #2a2e3a); }
+.btn.auto.on { background: linear-gradient(#2f7a4a, #1f5a34); border-color: #4fba7a; }
+.mon-bars-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+.mbar { position: absolute; width: 46px; height: 5px; transform: translate(-50%, -100%); background: #000a; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
+.mbar i { display: block; height: 100%; background: linear-gradient(#ff6a5a, #b02020); }
+.mbar.boss { width: 90px; height: 7px; } .mbar.boss i { background: linear-gradient(#d08aff, #7a2ab0); }
+.mbar.tgt { outline: 1px solid #ffe080; }
+
+@media (max-width: 760px) {
+  .arena { height: 62vh; min-height: 360px; }
+  .arena-head { font-size: 13px; }
+}
