@@ -136,6 +136,10 @@ const MON_TYPE = {
   'Diabrete': 'demon', 'Cão Infernal': 'demon', 'Cavaleiro Demônio': 'demon', 'Senhor das Chamas': 'demon',
   'Ciclope': 'beast', 'Gigante de Pedra': 'construct', 'Grifo': 'beast', 'Titã Primordial': 'construct',
   'Horror do Vazio': 'demon', 'Anjo Caído': 'undead', 'Devorador': 'demon', 'Deus do Abismo': 'demon',
+  'Caranguejo Gigante': 'beast', 'Pirata Afogado': 'undead', 'Gaivota Feroz': 'beast', 'Capitão Abissal': 'undead',
+  'Cogumelo Saltador': 'plant', 'Fada Sombria': 'spirit', 'Lagarta Gigante': 'beast', 'Rainha Micélio': 'plant',
+  'Pantera Negra': 'beast', 'Planta Carnívora': 'plant', 'Xamã Tribal': 'demon', 'Serpente Ancestral': 'beast',
+  'Harpia': 'beast', 'Golem Rúnico': 'construct', 'Guerreiro da Tempestade': 'spirit', 'Senhor do Trovão': 'spirit',
 };
 
 // Invocações
@@ -164,6 +168,15 @@ const ZONES = [
   { id: 'z9',  name: 'Vale dos Titãs',         min: 68, icon: '⛰️', monsters: [['Ciclope','👁️'],['Gigante de Pedra','🗿'],['Grifo','🦅']], boss: ['Titã Primordial','🌋'] },
   { id: 'z10', name: 'Abismo Eterno',          min: 82, icon: '🌌', monsters: [['Horror do Vazio','🦑'],['Anjo Caído','😇'],['Devorador','👾']], boss: ['Deus do Abismo','🌑'] },
 ];
+
+// Mapas de desvio: saem de um mapa principal (saída na parte de baixo) e têm faixa de nível própria
+const BRANCHES = [
+  { id: 'b1', name: 'Costa dos Naufrágios', min: 9,  span: 6, parent: 'z2', icon: '🏖️', monsters: [['Caranguejo Gigante','🦀'],['Pirata Afogado','🏴‍☠️'],['Gaivota Feroz','🐦']], boss: ['Capitão Abissal','🦑'] },
+  { id: 'b2', name: 'Bosque dos Cogumelos', min: 22, span: 7, parent: 'z4', icon: '🍄', monsters: [['Cogumelo Saltador','🍄'],['Fada Sombria','🧚'],['Lagarta Gigante','🐛']], boss: ['Rainha Micélio','👑'] },
+  { id: 'b3', name: 'Selva Esmeralda',      min: 30, span: 8, parent: 'z5', icon: '🌴', monsters: [['Pantera Negra','🐆'],['Planta Carnívora','🌺'],['Xamã Tribal','🪶']], boss: ['Serpente Ancestral','🐍'] },
+  { id: 'b4', name: 'Picos Trovejantes',    min: 60, span: 9, parent: 'z8', icon: '⛈️', monsters: [['Harpia','🦅'],['Golem Rúnico','🗿'],['Guerreiro da Tempestade','⚔️']], boss: ['Senhor do Trovão','⚡'] },
+];
+const ALL_ZONES = [...ZONES, ...BRANCHES];
 
 const RARITIES = [
   { id: 'comum',    name: 'Comum',     color: '#c8c8c8', mult: 1.0, affixes: 0, w: 60 },
@@ -238,9 +251,9 @@ function worldSky(zid) {
   const t = Date.now();
   const ph = (t / (DAY_MIN * 60000)) % 1;              // 0 = meio-dia, 0,5 = meia-noite
   const night = Math.max(0, Math.min(1, (-Math.cos(ph * Math.PI * 2) - 0.25) / 0.6)); // 0 dia … 1 noite
-  const win = Math.floor(t / 360000), zi = (ZONES.findIndex((z) => z.id === zid) + 1) * 7919;
+  const win = Math.floor(t / 360000), zi = (ALL_ZONES.findIndex((z) => z.id === zid) + 1) * 7919;
   let h = (win * 2654435761 + zi) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0; h ^= h >>> 13;
   const dry = ['z4', 'z5', 'z7', 'z8', 'z10'].includes(zid) || !/^z\d+$/.test(zid || ''); // caverna, deserto, neve, vulcão, abismo
-  const rain = !dry && (h % 100) < 35;
+  const rain = !dry && (h % 100) < (zid === 'b4' ? 75 : 35); // nos Picos Trovejantes quase sempre há tempestade
   return { night, rain, isNight: night > 0.5, phase: ph };
 }

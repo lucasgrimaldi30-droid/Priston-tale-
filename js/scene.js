@@ -56,6 +56,14 @@ const Scene2D = (() => {
     'Titã Primordial': ['golem', '#c04020', 'flame'],
     'Horror do Vazio': ['eye', '#5a2a8a'], 'Anjo Caído': ['humanoid', '#303040', 'wings'], 'Devorador': ['slime', '#402060', 'teeth'],
     'Deus do Abismo': ['eye', '#300050', 'crown'],
+    'Caranguejo Gigante': ['bug', '#d05030'], 'Pirata Afogado': ['skeleton', '#a0c8c0'], 'Gaivota Feroz': ['flyer', '#f0f0f0', 'beak'],
+    'Capitão Abissal': ['skeleton', '#5a9ab0', 'hat'],
+    'Cogumelo Saltador': ['slime', '#e04060'], 'Fada Sombria': ['flyer', '#a060ff'], 'Lagarta Gigante': ['serpent', '#90c040'],
+    'Rainha Micélio': ['plant', '#c040a0'],
+    'Pantera Negra': ['beast', '#26262e'], 'Planta Carnívora': ['plant', '#40a040'], 'Xamã Tribal': ['humanoid', '#a07850', 'hat'],
+    'Serpente Ancestral': ['serpent', '#30a060'],
+    'Harpia': ['flyer', '#8a80a0', 'beak'], 'Golem Rúnico': ['golem', '#6080c0'], 'Guerreiro da Tempestade': ['humanoid', '#a0c0ff', 'horns'],
+    'Senhor do Trovão': ['golem', '#4060ff', 'flame'],
   };
 
   // ---------- temas dos mapas ----------
@@ -70,6 +78,10 @@ const Scene2D = (() => {
     z8:  { sky: ['#2a0606', '#a03010'], far: '#4a1010', mid: '#380c0c', g: ['#3a1a14', '#1a0806'], deco: 'spike', dc: '#1a0a0a', amb: 'ember' },
     z9:  { sky: ['#b89878', '#f0e0c0'], far: '#9a8070', mid: '#786654', g: ['#8a7860', '#5a4a3a'], deco: 'rock', dc: '#6a5a4a', amb: 'dust' },
     z10: { sky: ['#06020f', '#2a1048'], far: '#1a0a30', mid: '#260e3c', g: ['#1a1028', '#08040f'], deco: 'crystal', dc: '#c060ff', amb: 'star' },
+    b1:  { sky: ['#3a90d0', '#98c8e0'], far: '#60a8c0', mid: '#c8b888', g: ['#a89060', '#7a6a44'], deco: 'palm', dc: '#3a9a4a', amb: 'leaf' },
+    b2:  { sky: ['#301848', '#8a60a8'], far: '#40285a', mid: '#4a3060', g: ['#5a4a6a', '#2e2440'], deco: 'mushroom', dc: '#e04080', amb: 'firefly' },
+    b3:  { sky: ['#2a6a40', '#a8e0a0'], far: '#1e5a30', mid: '#2a7a3a', g: ['#4a6e34', '#2a4620'], deco: 'palm', dc: '#2a8a30', amb: 'firefly' },
+    b4:  { sky: ['#3a4250', '#8a94a4'], far: '#4a5060', mid: '#5a6070', g: ['#6a6e78', '#3e424c'], deco: 'rock', dc: '#5a5e6a', amb: 'dust' },
     town_ferro: { sky: ['#a8502a', '#f2c08a'], far: '#6a5a50', mid: '#4a4240', g: ['#6e665e', '#3e3a36'], deco: 'house', dc: '#3a3a44', amb: 'ember' },
     town_luz: { sky: ['#5aa8f0', '#eaf6ff'], far: '#c8d8ec', mid: '#e0ecf8', g: ['#d8dce4', '#a8b0bc'], deco: 'house', dc: '#3a6ad0', amb: 'wisp' },
   };

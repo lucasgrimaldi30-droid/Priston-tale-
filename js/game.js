@@ -216,7 +216,7 @@ const BEST_TIERS = [50, 250, 1000];
 function bestTiers() { let n = 0; for (const k in (S.best || {})) for (const t of BEST_TIERS) if (S.best[k] >= t) n++; return n; }
 function tabBestiary() {
   S.best = S.best || {};
-  const all = ZONES.flatMap((z) => [...z.monsters.map((m) => ({ n: m[0], i: m[1], z })), { n: z.boss[0], i: z.boss[1], z, boss: true }]);
+  const all = ALL_ZONES.flatMap((z) => [...z.monsters.map((m) => ({ n: m[0], i: m[1], z })), { n: z.boss[0], i: z.boss[1], z, boss: true }]);
   const tiers = bestTiers();
   return `<p class="muted">Cada marco (50, 250 e 1.000 derrotados) de cada monstro dá <b>+0,25% de dano e de experiência</b> para sempre. Total atual: <b>+${(tiers * 0.25).toFixed(2)}%</b> (${tiers}/${all.length * 3} marcos).</p>
   <div class="best-grid">${all.map((m) => { const k = S.best[m.n] || 0, next = BEST_TIERS.find((t) => k < t); return `<div class="best-card ${k ? '' : 'unknown'}"><span class="best-ico">${k ? m.i : '❔'}</span><b>${k ? esc(m.n) : '???'}</b><small class="muted">${esc(m.z.name)}${m.boss ? ' · chefe' : ''}</small><small>${fmt(k)} derrotados ${BEST_TIERS.map((t) => (k >= t ? '★' : '☆')).join('')}</small>${next ? `<div class="q-prog"><i style="width:${Math.min(100, k / next * 100)}%"></i></div>` : '<small class="good">Completo!</small>'}</div>`; }).join('')}</div>`;
@@ -388,8 +388,11 @@ function derived() {
 }
 
 // ---------- monstros ----------
-function zoneById(id) { return ZONES.find((z) => z.id === id); }
-function zoneSpan(z) { const i = ZONES.indexOf(z); return i < ZONES.length - 1 ? ZONES[i + 1].min - z.min : 18; }
+function zoneById(id) { return ALL_ZONES.find((z) => z.id === id); }
+function zoneSpan(z) { if (z.span) return z.span; const i = ZONES.indexOf(z); return i < ZONES.length - 1 ? ZONES[i + 1].min - z.min : 18; }
+// nível de recompensa do mapa (desvio usa o do mapa de onde sai, +1)
+function zoneTier(z) { return z.parent ? ZONES.findIndex((q) => q.id === z.parent) + 2 : ZONES.indexOf(z) + 1; }
+const zoneIdx = (zid) => ALL_ZONES.findIndex((z) => z.id === zid);
 
 function makeMonster(name, icon, lvl, boss, groupN) {
   const g = boss ? 1 : (groupN > 1 ? 0.55 : 1);
@@ -406,16 +409,72 @@ function makeMonster(name, icon, lvl, boss, groupN) {
 // cria um grupo de monstros (chefe vem sozinho)
 // ---------- mundo aberto ----------
 const WORLD = { size: 33, entry: { x: 0, z: 15 }, arena: { x: 0, z: -23 }, cap: 12 };
+// ---------- mapas ligados: saída para o mapa anterior (oeste) e o próximo (leste) ----------
+// ficam no eixo da tela (a câmera olha na diagonal): próximo mapa à direita, anterior à esquerda
+const EXIT_NEXT = { x: 26.3, z: -14.4 }, EXIT_PREV = { x: -26.3, z: 14.4 }, EXIT_BRANCH = { x: 12.5, z: 22.9 };
+const inward = (e, d) => { const L = Math.hypot(e.x, e.z); return { x: e.x * (1 - d / L), z: e.z * (1 - d / L) }; };
+function zoneExits(zid) {
+  const i = ZONES.findIndex((z) => z.id === zid), out = [], z = zoneById(zid);
+  if (z && z.parent) return [{ to: z.parent, x: EXIT_PREV.x, z: EXIT_PREV.z, side: 'prev' }]; // desvio: só volta para o mapa de origem
+  if (i > 0) out.push({ to: ZONES[i - 1].id, x: EXIT_PREV.x, z: EXIT_PREV.z, side: 'prev' });
+  if (i >= 0 && i < ZONES.length - 1) out.push({ to: ZONES[i + 1].id, x: EXIT_NEXT.x, z: EXIT_NEXT.z, side: 'next' });
+  for (const b of BRANCHES) if (b.parent === zid) out.push({ to: b.id, x: EXIT_BRANCH.x, z: EXIT_BRANCH.z, side: 'branch' });
+  return out;
+}
+function exitLocked(ex) { return S.lvl < zoneById(ex.to).min - 3; }
+function nearExit(r) { return R.pos ? zoneExits(S.zone).find((e) => dist2(e, R.pos) < r) : null; }
+function walkZone(ex) {
+  const nz = zoneById(ex.to);
+  if (exitLocked(ex)) { toast(`🔒 ${nz.name} abre no nível ${nz.min - 3}.`, 'bad'); R.move = null; R.travel = null; R.pos = inward(ex, 2.5); return; }
+  const from = S.zone, back = zoneExits(ex.to).find((e) => e.to === from);
+  S.zone = ex.to; R.worldZone = null; R.mon = null; R.move = null; R.bossFight = false; R.travel = null;
+  if (nz.parent) { S.visited = S.visited || {}; if (!S.visited[nz.id]) { S.visited[nz.id] = 1; log(`🧭 Você descobriu <b>${esc(nz.name)}</b>!`, 'lvl'); } }
+  R.arrive = back ? inward(back, 3.5) : null;
+  log(`🚶 Você chegou a <b>${nz.icon} ${esc(nz.name)}</b> (Nv. ${nz.min}+).`, 'muted'); toast(`${nz.icon} ${nz.name}`);
+  Sfx.play('portal'); R.dirty.all = true;
+  if (R.win === 'mapas') renderTab();
+}
+// o Auto anda até o mapa do seu nível pelas saídas (em vez de teleportar)
+function travelStep(dt, speed) {
+  if (!S.settings.auto || S.settings.autoTravel === false || R.dungeon) { R.travel = null; return false; }
+  R.travelT = (R.travelT || 0) - dt;
+  if (!R.travel && R.travelT <= 0) {
+    R.travelT = 4;
+    const cz = zoneById(S.zone);
+    if (cz && cz.parent && S.lvl >= cz.min + cz.span + 2) { R.travel = zoneExits(S.zone)[0]; log(`🚶 Este mapa ficou fácil. Voltando para ${esc(zoneById(cz.parent).name)}...`, 'muted'); }
+    const i = ZONES.findIndex((z) => z.id === S.zone), nx = i >= 0 && ZONES[i + 1];
+    if (!R.travel && nx && S.lvl >= nx.min + 1 && !R.mons.some((m) => m.boss && m.aggro)) { R.travel = zoneExits(S.zone).find((e) => e.side === 'next'); if (R.travel) log(`🚶 Você já está forte para ${nx.icon} ${esc(nx.name)}. Indo para lá a pé...`, 'muted'); }
+  }
+  if (!R.travel) return false;
+  if (aliveMons().some((m) => m.aggro && !m.returning && dist2(m, R.pos) < 8)) return false; // luta primeiro, depois segue viagem
+  R.mon = null; R.gather = null; R.gathering = false;
+  R.face = Math.atan2(R.travel.z - R.pos.z, R.travel.x - R.pos.x); R.moving = true;
+  stepTo(R.pos, R.travel, speed * dt);
+  if (dist2(R.pos, R.travel) < 1.8) walkZone(R.travel);
+  return true;
+}
+// monstros que vêm dos mapas vizinhos e errantes raros
+const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
+function spawnSource() {
+  const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
+  if (exits.length && Math.random() < BORDER_CHANCE) {
+    const ex = exits[rint(0, exits.length - 1)], nz = zoneById(ex.to), ns = zoneSpan(nz), mi = rint(0, 2);
+    const lvl = ex.side === 'prev' ? nz.min + ns - rint(1, 3) : nz.min + rint(0, 2);
+    return { mon: nz.monsters[mi], lvl, center: inward(ex, 6 + rint(0, 4)), spread: 3.5, border: nz.name };
+  }
+  const camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)], i = rint(0, 2);
+  return { mon: z.monsters[i], lvl: z.min + Math.floor((i / 3) * span) + rint(0, Math.max(1, Math.floor(span / 3))), center: c, spread: 3 };
+}
 const RANGED_W = { arco: 1, dardo: 1, cajado: 1, cetro: 1 };
 const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 function weaponRange() { return RANGED_W[curWeapon()] ? 7 : 1.8; }
 function seeded(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // acampamentos de monstros fixos por mapa (mesma semente usada pela cena 3D)
 function zoneCamps(zid) {
-  const r = seeded(ZONES.findIndex((z) => z.id === zid) * 977 + 13), camps = [];
+  const r = seeded(zoneIdx(zid) * 977 + 13), camps = [];
   while (camps.length < 5) {
     const a = r() * Math.PI * 2, d = 9 + r() * 18, c = { x: Math.cos(a) * d, z: Math.sin(a) * d * 0.9 };
-    if (dist2(c, WORLD.entry) > 9 && dist2(c, WORLD.arena) > 8 && camps.every((o) => dist2(o, c) > 8)) camps.push(c);
+    if (dist2(c, WORLD.entry) > 9 && dist2(c, WORLD.arena) > 8 && dist2(c, EXIT_PREV) > 8 && dist2(c, EXIT_NEXT) > 8 && dist2(c, EXIT_BRANCH) > 8 && camps.every((o) => dist2(o, c) > 8)) camps.push(c);
   }
   return camps;
 }
@@ -427,14 +486,20 @@ function stepTo(o, t, max, stop = 0) {
   return d - stop <= max;
 }
 function spawnWorldMonster(initial = false) {
-  const z = zoneById(S.zone), span = zoneSpan(z), camps = zoneCamps(S.zone);
   for (let tries = 0; tries < 12; tries++) {
-    const c = camps[rint(0, camps.length - 1)], a = Math.random() * Math.PI * 2, d = Math.random() * 3;
+    const src = spawnSource(), c = src.center, a = Math.random() * Math.PI * 2, d = Math.random() * src.spread;
     const pos = { x: c.x + Math.cos(a) * d, z: c.z + Math.sin(a) * d };
     if (R.pos && dist2(pos, R.pos) < (initial ? 6 : 9)) continue;
-    const i = rint(0, 2), lvl = z.min + Math.floor((i / 3) * span) + rint(0, Math.max(1, Math.floor(span / 3)));
-    const m = makeMonster(z.monsters[i][0], z.monsters[i][1], lvl, false, 2);
+    const m = makeMonster(src.mon[0], src.mon[1], Math.max(1, src.lvl), false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
+    if (src.border) m.border = src.border;
+    if (!initial && !R.dungeon && Math.random() < ROAM_CHANCE && !R.mons.some((o) => o.roamer)) { // errante raro: elite forte que cruza o mapa
+      m.roamer = true; m.elite = true; m.skin = m.name; m.name = m.name + ' Errante';
+      m.maxHp = m.hp = Math.round(m.maxHp * 4); m.atk = Math.round(m.atk * 1.5); m.def = Math.round(m.def * 1.2); m.xp *= 7; m.gold *= 7;
+      R.mons.push(m);
+      log(`👣 Um <b>${esc(m.name)}</b> está cruzando o mapa! Ele deixa prêmios raros.`, 'boss');
+      return m;
+    }
     m.xp = Math.round(m.xp * 1.3); m.gold = Math.round(m.gold * 1.15); // compensa o tempo andando
     if (Math.random() < (R.dungeon ? 0.18 : 0.07) * (eventNow().id === 'elite' ? 3 : 1)) { // monstro elite
       m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 2.6); m.atk = Math.round(m.atk * 1.35); m.def = Math.round(m.def * 1.15);
@@ -456,9 +521,9 @@ function spawnBoss() {
   return m;
 }
 function initWorld() {
-  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null;
+  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null; R.travel = null;
   R.nodes = zoneNodes(S.zone).map((n, i) => ({ ...n, id: i, cd: 0 }));
-  R.pos = { ...WORLD.entry };
+  R.pos = R.arrive ? { ...R.arrive } : { ...WORLD.entry }; R.arrive = null;
   for (let i = 0; i < WORLD.cap; i++) spawnWorldMonster(true);
 }
 // ---------- eventos do mundo (pelo relógio real, iguais para todos os jogadores) ----------
@@ -498,7 +563,7 @@ function spawnWorldBoss(slot) {
 }
 function worldBossReward(m) {
   S.wbSlot = m.slot; S.stats.wbosses = (S.stats.wbosses || 0) + 1;
-  const tier = ZONES.findIndex((z) => z.id === S.zone) + 1, st = 3 + tier;
+  const tier = zoneTier(zoneById(S.zone)), st = 3 + tier;
   S.stones += st;
   for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 6));
   dropGem(1, m.lvl); dropGem(1, m.lvl);
@@ -511,17 +576,17 @@ const MATS = { minerio: { name: 'Minério', icon: '⛏️' }, erva: { name: 'Erv
 const NODE_TYPES = ['minerio', 'erva', 'minerio', 'erva', 'erva', 'essencia'];
 const NODE_CD = 60, GATHER_T = 2.2;
 function zoneNodes(zid) {
-  const r = seeded(ZONES.findIndex((z) => z.id === zid) * 389 + 71), camps = zoneCamps(zid), out = [];
+  const r = seeded(zoneIdx(zid) * 389 + 71), camps = zoneCamps(zid), out = [];
   for (let k = 0; k < 400 && out.length < NODE_TYPES.length; k++) {
     const a = r() * Math.PI * 2, dd = 7 + r() * 22, c = { x: Math.cos(a) * dd, z: Math.sin(a) * dd * 0.9 };
-    if (dist2(c, WORLD.entry) > 5 && dist2(c, WORLD.arena) > 8 && camps.every((o) => dist2(o, c) > 5) && out.every((o) => dist2(o, c) > 6)) out.push({ ...c, type: NODE_TYPES[out.length] });
+    if (dist2(c, WORLD.entry) > 5 && dist2(c, WORLD.arena) > 8 && dist2(c, EXIT_PREV) > 6 && dist2(c, EXIT_NEXT) > 6 && dist2(c, EXIT_BRANCH) > 6 && camps.every((o) => dist2(o, c) > 5) && out.every((o) => dist2(o, c) > 6)) out.push({ ...c, type: NODE_TYPES[out.length] });
   }
   return out;
 }
 function profLvl(k) { return Math.min(50, 1 + Math.floor(Math.sqrt(((S.prof || {})[k] || 0) / 8))); }
 function addMat(k, n) { S.mats = S.mats || {}; S.mats[k] = (S.mats[k] || 0) + n; }
 function gatherDone(nd) {
-  const tier = ZONES.findIndex((z) => z.id === S.zone) + 1, lv0 = profLvl('coleta');
+  const tier = zoneTier(zoneById(S.zone)), lv0 = profLvl('coleta');
   let n = 1 + Math.floor(tier / 3) + (Math.random() < lv0 * 0.02 ? 1 : 0);
   if (nd.type === 'essencia') n = Math.max(1, Math.ceil(n / 2));
   addMat(nd.type, n); nd.cd = NODE_CD;
@@ -629,7 +694,7 @@ function dungeonTick(dt) {
   }
 }
 function dungeonReward() {
-  const z = zoneById(R.dungeon.zone), tier = ZONES.indexOf(z) + 1;
+  const z = zoneById(R.dungeon.zone), tier = zoneTier(z);
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
@@ -842,6 +907,10 @@ function killMonster(m) {
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
     S.stones += rint(1, 3); dropGem(1, m.lvl);
     log(`👑 Chefe derrotado! Você recebeu Pedras de Refino.`, 'boss');
+  } else if (m.roamer) {
+    S.stats.elites = (S.stats.elites || 0) + 1; S.stats.roamers = (S.stats.roamers || 0) + 1;
+    dropItem(genItem(m.lvl, 5)); S.stones += 2; dropGem(1, m.lvl); addMat('essencia', 2);
+    log(`👣 <b>Errante derrotado!</b> +2 💎, um item raro, uma gema e 2 essências.`, 'boss'); toast('Errante derrotado!', 'good');
   } else if (m.elite) {
     S.stats.elites = (S.stats.elites || 0) + 1;
     log(`⭐ Monstro elite derrotado!`, 'boss');
@@ -1062,9 +1131,11 @@ function playerAI(dt, d) {
   if (R.move) {
     R.gather = null; R.gathering = false;
     if (stepTo(R.pos, R.move, speed * dt)) R.move = null;
+    if (!R.dungeon) { const ex = nearExit(1.8); if (ex) { walkZone(ex); return; } }
     R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
     return;
   }
+  if (!R.dungeon && travelStep(dt, speed)) return;
   if (!R.dungeon && gatherStep(dt, speed)) return;
   if (!R.mon && S.settings.auto) { // no modo manual o herói só ataca o que o jogador tocar
     const attackers = aliveMons().filter((m) => m.aggro && !m.returning);
@@ -1166,8 +1237,13 @@ function monstersAI(dt) {
       if (stepTo(m, m.home, 4 * dt)) { m.returning = false; if (!m.boss) m.hp = m.maxHp; }
       m.moving = true;
     } else {
-      // passeia perto do acampamento
+      // passeia perto do acampamento (o errante cruza o mapa inteiro)
       m.wait -= dt;
+      if (m.roamer) {
+        if (!m.wp && m.wait <= 0) { const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 20; m.wp = { x: Math.cos(a) * r, z: Math.sin(a) * r * 0.8 }; }
+        if (m.wp) { m.face = Math.atan2(m.wp.z - m.z, m.wp.x - m.x); m.moving = true; if (stepTo(m, m.wp, 1.6 * dt)) { m.wp = null; m.wait = 1 + Math.random() * 2; } m.home = { x: m.x, z: m.z }; }
+        continue;
+      }
       if (!m.wp && m.wait <= 0) { const a = Math.random() * Math.PI * 2, r = Math.random() * 3.2; m.wp = { x: m.home.x + Math.cos(a) * r, z: m.home.z + Math.sin(a) * r }; }
       if (m.wp) { m.face = Math.atan2(m.wp.z - m.z, m.wp.x - m.x); m.moving = true; if (stepTo(m, m.wp, 1.1 * dt)) { m.wp = null; m.wait = 2 + Math.random() * 4; } }
     }
@@ -1468,6 +1544,7 @@ function drawMinimap() {
     if (!R.dungeon) for (const c of zoneCamps(S.zone)) dot(c.x, c.z, 4, 'rgba(120,80,40,.6)');
     if (!R.dungeon) { const [ax, ay] = P(WORLD.arena.x, WORLD.arena.z); g.beginPath(); g.arc(ax, ay, 6 * k, 0, Math.PI * 2); g.strokeStyle = '#b060ff'; g.lineWidth = 2; g.stroke(); }
     if (!R.dungeon) dot(WORLD.entry.x, WORLD.entry.z, 3.5, '#60e080', '#000');
+    if (!R.dungeon) for (const ex of zoneExits(S.zone)) { const [ex0, ey0] = P(ex.x, ex.z); g.fillStyle = exitLocked(ex) ? '#888' : '#60c0ff'; g.font = "bold 13px sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ex.side === 'next' ? '▶' : ex.side === 'branch' ? '▼' : '◀', ex0, ey0); }
     if (!R.dungeon && R.nodes) for (const nd of R.nodes) if (nd.cd <= 0) dot(nd.x, nd.z, 2.4, nd.type === 'essencia' ? '#60e0ff' : nd.type === 'erva' ? '#70e060' : '#c0b0a0', '#000');
     for (const m of aliveMons()) dot(m.x, m.z, m.boss ? 5 : m.elite ? 3.6 : 2.6, m.boss ? '#c070ff' : m.elite ? '#ffd040' : m.aggro ? '#ff4040' : '#ffaa40', '#000');
     if (R.move) dot(R.move.x, R.move.z, 2, '#80ff9a');
@@ -1845,6 +1922,8 @@ const ACH = [
   { id: 't10', name: 'Escalador', desc: 'Chegue ao andar 10 da Torre Infinita', ok: () => (S.towerBest || 0) >= 10, stones: 5 },
   { id: 't30', name: 'Mestre da Torre', desc: 'Chegue ao andar 30 da Torre Infinita', ok: () => (S.towerBest || 0) >= 30, stones: 20, title: 'Mestre da Torre' },
   { id: 'wb1', name: 'Caçador de Avatares', desc: 'Derrote um Chefe Mundial', ok: () => (S.stats.wbosses || 0) >= 1, stones: 8, title: 'Caçador de Avatares' },
+  { id: 'exp4', name: 'Desbravador', desc: 'Descubra os 4 mapas escondidos andando pelas saídas', ok: () => Object.keys(S.visited || {}).length >= 4, stones: 10, title: 'Desbravador' },
+  { id: 'ro1', name: 'Rastreador', desc: 'Derrote um monstro Errante', ok: () => (S.stats.roamers || 0) >= 1, stones: 5, title: 'Rastreador' },
   { id: 'cr10', name: 'Mãos de Artesão', desc: 'Crie 10 itens com materiais coletados', ok: () => (S.stats.crafts || 0) >= 10, stones: 5 },
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
   { id: 'rb1', name: 'Renascido', desc: 'Renasça pela primeira vez', ok: () => (S.rebirths || 0) >= 1, stones: 30, title: 'Renascido' },
@@ -2059,17 +2138,18 @@ function renderTab() {
 }
 
 function tabMaps() {
-  return tabTower() + `<div class="zone-list">${ZONES.map((z) => {
-    const locked = S.lvl < z.min - 3;
-    const cur = z.id === S.zone;
-    return `<button class="zone ${cur ? 'active' : ''}" data-zone="${z.id}" ${locked ? 'disabled' : ''}>
+  const entry = (z) => {
+    const locked = S.lvl < z.min - 3, cur = z.id === S.zone;
+    if (z.parent && !(S.visited || {})[z.id]) return `<div class="zone zone-hidden"><span class="zone-ico">❓</span><span class="zone-info"><b>Mapa escondido</b><small>Ache a saída de baixo (▼) em ${esc(zoneById(z.parent).name)} · Nível ${z.min}+</small></span></div>`;
+    return `<button class="zone ${cur ? 'active' : ''} ${z.parent ? 'zone-branch' : ''}" data-zone="${z.id}" ${locked ? 'disabled' : ''}>
       <span class="zone-ico">${z.icon}</span>
-      <span class="zone-info"><b>${z.name}</b><small>Nível ${z.min} – ${z.min + zoneSpan(z)} · Chefe: ${z.boss[1]} ${z.boss[0]}</small>
+      <span class="zone-info"><b>${z.parent ? '↳ ' : ''}${z.name}</b><small>Nível ${z.min} – ${z.min + zoneSpan(z)} · Chefe: ${z.boss[1]} ${z.boss[0]}</small>
       <small class="muted">${z.monsters.map((m) => m[1] + ' ' + m[0]).join(' · ')}</small>
       <small class="muted">Chefes derrotados: ${S.bosses[z.id] || 0}</small></span>
       ${locked ? `<span class="lock">🔒 Nv.${z.min - 3}</span>` : ''}
     </button>${S.lvl >= z.min ? `<button class="btn small dun-btn" data-dun="${z.id}" ${!dunReady(z.id) || S.gold < dunCost(z) ? 'disabled' : ''}>🕳️ Masmorra · ${fmt(dunCost(z))} ouro${dunReady(z.id) ? '' : ` · ${Math.ceil((S.dunCd[z.id] - Date.now()) / 60000)} min`}</button>` : ''}`;
-  }).join('')}</div>`;
+  };
+  return tabTower() + `<p class="muted map-tip">🚶 Os mapas são ligados: ande até as saídas nas bordas (◀ ▶ ▼ no minimapa) para ir ao vizinho, ou toque num mapa abaixo para teleportar. Alguns mapas são escondidos e só aparecem depois que você chega neles a pé.</p><div class="zone-list">${ZONES.map((z) => entry(z) + BRANCHES.filter((b) => b.parent === z.id).map(entry).join('')).join('')}</div>`;
 }
 
 function tabInv() {
@@ -2247,6 +2327,7 @@ function tabConfig() {
         <option value="2d" ${st.gfx === '2d' ? 'selected' : ''}>2D (mais leve)</option>
       </select></label>
     <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates, quando tiver nível para ele)</label>
+    <label class="check"><input type="checkbox" data-set="autoTravel" ${st.autoTravel !== false ? 'checked' : ''}> No modo Auto, andar até o mapa do seu nível pelas saídas</label>
     <label class="check"><input type="checkbox" data-set="autoGather" ${st.autoGather !== false ? 'checked' : ''}> Coletar materiais automaticamente no modo Auto</label>
     <label class="check"><input type="checkbox" data-set="autoBuyPots" ${st.autoBuyPots ? 'checked' : ''}> Comprar poções menores automaticamente quando acabarem</label>
     <hr>
@@ -2335,7 +2416,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -2377,6 +2458,7 @@ document.addEventListener('click', (e) => {
   if (ds.dun) { enterDungeon(ds.dun); return; }
   if (ds.tower) { enterTower(ds.tower); return; }
   if (ds.craft) { craft(ds.craft); return; }
+  if (ds.goexit) { const ex = zoneExits(S.zone)[+ds.goexit]; if (ex && !R.inTown && !R.dungeon) { R.move = { x: ex.x, z: ex.z }; R.mon = null; R.gather = null; } return; }
   if (ds.ftab) { R.forgeTab = ds.ftab; return renderTab(); }
   if (ds.gcomb) { const [k, l] = ds.gcomb.split(':'); combineGem(k, +l); return; }
   if (ds.gin) { const [u, k] = ds.gin.split(':'); socketGem(u, k); return; }

@@ -603,6 +603,20 @@ const Scene3D = (() => {
         for (const [x, h, z] of [[0, 2.6, 0], [0.5, 1.5, 0.2], [-0.45, 1.2, -0.1]]) mk(G.cone(0.32, h, 5), M(th.dc), g, x, h / 2, z);
         { const lava = mk(new THREE.CircleGeometry(0.9, 12), M('#ff5010', { e: '#ff4000', ei: 1.4 }), g, 0, 0.02, 0, false); lava.rotation.x = -Math.PI / 2; }
         break;
+      case 'palm': {
+        for (let i = 0; i < 5; i++) { const t2 = mk(G.cyl(0.11 - i * 0.012, 0.13 - i * 0.012, 0.55, 6), M('#8a6a40'), g, i * 0.06, 0.28 + i * 0.5, 0); t2.rotation.z = -0.08; }
+        for (let i = 0; i < 6; i++) { const lf = mk(G.box(1.3, 0.04, 0.32), M(th.dc), g, 0.3 + Math.cos(i * 1.05) * 0.55, 2.45, Math.sin(i * 1.05) * 0.55); lf.rotation.y = -i * 1.05; lf.rotation.z = -0.45; }
+        mk(G.sph(0.11, 6), M('#6a4a2a'), g, 0.32, 2.35, 0.1); mk(G.sph(0.11, 6), M('#6a4a2a'), g, 0.22, 2.32, -0.12);
+        break;
+      }
+      case 'mushroom':
+        for (const [x, z, h, r] of [[0, 0, 1.3, 0.75], [0.7, 0.3, 0.7, 0.4], [-0.5, -0.3, 0.5, 0.32]]) {
+          mk(G.cyl(r * 0.25, r * 0.3, h, 7), M('#e8e0d0'), g, x, h / 2, z);
+          mk(new THREE.SphereGeometry(r, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M(th.dc, { e: th.dc, ei: 0.35 }), g, x, h, z);
+          for (let k = 0; k < 3; k++) mk(G.sph(r * 0.12, 5), M('#fff0f8'), g, x + Math.cos(k * 2.1) * r * 0.55, h + r * 0.55, z + Math.sin(k * 2.1) * r * 0.55);
+        }
+        { const gl = glowSprite(th.dc, 2, 0.35); gl.position.y = 1.2; g.add(gl); }
+        break;
       case 'rock':
         { const r = mk(G.dod(0.7), M(th.dc), g, 0, 0.35, 0); r.scale.set(1.3, 0.7, 1); }
         mk(G.dod(0.35), M(th.dc), g, 0.7, 0.18, 0.2);
@@ -978,6 +992,10 @@ const Scene3D = (() => {
     'Cavaleiro Demônio':  { m: 'Skeleton_Warrior', tint: '#ff7a68', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A' },
     'Ciclope':            { m: 'Skeleton_Warrior', tint: '#d8b080', r: 'Skeleton_Axe', s: 1.45 },
     'Anjo Caído':         { m: 'Skeleton_Rogue', tint: '#8080b0', r: 'Skeleton_Blade' },
+    'Pirata Afogado':     { m: 'Skeleton_Rogue', tint: '#90d0c8', r: 'Skeleton_Blade' },
+    'Capitão Abissal':    { m: 'Skeleton_Warrior', tint: '#70b0c8', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A', s: 1.15 },
+    'Xamã Tribal':        { m: 'Skeleton_Mage', tint: '#b0e080', r: 'Skeleton_Staff', mage: true },
+    'Guerreiro da Tempestade': { m: 'Skeleton_Warrior', tint: '#a8c8ff', r: 'Skeleton_Blade', l: 'Skeleton_Shield_Small_A' },
   };
   const NPC_MODEL = {
     mercador: { m: 'Rogue', tint: '#c8f0d0', anim: 'Idle' },
@@ -1219,7 +1237,7 @@ const Scene3D = (() => {
     const gtex = groundTex(th.g[0], th.g[1]); gtex.repeat.set(24, 24);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; root.add(ground);
-    const r = seeded(ZONES.findIndex((z) => z.id === zid) * 131 + 7);
+    const r = seeded(ALL_ZONES.findIndex((z) => z.id === zid) * 131 + 7);
     // borda do mapa: montanhas e penhascos
     for (let i = 0; i < 44; i++) {
       const a = (i / 44) * Math.PI * 2 + r() * 0.1, d = 39 + r() * 7, h = 5 + r() * 9;
@@ -1227,7 +1245,8 @@ const Scene3D = (() => {
       m.rotation.y = r() * 3; m.receiveShadow = true;
     }
     const camps = zoneCamps(zid), entry = WORLD.entry, arena = WORLD.arena;
-    const free = (x, z, pad) => Math.hypot(x - entry.x, z - entry.z) > 5 + pad && Math.hypot(x - arena.x, z - arena.z) > 7 + pad && camps.every((c) => Math.hypot(x - c.x, z - c.z) > 3.6 + pad);
+    const exits = typeof zoneExits === 'function' ? zoneExits(zid) : [];
+    const free = (x, z, pad) => Math.hypot(x - entry.x, z - entry.z) > 5 + pad && Math.hypot(x - arena.x, z - arena.z) > 7 + pad && camps.every((c) => Math.hypot(x - c.x, z - c.z) > 3.6 + pad) && exits.every((e) => Math.hypot(x - e.x, z - e.z) > 5 + pad);
     for (let i = 0, n = 0; i < 500 && n < 110; i++) {
       const a = r() * Math.PI * 2, d = 4 + r() * 33, x = Math.cos(a) * d, z = Math.sin(a) * d;
       if (!free(x, z, 0)) continue;
@@ -1249,12 +1268,50 @@ const Scene3D = (() => {
     rune.rotation.x = -Math.PI / 2;
     // entrada: duas tochas
     for (const sx of [-2, 2]) { mk(G.cyl(0.08, 0.1, 1.8, 6), M('#4a3a2a'), root, entry.x + sx, 0.9, entry.z + 1.5); const tg = glowSprite('#ffb050', 1.2, 0.8); tg.position.set(entry.x + sx, 1.9, entry.z + 1.5); root.add(tg); }
+    // saídas para os mapas vizinhos: arco de pedra com portal girando e caminho de terra
+    const exitObjs = [];
+    for (const ex of exits) {
+      const ea = Math.atan2(ex.z, ex.x), g = new THREE.Group(); g.position.set(ex.x, 0, ex.z); g.rotation.y = -(ea + Math.PI / 2); root.add(g);
+      for (const sx of [-1.5, 1.5]) mk(G.box(0.6, 3.2, 0.6), M('#7a7068'), g, sx, 1.6, 0);
+      mk(G.box(3.8, 0.55, 0.7), M('#6a6058'), g, 0, 3.3, 0);
+      const pm = new THREE.MeshBasicMaterial({ color: ex.side === 'next' ? '#50b0ff' : ex.side === 'branch' ? '#ffc040' : '#70e0a0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const portal = mk(new THREE.CircleGeometry(1.25, 32), pm, g, 0, 1.55, 0, false); portal.scale.y = 1.15;
+      const sw = mk(new THREE.RingGeometry(0.5, 1.2, 32, 1, 0, Math.PI * 1.4), pm.clone(), g, 0, 1.55, 0.02, false);
+      const gl = glowSprite(ex.side === 'next' ? '#60b0ff' : ex.side === 'branch' ? '#ffd060' : '#80ffb0', 3.2, 0.5); gl.position.y = 1.6; g.add(gl);
+      const pg = new THREE.Group(); pg.position.set(ex.x - Math.cos(ea) * 5, 0.015, ex.z - Math.sin(ea) * 5); pg.rotation.y = -ea; root.add(pg);
+      const path = mk(new THREE.PlaneGeometry(10, 1.5), new THREE.MeshStandardMaterial({ color: new THREE.Color(th.g[1]).lerp(new THREE.Color('#8a7050'), 0.4), roughness: 1 }), pg, 0, 0, 0, false);
+      path.rotation.x = -Math.PI / 2; path.receiveShadow = true;
+      exitObjs.push({ ex, sw, portal, ea });
+    }
     scene.add(root);
-    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, world: true, sun, rune, zid,
+    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, world: true, sun, rune, zid, exits: exitObjs, exitSig: '',
       cyc: { hemi, fill, sunI: sun.intensity, hemiI: hemi.intensity, fillI: fill.intensity, hemiC: hemi.color.clone(), sunC: sun.color.clone(),
         fogC: new THREE.Color(th.sky[1]), skyDay: scene.background, skyNight: null, night: -1, lit: [] } };
     // à noite as fogueiras e tochas brilham mais
     root.traverse((o) => { if (o.isSprite) env.cyc.lit.push({ o, s: o.scale.x }); });
+  }
+
+  // ---------- saídas entre mapas (portal girando + placa com o nome) ----------
+  function updateExits(t, dt) {
+    if (!env || !env.exits || R.dungeon || R.inTown) return;
+    const lab = document.getElementById('npc-labels'); if (!lab) return;
+    const sig = env.zid + env.exits.map((o) => exitLocked(o.ex)).join() + Object.keys(S.visited || {}).length;
+    if (env.exitSig !== sig) {
+      env.exitSig = sig;
+      lab.innerHTML = env.exits.map((o, i) => { const z = ALL_ZONES.find((q) => q.id === o.ex.to), lk = exitLocked(o.ex), unk = z.parent && !(S.visited || {})[z.id];
+        return `<div class="npc-label exit-label${lk ? ' locked' : ''}" id="exl-${i}" data-goexit="${i}"><span>${lk ? '🔒' : unk ? '❓' : z.icon}</span><b>${o.ex.side === 'prev' ? '◀ ' : ''}${unk ? 'Caminho desconhecido' : z.name}${o.ex.side === 'next' ? ' ▶' : o.ex.side === 'branch' ? ' ▼' : ''}</b><small>${lk ? 'Nível ' + (z.min - 3) : 'Nv. ' + z.min + '+'}</small></div>`; }).join('');
+    }
+    env.exits.forEach((o, i) => {
+      o.sw.rotation.z -= dt * 2.2; o.portal.material.opacity = 0.35 + Math.sin(t * 2 + i) * 0.1;
+      if (Math.random() < dt * 6) spawnP({ x: o.ex.x + rand(-0.2, 0.2), y: rand(0.4, 2.6), z: o.ex.z + rand(-1, 1), vx: -Math.cos(o.ea) * 0.8, vy: 0.3, vz: -Math.sin(o.ea) * 0.8, life: 1, r: 0.5, gg: 0.8, b: 1, size: 0.09 });
+      const el = document.getElementById('exl-' + i); if (!el) return;
+      tmpV.set(o.ex.x, 3.9, o.ex.z); tmpV.project(camera);
+      if (tmpV.z > 1) { el.style.display = 'none'; return; }
+      const edge = Math.abs(tmpV.x) > 0.86 || Math.abs(tmpV.y) > 0.8; // longe: a placa fica presa na borda da tela, apontando a saída
+      if (edge) { if (o.ex.side === 'branch') { tmpV.x = clamp(tmpV.x, -0.5, 0.5); tmpV.y = -0.42; } else { tmpV.x = tmpV.x < 0 ? -0.78 : 0.78; tmpV.y = 0.12; } }
+      el.classList.toggle('edge', edge);
+      el.style.display = ''; el.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; el.style.top = ((1 - tmpV.y) / 2 * H) + 'px';
+    });
   }
 
   // ---------- pontos de coleta ----------
@@ -1345,7 +1402,7 @@ const Scene3D = (() => {
       const w = mk(G.box(3.9, h, 1), wallM, root, Math.cos(a) * 16.5, h / 2, Math.sin(a) * 16.5); w.rotation.y = -a + Math.PI / 2; w.receiveShadow = true;
       if (i % 4 === 0) { mk(G.box(1.2, h + 1, 1.2), capM, root, Math.cos(a) * 15.8, (h + 1) / 2, Math.sin(a) * 15.8); const tg = glowSprite('#ff9040', 1.6, 0.85); tg.position.set(Math.cos(a) * 15.1, h * 0.75, Math.sin(a) * 15.1); root.add(tg); }
     }
-    const r = seeded(ZONES.findIndex((z) => z.id === zid) * 53 + floor * 7);
+    const r = seeded(ALL_ZONES.findIndex((z) => z.id === zid) * 53 + floor * 7);
     for (let i = 0; i < 18; i++) { const a = r() * 6.28, d = 6 + r() * 8; const p = buildProp(th.deco === 'crystal' || th.deco === 'spike' || th.deco === 'tomb' ? th.deco : 'rock', th, M); p.position.set(Math.cos(a) * d, 0, Math.sin(a) * d - 2); p.scale.setScalar(0.9 + r() * 0.6); root.add(p); }
     const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: bossF ? '#ff4060' : tower ? '#e0b040' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, bossF ? -7 : -3, false);
     rune.rotation.x = -Math.PI / 2;
@@ -2594,7 +2651,7 @@ const Scene3D = (() => {
     updateTelegraphs();
     updateCompanions(t, dt);
     updateOthers(t, dt);
-    ambient(dt); skyCycle(dt); rainFx(dt); updateNodes(t, dt);
+    ambient(dt); skyCycle(dt); rainFx(dt); updateNodes(t, dt); updateExits(t, dt);
     updateParticles(dt);
     if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
     updateCamera(t, dt);

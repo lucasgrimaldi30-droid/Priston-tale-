@@ -112,6 +112,17 @@ Atalhos no `keydown` do fim de `game.js`.
   `gatherStep` dentro do `playerAI` (tocar no ponto manda `gameOrder({type:'gather'})`; o Auto coleta pontos a até 14 m sem monstros agressivos;
   `S.settings.autoGather === false` desliga), `gatherDone`, `S.mats`, `S.prof` (coleta e arte, `profLvl`). Receitas `RECIPES` na aba "Criar" do Ferreiro.
   Elites deixam essência (25%). Diária "coletas". Cena: `buildNode`/`updateNodes` (pontos brilham, encolhem quando vazios, herói usa a animação Interact).
+- **Mapas ligados:** `zoneExits(zid)` dá as saídas de cada mapa: anterior em `EXIT_PREV` (esquerda da tela), próximo em `EXIT_NEXT` (direita) e
+  desvio em `EXIT_BRANCH` (embaixo) — ficam no eixo da tela porque a câmera olha na diagonal. Andar até a saída (`nearExit` no ramo `R.move` do
+  `playerAI`) chama `walkZone(ex)`, que troca `S.zone` e põe o herói na saída de volta (`R.arrive`, `inward()`); saída trancada por nível (`exitLocked`).
+  `travelStep` faz o Auto andar até o mapa do nível (`S.settings.autoTravel`), lutando antes com o que estiver agressivo por perto.
+  Teleporte pela janela de mapas e Portais continua. Cena: arco com portal girando, caminho e placas em `#npc-labels` (`updateExits`; fora da tela a placa
+  fica na borda; tocar na placa anda até a saída via `data-goexit`). Minimapa mostra ◀ ▶ ▼.
+- **Mapas escondidos (desvios):** `BRANCHES` em `data.js` (b1 Costa dos Naufrágios, b2 Bosque dos Cogumelos, b3 Selva Esmeralda, b4 Picos Trovejantes),
+  cada um com `parent` e `span`; `ALL_ZONES = ZONES + BRANCHES`. Use `zoneById`, `zoneSpan`, `zoneTier(z)` (prêmios) e `zoneIdx` (sementes); nunca
+  `ZONES.indexOf` para mapas que podem ser desvio. Só aparecem na janela de mapas depois de visitados a pé (`S.visited`). Novos props `palm` e `mushroom`.
+- **Monstros variados:** `spawnSource()` — 16% vêm do mapa vizinho e nascem perto da saída dele (`m.border`); 1,5% viram **Errante** (`m.roamer`,
+  elite forte que cruza o mapa inteiro, nome "<monstro> Errante", `m.skin` para o modelo) com prêmio raro.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

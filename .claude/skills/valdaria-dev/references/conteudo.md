@@ -53,3 +53,12 @@ fxVortex, fxNova, fxRain, slash, ring, projectile, burst`. Bônus visível enqua
 - XP por nível: `xpNeed(l) = 40·l^2,6 (+8%/nível acima de 79) + 60`. Monstros do mundo: vida ×0,55, ataque ×0,5, XP ×0,78 (×0,6 do grupo ×1,3 do mundo).
 - Missões: caçada = 12% do XP do nível; chefe = 35%.
 - Ouro sobra no fim do jogo (só o refino gasta): ponto conhecido para melhorar.
+
+## Mapas escondidos (desvios)
+| Id | Mapa | Nível | Sai de | Monstros | Chefe |
+|---|---|---|---|---|---|
+| b1 | Costa dos Naufrágios 🏖️ | 9–15 | Bosque Sussurrante | Caranguejo Gigante, Pirata Afogado, Gaivota Feroz | Capitão Abissal |
+| b2 | Bosque dos Cogumelos 🍄 | 22–29 | Minas de Ferro Negro | Cogumelo Saltador, Fada Sombria, Lagarta Gigante | Rainha Micélio |
+| b3 | Selva Esmeralda 🌴 | 30–38 | Deserto de Cobre | Pantera Negra, Planta Carnívora, Xamã Tribal | Serpente Ancestral |
+| b4 | Picos Trovejantes ⛈️ | 60–69 | Cidadela Infernal | Harpia, Golem Rúnico, Guerreiro da Tempestade | Senhor do Trovão (quase sempre chove) |
+Para um monstro novo: nome em `MON_TYPE` (data.js), aparência em `MON` (scene.js) e, se for humanoide, modelo em `MON_MODEL` (scene3d.js).

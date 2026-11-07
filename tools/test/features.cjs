@@ -67,6 +67,31 @@ const startServer = require('./server.cjs');
     ok('Coletar material', ((S.mats || {})[nd.type] || 0) > mat0 && nd.cd > 0, `${nd.type}`);
     S.mats = { erva: 50, minerio: 50, essencia: 50 }; const hp0 = S.pots.hp2 || 0, ston = S.stones; craft('vida'); craft('pedra');
     ok('Artesanato cria poções e pedra', S.pots.hp2 >= hp0 + 5 && S.stones > ston && tabCraft().includes('Criar'));
+    // mapas ligados, viagem a pé, monstros de borda e errantes
+    novo('gladiador', 20, { tut: 99 }); S.settings.auto = false; S.zone = 'z2'; initWorld();
+    const exs = zoneExits('z2'); ok('Saídas para os vizinhos', exs.length === 3 && exs[2].to === 'b1' && exs[0].to === 'z1' && exs[1].to === 'z3' && zoneExits('z1').length === 1);
+    R.mons = []; R.pos = inward(EXIT_NEXT, 4); window.gameOrder({ type: 'move', x: EXIT_NEXT.x, z: EXIT_NEXT.z }); ticks(20);
+    ok('Andar pela saída leva ao próximo mapa', S.zone === 'z3', S.zone); ticks(1);
+    ok('Chega do lado certo', dist2(R.pos, EXIT_PREV) < 5, `x=${R.pos.x.toFixed(1)}`);
+    S.lvl = 5; R.mons = []; R.pos = inward(EXIT_NEXT, 4); window.gameOrder({ type: 'move', x: EXIT_NEXT.x, z: EXIT_NEXT.z }); ticks(20);
+    ok('Saída trancada pelo nível', S.zone === 'z3'); S.lvl = 20;
+    S.zone = 'z1'; initWorld(); S.settings.auto = true; R.mons = []; R.travelT = 0; let tz = 0; for (let i = 0; i < 400 && S.zone === 'z1'; i++) { R.mons = []; tick(); tz = i; }
+    ok('Auto anda até o mapa do nível', S.zone === 'z2', `${S.zone} em ${tz} ticks`);
+    S.settings.autoTravel = false; S.zone = 'z5'; S.lvl = 40; initWorld(); let border = 0; for (let i = 0; i < 300; i++) { const m = spawnWorldMonster(); if (m && m.border) border++; R.mons = []; }
+    ok('Monstros dos mapas vizinhos aparecem', border > 15, `${border}/300`);
+    let ro = null; for (let i = 0; i < 2000 && !ro; i++) { R.mons = []; const m = spawnWorldMonster(); if (m && m.roamer) ro = m; }
+    const sr = S.stones; if (ro) { ro.hp = 0; killMonster(ro); }
+    ok('Errante raro dá prêmio', !!ro && ro.name.endsWith('Errante') && S.stones >= sr + 2);
+    // mapas escondidos (desvios)
+    novo('gladiador', 25, { tut: 99 }); S.settings.auto = false; S.zone = 'z4'; initWorld();
+    const bx = zoneExits('z4').find((e) => e.side === 'branch'); ok('Mapa com saída para desvio', !!bx && bx.to === 'b2' && zoneExits('b2').length === 1 && zoneExits('b2')[0].to === 'z4');
+    ok('Desvio escondido na janela de mapas', tabMaps().includes('Mapa escondido'));
+    R.mons = []; R.pos = inward(EXIT_BRANCH, 4); window.gameOrder({ type: 'move', x: EXIT_BRANCH.x, z: EXIT_BRANCH.z }); ticks(20);
+    ok('Entrar no desvio a pé', S.zone === 'b2' && S.visited.b2 === 1 && R.mons.length > 0 && R.nodes.length === 6, S.zone);
+    ok('Desvio descoberto aparece', tabMaps().includes('Bosque dos Cogumelos') && zoneTier(zoneById('b2')) === 5);
+    S.visited = { b1: 1, b2: 1, b3: 1, b4: 1 }; checkAch(); ok('Conquista Desbravador', !!S.ach.exp4);
+    S.settings.auto = true; S.lvl = 35; R.travelT = 0; for (let i = 0; i < 600 && S.zone === 'b2'; i++) { R.mons = []; tick(); }
+    ok('Auto sai do desvio quando fica fácil', S.zone === 'z4' || S.zone === 'z5', S.zone);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

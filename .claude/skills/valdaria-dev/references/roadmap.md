@@ -13,10 +13,10 @@
 - **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
   renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA), especialização no nível 50, mascotes que evoluem,
   bestiário com bônus, medidor de dano e estatísticas, efeito das habilidades crescendo com o nível, Torre Infinita, eventos e chefe mundial,
-  dia/noite e chuva, coleta e artesanato.
+  dia/noite e chuva, coleta e artesanato, mapas ligados (andar entre eles), 4 mapas escondidos, monstros vizinhos e errantes.
 
 ## Ideias sugeridas e ainda não feitas
-Mais mapas e biomas · grupos e guildas · trocas entre jogadores · eventos no servidor (hoje o relógio é do navegador).
+Mais mapas escondidos · grupos e guildas · trocas entre jogadores · eventos no servidor (hoje o relógio é do navegador).
 
 ## Pendente com o dono
 - Revisão **golpe por golpe** das 8 classes (ele vai jogar e mandar os ajustes, um por vez).
