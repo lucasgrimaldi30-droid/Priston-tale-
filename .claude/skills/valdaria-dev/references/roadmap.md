@@ -13,7 +13,7 @@
 - **Progressão:** habilidades de nível 1–10, gemas, forja, conjuntos, montarias, mascotes, conquistas e títulos, missões diárias, prêmio de login,
   renascimento, tutorial, equipar melhores, qualidade gráfica, app instalável (PWA), especialização no nível 50, mascotes que evoluem,
   bestiário com bônus, medidor de dano e estatísticas, efeito das habilidades crescendo com o nível, Torre Infinita, eventos e chefe mundial,
-  dia/noite e chuva, coleta e artesanato, mapas ligados (andar entre eles), 4 mapas escondidos, monstros vizinhos e errantes, artefatos (cruz de 5), alma (grade 5×5 de pedras), missão semanal, história até o 80 (Vaelor), XP depois do 80 com equipe, Despertar, Fenda Primordial e menus aos poucos.
+  dia/noite e chuva, coleta e artesanato, mapas ligados (andar entre eles), 4 mapas escondidos, monstros vizinhos e errantes, artefatos (cruz de 5), alma (grade 5×5 de pedras), missão semanal, história até o 80 (Vaelor), XP depois do 80 com equipe, Despertar, Fenda Primordial, menus aos poucos, PK opcional e Casa de Títulos (permanentes e provisórios com bônus).
 
 ## Ideias sugeridas e ainda não feitas
 Mais mapas escondidos · torre em grupo · arena de PK com ranking por temporada · trocas entre jogadores · eventos no servidor (hoje o relógio é do navegador).

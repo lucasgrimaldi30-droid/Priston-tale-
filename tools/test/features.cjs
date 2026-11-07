@@ -139,6 +139,16 @@ const startServer = require('./server.cjs');
     { const keep = window.partyMembersNear; window.partyMembersNear = () => [{ cls: 'gladiador' }, { cls: 'cleriga' }, { cls: 'arcanista' }];
       const tb = teamBond(); window.partyMembersNear = keep;
       ok('Funções no grupo dão bônus (formação completa)', tb.roles.length === 4 && tb.taken < 0.5 && tb.dmg > 1.5 && tb.regen > 0, `dano x${tb.dmg.toFixed(2)} recebido x${tb.taken.toFixed(2)}`); }
+    // casa de títulos
+    novo('gladiador', 50, { tut: 99 }); S.settings.auto = false; titleState();
+    const atkT0 = derived().atkMin; S.stats.kills = 5000; checkTitles();
+    ok('Título permanente com bônus (Matador)', titleOwned(titleById('matador')) && S.title === 'Matador' && derived().atkMin > atkT0);
+    S.streak.alive = 2 * 3600; checkTitles(); S.title = 'IMORTAL'; const ev0 = derived().evade;
+    ok('IMORTAL depois de 2 h sem morrer', titleOwned(titleById('imortal')) && titleEquipped().id === 'imortal');
+    titlesOnDeath(); ok('Morrer tira o título provisório', !titleOwned(titleById('imortal')) && S.title === '' && S.streak.alive === 0);
+    R.killTimes = Array(40).fill(Date.now()); checkTitles(); ok('Fúria Sangrenta é temporária', titleOwned(titleById('furia')) && S.titles.furia.until > Date.now());
+    S.titles.furia.until = Date.now() - 1; R.killTimes = []; checkTitles(); ok('Título temporário acaba com o tempo', !titleOwned(titleById('furia')));
+    ok('Coleção dá bônus e janela abre', titleBonus().xpb >= 0.5 && (R.achTab = 'titulos', tabAch().includes('Casa de Títulos')));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

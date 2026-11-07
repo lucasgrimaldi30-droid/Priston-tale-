@@ -151,6 +151,12 @@ Atalhos no `keydown` do fim de `game.js`.
   sobrevive **com poções** prestando atenção, **sem poções morre**; em equipe com tanque e cura é difícil morrer; muito forte fica tranquilo.
   O Auto sai da Fenda depois de 2 mortes sozinho.
 - **Menus aos poucos:** `UNLOCK` (Conquistas nv 3, Ranking 6, Social 10, Alma 20), `applyUnlocks()` no `renderAll`; `openWin` recusa menu trancado.
+- **Casa de Títulos:** `TITLES` com bônus (`b`: atkp, defp, hpp, crit, evadep, spd, goldb, xpb, bossDmg, absorb). Permanentes (abates,
+  chefes, elites, masmorras, torre, mapas escondidos, Vaelor, ouro, artesanato, Chefes Mundiais, PK) e provisórios: `temp: 'death'` (IMORTAL =
+  2 h sem morrer, Invicto = 1.000 abates seguidos; somem em `titlesOnDeath`) ou `temp: segundos` (Fúria Sangrenta, Campeão do Evento).
+  `S.titles`, `S.streak` (`alive`, `kills`), `checkTitles()` 1×/s, `titleBonus()` no `derived()` (título equipado = `S.title` pelo nome + coleção:
+  +0,5% XP e ouro por permanente). Janela de Conquistas com abas (`R.achTab`: Casa de Títulos e Conquistas). Títulos antigos das conquistas
+  continuam cosméticos (sem bônus); não repita nomes entre `ACH` e `TITLES`.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

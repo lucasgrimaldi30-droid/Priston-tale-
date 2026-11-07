@@ -351,6 +351,8 @@ function derived() {
   // alma e artefato
   const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
   for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
+  const TB = titleBonus(); for (const k of ['atkp', 'defp', 'hpp', 'crit', 'spd', 'absorb']) if (TB[k]) SO[k] = (SO[k] || 0) + TB[k];
+  bonus.xpb += TB.xpb || 0; bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
@@ -847,6 +849,7 @@ function hitMonster(m, mult, sk, d, forceCrit, src) {
   if (crit) dmg *= d.critMult + (forceCrit ? 0.5 : 0);
   if (m.type === 'undead') dmg *= 1 + d.undead + (sk && sk.holy ? 0.5 : 0);
   if (m.boss && sk && sk.boss) dmg *= 1 + sk.boss;
+  if (m.boss) { const bd = titleBonus().bossDmg; if (bd) dmg *= 1 + bd / 100; }
   if (sk && sk.type === 'aoe') dmg *= 1 + d.aoeMult; else if (sk && sk.type === 'dmg') dmg *= 1 + d.singleMult;
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def) * teamBond().dmg));
   m.hp -= dmg; m.aggro = true;
@@ -924,13 +927,14 @@ function killMonster(m) {
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
+  titleState(); S.streak.kills++; (R.killTimes = R.killTimes || []).push(Date.now()); if (R.killTimes.length > 80) R.killTimes.splice(0, R.killTimes.length - 80);
   if (!m.tower && !m.dun) storyProgress('kill', S.zone);
   if (m.sboss) { storyProgress('sboss', S.zone); S.stats.vaelor = 1; }
   else if (m.boss && !m.tower && !m.wboss && !m.dun) storyProgress('boss', S.zone);
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
-    if (m.wboss) worldBossReward(m);
+    if (m.wboss) { worldBossReward(m); R.wbJust = true; }
     if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
     S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
@@ -1020,7 +1024,7 @@ function die(killer) {
     return;
   }
   S.hp = 0;
-  S.stats.deaths++;
+  S.stats.deaths++; titlesOnDeath();
   if (zoneById(S.zone) && zoneById(S.zone).danger && !R.dungeon) R.dangerDeaths = (R.dangerDeaths || 0) + 1;
   const loss = Math.floor(xpNeed(S.lvl) * 0.03);
   S.xp = Math.max(0, S.xp - loss);
@@ -1114,7 +1118,8 @@ function tick() {
   if (R.reviveCd > 0) R.reviveCd -= dt;
   if (R.stealth > 0) R.stealth -= dt;
   S.hp = Math.min(S.hp, d.maxHp);
-  R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); }
+  R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); checkTitles(); }
+  if (!R.dead) { titleState(); S.streak.alive += dt; }
 
   if (!R.inTown && !R.dead && S.hp > 0) { const tb = teamBond(); if (tb.regen) S.hp = Math.min(d.maxHp, S.hp + d.maxHp * tb.regen * dt); }
   if (R.inTown) { // cidade: zona segura, recuperação rápida
@@ -1700,7 +1705,7 @@ function onPvpHit(m) {
   if (S.settings.auto && !R.pvp) R.pvp = { id: m.fid }; // revida sozinho no modo Auto
   if (S.hp <= 0) {
     S.hp = 0; R.dead = PVP_RESPAWN; R.mon = null; R.pvp = null; R.pvpProt = Date.now() + PVP_RESPAWN * 1000 + PVP_PROT;
-    S.stats.pvpDeaths = (S.stats.pvpDeaths || 0) + 1;
+    S.stats.pvpDeaths = (S.stats.pvpDeaths || 0) + 1; titlesOnDeath();
     Net.soc('pvpdead', { by: m.fid });
     log(`💀 Você foi derrotado por <b>${esc(m.from)}</b> em combate. No PK você não perde XP nem itens.`, 'death'); Sfx.play('death');
   }
@@ -1863,7 +1868,8 @@ function drawMinimap() {
 
 function renderHeader() {
   const c = CLASSES[S.cls];
-  $('#p-name').innerHTML = `${esc(S.name)}${S.title ? ` <small class="p-title">« ${esc(S.title)} »</small>` : ''}`;
+  const te = titleEquipped();
+  $('#p-name').innerHTML = `${esc(S.name)}${S.title ? ` <small class="p-title ${te && te.temp ? 'tt-temp-name' : ''}">« ${te ? te.icon + ' ' : ''}${esc(S.title)} »</small>` : ''}`;
   $('#hdr-name').innerHTML = `${c.icon} ${esc(S.name)} <span class="muted">· ${c.name} · ${FACTIONS[c.faction].name}</span>`;
 }
 
@@ -2583,6 +2589,82 @@ const ACH = [
   { id: 'rb5', name: 'Imortal', desc: 'Renasça 5 vezes', ok: () => (S.rebirths || 0) >= 5, stones: 80, title: 'Imortal' },
   { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.owned && (S.owned.mount1 || S.owned.mount2), gold: 10000 },
 ];
+
+// ============================================================
+//  🏛️ CASA DE TÍTULOS: títulos com bônus (um equipado por vez)
+//  permanentes: conquistados para sempre · provisórios: valem enquanto você mantém a façanha
+// ============================================================
+const TITLE_BONUS = { atkp: (v) => `+${v}% ataque`, defp: (v) => `+${v}% defesa`, hpp: (v) => `+${v}% vida`, crit: (v) => `+${v}% crítico`, evadep: (v) => `+${v}% esquiva`,
+  spd: (v) => `+${Math.round(v * 100)}% velocidade de ataque`, goldb: (v) => `+${v}% ouro`, xpb: (v) => `+${v}% XP`, bossDmg: (v) => `+${v}% dano em chefes`, absorb: (v) => `-${Math.round(v * 100)}% dano recebido` };
+const TITLES = [
+  // permanentes
+  { id: 'matador', name: 'Matador', icon: '🗡️', desc: 'Derrote 5.000 monstros', prog: () => S.stats.kills, need: 5000, b: { atkp: 3 } },
+  { id: 'exterminador', name: 'Exterminador', icon: '⚔️', desc: 'Derrote 25.000 monstros', prog: () => S.stats.kills, need: 25000, b: { atkp: 6 } },
+  { id: 'lenda_caca', name: 'Lenda da Caçada', icon: '🐉', desc: 'Derrote 100.000 monstros', prog: () => S.stats.kills, need: 100000, b: { atkp: 8, crit: 2 } },
+  { id: 'carrasco', name: 'Carrasco de Chefes', icon: '👑', desc: 'Derrote 50 chefes', prog: () => S.stats.bosses, need: 50, b: { bossDmg: 10 } },
+  { id: 'cacador_elite', name: 'Caçador de Elites', icon: '⭐', desc: 'Derrote 300 monstros elite', prog: () => S.stats.elites || 0, need: 300, b: { crit: 3 } },
+  { id: 'profundezas', name: 'Rei das Profundezas', icon: '🕳️', desc: 'Conclua 25 masmorras', prog: () => S.stats.dungeons || 0, need: 25, b: { defp: 6 } },
+  { id: 'escalador', name: 'Escalador Celeste', icon: '🗼', desc: 'Chegue ao andar 40 da Torre Infinita', prog: () => S.towerBest || 0, need: 40, b: { hpp: 6 } },
+  { id: 'desbravador', name: 'Andarilho do Mundo', icon: '🧭', desc: 'Descubra os 5 mapas escondidos', prog: () => Object.keys(S.visited || {}).length, need: 5, b: { goldb: 10 } },
+  { id: 'selador', name: 'Selador do Vazio', icon: '🌑', desc: 'Derrote Vaelor, o Arauto do Vazio', prog: () => (S.stats.vaelor ? 1 : 0), need: 1, b: { atkp: 4, defp: 4 } },
+  { id: 'magnata', name: 'Magnata', icon: '💰', desc: 'Ganhe 5 milhões de ouro', prog: () => S.stats.goldEarned, need: 5e6, b: { goldb: 15 } },
+  { id: 'artesao', name: 'Mestre Artesão', icon: '🔨', desc: 'Crie 100 itens com materiais', prog: () => S.stats.crafts || 0, need: 100, b: { xpb: 6 } },
+  { id: 'avatares', name: 'Flagelo dos Avatares', icon: '🔥', desc: 'Derrote 10 Chefes Mundiais', prog: () => S.stats.wbosses || 0, need: 10, b: { bossDmg: 8, atkp: 2 } },
+  { id: 'duelista', name: 'Mestre Duelista', icon: '🤺', desc: 'Vença 10 jogadores no PK', prog: () => S.stats.pvpKills || 0, need: 10, b: { atkp: 3, evadep: 2 } },
+  { id: 'senhor_guerra', name: 'Conquistador', icon: '🏴', desc: 'Vença 100 jogadores no PK', prog: () => S.stats.pvpKills || 0, need: 100, b: { atkp: 5, defp: 5 } },
+  // provisórios: perdem ao morrer ou com o tempo
+  { id: 'imortal', name: 'IMORTAL', icon: '💠', temp: 'death', desc: 'Fique 2 horas jogando sem morrer (perde ao morrer)', prog: () => Math.floor((S.streak ? S.streak.alive : 0) / 60), need: 120, unit: 'min', b: { evadep: 8 } },
+  { id: 'invicto', name: 'Invicto', icon: '🛡️', temp: 'death', desc: 'Derrote 1.000 monstros seguidos sem morrer (perde ao morrer)', prog: () => (S.streak ? S.streak.kills : 0), need: 1000, b: { atkp: 5, defp: 3 } },
+  { id: 'furia', name: 'Fúria Sangrenta', icon: '🩸', temp: 600, desc: 'Derrote 40 monstros em 1 minuto (vale 10 min)', prog: () => (R.killTimes || []).filter((t) => Date.now() - t < 60000).length, need: 40, b: { spd: 0.12 } },
+  { id: 'rei_evento', name: 'Campeão do Evento', icon: '🎉', temp: 1800, desc: 'Derrote um Chefe Mundial (vale 30 min)', prog: () => (R.wbJust ? 1 : 0), need: 1, b: { xpb: 15, goldb: 15 } },
+];
+const titleById = (id) => TITLES.find((t) => t.id === id);
+function titleState() { S.titles = S.titles || {}; S.streak = S.streak || { alive: 0, kills: 0 }; return S.titles; }
+function titleOwned(t) { const st = titleState()[t.id]; if (!st) return false; if (typeof t.temp === 'number') return st.until > Date.now(); return true; }
+function titleEquipped() { const t = TITLES.find((x) => x.name === S.title); return t && titleOwned(t) ? t : null; }
+function titleCollection() { return TITLES.filter((t) => !t.temp && titleOwned(t)).length; }
+function titleBonus() { // bônus do título equipado + coleção (cada título permanente: +0,5% XP e ouro)
+  const B = {}, t = titleEquipped(); if (t) for (const [k, v] of Object.entries(t.b)) B[k] = (B[k] || 0) + v;
+  const c = titleCollection(); if (c) { B.xpb = (B.xpb || 0) + c * 0.5; B.goldb = (B.goldb || 0) + c * 0.5; }
+  return B;
+}
+function grantTitle(t) {
+  const st = titleState(), first = !st[t.id];
+  st[t.id] = typeof t.temp === 'number' ? { until: Date.now() + t.temp * 1000 } : { at: Date.now() };
+  if (first || typeof t.temp === 'number') {
+    log(`🏛️ Título ${t.temp ? 'provisório' : 'conquistado'}: <b>${t.icon} ${esc(t.name)}</b> (${Object.entries(t.b).map(([k, v]) => TITLE_BONUS[k](v)).join(', ')}). Equipe na Casa de Títulos!`, 'lvl');
+    toast(`🏛️ Título: ${t.name}!`, 'good'); Sfx.play('levelup');
+    if (!titleEquipped()) S.title = t.name;
+    R.dirty.all = true;
+  }
+}
+function checkTitles() {
+  const st = titleState();
+  for (const t of TITLES) {
+    if (typeof t.temp === 'number' && st[t.id] && st[t.id].until <= Date.now() && !st[t.id].gone) { st[t.id].gone = true; log(`🏛️ O título provisório <b>${esc(t.name)}</b> acabou.`, 'muted'); if (S.title === t.name) S.title = ''; R.dirty.all = true; }
+    const owned = titleOwned(t);
+    if (!owned && t.prog() >= t.need) grantTitle(t);
+  }
+  R.wbJust = false;
+}
+function titlesOnDeath() { // morreu: perde os provisórios de "sem morrer"
+  const st = titleState(); S.streak = { alive: 0, kills: 0 };
+  for (const t of TITLES) if (t.temp === 'death' && st[t.id]) { delete st[t.id]; log(`💔 Você perdeu o título provisório <b>${t.icon} ${esc(t.name)}</b>.`, 'death'); if (S.title === t.name) S.title = ''; R.dirty.all = true; }
+}
+function tabTitles() {
+  titleState();
+  const eq = titleEquipped(), col = titleCollection();
+  const card = (t) => { const own = titleOwned(t), pr = Math.min(t.need, t.prog()), st = S.titles[t.id];
+    const left = typeof t.temp === 'number' && own ? ` · acaba em ${Math.ceil((st.until - Date.now()) / 60000)} min` : '';
+    return `<div class="q-card ${own ? 'ok' : ''} ${eq === t ? 'tt-eq' : ''}"><h4><span>${own ? t.icon : '🔒'} ${esc(t.name)} ${t.temp ? '<small class="tt-temp">provisório</small>' : ''}</span><small class="q-rew">${Object.entries(t.b).map(([k, v]) => TITLE_BONUS[k](v)).join(' · ')}</small></h4>
+      <p>${esc(t.desc)}${left}</p>${own ? `<div class="item-actions">${eq === t ? '<small class="good">✔ equipado</small>' : `<button class="btn small primary" data-teq="${t.id}">Equipar</button>`}</div>` : `<div class="q-prog"><i style="width:${pr / t.need * 100}%"></i></div><small>${fmt(pr)}/${fmt(t.need)}${t.unit ? ' ' + t.unit : ''}</small>`}</div>`; };
+  return `<div class="tt-head"><div><b>Título equipado:</b> ${eq ? `${eq.icon} ${esc(eq.name)} <small>(${Object.entries(eq.b).map(([k, v]) => TITLE_BONUS[k](v)).join(', ')})</small>` : (S.title ? esc(S.title) + ' <small class="muted">(sem bônus)</small>' : 'nenhum')}</div>
+    <div><b>Coleção:</b> ${col} título(s) permanente(s) = +${(col * 0.5).toFixed(1)}% XP e ouro</div><small class="muted">Só um título fica equipado por vez. Provisórios somem ao morrer ou quando o tempo acaba.</small>
+    ${eq || S.title ? '<button class="btn tiny" data-teq="-">Tirar título</button>' : ''}</div>
+    <div class="q-sec">Provisórios</div>${TITLES.filter((t) => t.temp).map(card).join('')}
+    <div class="q-sec">Permanentes</div>${TITLES.filter((t) => !t.temp).map(card).join('')}`;
+}
+
 function checkAch() {
   S.ach = S.ach || {};
   for (const a of ACH) if (!S.ach[a.id] && a.ok()) {
@@ -2595,6 +2677,11 @@ function checkAch() {
   }
 }
 function tabAch() {
+  const tt = R.achTab || 'titulos';
+  const tabs = `<div class="sub-tabs"><button class="btn small ${tt === 'titulos' ? 'primary' : ''}" data-achtab="titulos">🏛️ Casa de Títulos</button><button class="btn small ${tt === 'lista' ? 'primary' : ''}" data-achtab="lista">🏆 Conquistas</button></div>`;
+  return tabs + (tt === 'titulos' ? tabTitles() : tabAchList());
+}
+function tabAchList() {
   S.ach = S.ach || {};
   const done = ACH.filter((a) => S.ach[a.id]).length, titles = ACH.filter((a) => a.title && S.ach[a.id]).map((a) => a.title);
   return `<p class="muted">Conquistas: <b>${done}/${ACH.length}</b>. Títulos aparecem embaixo do seu nome.</p>
@@ -2766,7 +2853,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   if (winLocked(name)) { toast(`Libera no nível ${UNLOCK[name]}.`); return; }
@@ -3066,13 +3153,14 @@ function toast(msg, cls = '') {
   const t = document.createElement('div');
   t.className = 'toast ' + cls;
   t.textContent = msg;
-  $('#toasts').appendChild(t);
+  const box = $('#toasts'); box.appendChild(t);
+  while (box.children.length > 3) box.firstChild.remove(); // no máximo 3 avisos na tela
   setTimeout(() => t.remove(), 2500);
 }
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3117,6 +3205,8 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.achtab) { R.achTab = ds.achtab; return renderTab(); }
+  if (ds.teq) { if (ds.teq === '-') S.title = ''; else { const t = titleById(ds.teq); if (t && titleOwned(t)) S.title = t.name; } Sfx.play('click'); R.dirty.all = true; return renderTab(); }
   if (ds.story) { storyClick(ds.story); return; }
   if (ds.sreplay !== undefined) { const c = STORY[+ds.sreplay]; if (c) storyShow(+ds.sreplay < storyState().ch ? [...c.intro, ...c.outro] : c.intro, c.title); return; }
   if (ds.awk) { awkAdd(ds.awk); renderChar(); return; }
