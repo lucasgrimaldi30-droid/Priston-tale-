@@ -338,6 +338,7 @@ const Scene3D = (() => {
     return { root, inner, hips, legs, torso, arms, head, weapon, mats, wt, aura, auraGlow, cape, atk: null, hurt: -9, x: 0 };
   }
   function buildHero(cls) {
+    if (modelsReady()) { const h = buildHeroModel(cls); if (h) return h; }
     const eq = {};
     for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto']) if (S.equip[k] && (k !== 'arma' || S.equip[k].wtype === CLASSES[cls].weapon)) eq[k] = S.equip[k];
     return buildCharacter(LOOK[cls], CLASSES[cls].weapon, eq);
@@ -345,7 +346,7 @@ const Scene3D = (() => {
   const equipSig = () => S.cls + '|' + ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto'].map((k) => S.equip[k] ? S.equip[k].uid + ':' + S.equip[k].refine : '-').join(',');
 
   function updateWeaponLook() {
-    const h = st.hero; if (!h || !S.equip.arma) return;
+    const h = st.hero; if (!h || !S.equip.arma || h.model || !h.weapon.userData.glowMats) return;
     const it = S.equip.arma, key = it.uid + ':' + it.refine;
     if (key === weaponKey) return;
     weaponKey = key;
@@ -361,6 +362,7 @@ const Scene3D = (() => {
 
   // ---------- monstros ----------
   function buildMonster(name, boss) {
+    if (modelsReady() && MON_MODEL[name]) { const m = buildMonsterModel(name, boss); if (m) return m; }
     const look = MON[name] || ['slime', '#888888'];
     const [kind, color, extra] = look;
     const mats = [], M = matFactory(mats);
@@ -542,6 +544,7 @@ const Scene3D = (() => {
   }
 
   function animMonster(m, t, dt) {
+    if (m.model) return animMonsterModel(m, t, dt);
     const P = m.P, ph = t * 6 + m.seed, wk = Math.sin(ph);
     let y = 0;
     if (P.float) y = P.float + Math.sin(t * 2.4 + m.seed) * 0.12;
@@ -679,6 +682,275 @@ const Scene3D = (() => {
     wrap(env.far, 0.08, 46); wrap(env.mid, 0.3, 42); wrap(env.props, 1, 22.5); wrap(env.scatter, 1, 20); wrap(env.ceil, 1, 21);
   }
 
+  // ---------- modelos 3D (KayKit, CC0) ----------
+  const MODEL_DIR = 'assets/models/';
+  const MODEL_FILES = ['Barbarian', 'Knight', 'Mage', 'Rogue', 'Rogue_Hooded', 'Skeleton_Mage', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'skel_props'];
+  const Assets = { state: 'idle', gltf: {}, clips: {}, height: {} };
+  const HERO_MODEL = {
+    gladiador:  { m: 'Barbarian', r: (t) => (t >= 3 ? '2H_Axe' : '1H_Axe'), shields: ['Barbarian_Round_Shield'], hat: 'Barbarian_Hat', cape: 'Barbarian_Cape', capeDefault: true },
+    engenheiro: { m: 'Knight', tint: '#b8c4d8', proc: 'martelo', shields: ['Round_Shield', 'Rectangle_Shield', 'Rectangle_Shield', 'Badge_Shield', 'Spike_Shield', 'Spike_Shield'], hat: 'Knight_Helmet', hatDefault: true, cape: 'Knight_Cape' },
+    cacadora:   { m: 'Rogue_Hooded', tint: '#c8ecc0', r: (t) => (t >= 2 ? '2H_Crossbow' : '1H_Crossbow'), cape: 'Rogue_Cape', capeDefault: true },
+    lanceiro:   { m: 'Knight', tint: '#b0c8ff', proc: 'lanca', hat: 'Knight_Helmet', hatDefault: true, cape: 'Knight_Cape' },
+    paladino:   { m: 'Knight', tint: '#fff6e0', r: () => '1H_Sword', shields: ['Round_Shield', 'Rectangle_Shield', 'Rectangle_Shield', 'Badge_Shield', 'Spike_Shield', 'Spike_Shield'], shieldDefault: 'Badge_Shield', hat: 'Knight_Helmet', cape: 'Knight_Cape', capeDefault: true },
+    valquiria:  { m: 'Rogue', tint: '#d0dcff', proc: 'dardo', cape: 'Rogue_Cape', capeDefault: true },
+    arcanista:  { m: 'Mage', r: () => '2H_Staff', hat: 'Mage_Hat', hatDefault: true, cape: 'Mage_Cape', capeDefault: true },
+    cleriga:    { m: 'Mage', tint: '#fffaf2', r: () => '1H_Wand', l: 'Spellbook_open', cape: 'Mage_Cape', capeDefault: true },
+  };
+  const MON_MODEL = {
+    'Goblin Ladrão':      { m: 'Skeleton_Rogue', tint: '#9ae070', r: 'Skeleton_Blade', s: 0.8 },
+    'Zumbi do Brejo':     { m: 'Skeleton_Minion', tint: '#9ccc88' },
+    'Bruxa do Pântano':   { m: 'Skeleton_Mage', tint: '#c090e0', r: 'Skeleton_Staff', mage: true },
+    'Minerador Maldito':  { m: 'Skeleton_Minion', tint: '#e8d8a0', r: 'Skeleton_Axe' },
+    'Múmia Errante':      { m: 'Skeleton_Minion', tint: '#f0e4c0' },
+    'Faraó Esquecido':    { m: 'Skeleton_Mage', tint: '#ffd870', r: 'Skeleton_Staff', mage: true },
+    'Esqueleto Guerreiro':{ m: 'Skeleton_Warrior', r: 'Skeleton_Blade', l: 'Skeleton_Shield_Small_A' },
+    'Ghoul':              { m: 'Skeleton_Rogue', tint: '#90b090', r: 'Skeleton_Blade' },
+    'Lich Ancião':        { m: 'Skeleton_Mage', tint: '#c8a8ff', r: 'Skeleton_Staff', mage: true },
+    'Cavaleiro Demônio':  { m: 'Skeleton_Warrior', tint: '#ff7a68', r: 'Skeleton_Axe', l: 'Skeleton_Shield_Large_A' },
+    'Ciclope':            { m: 'Skeleton_Warrior', tint: '#d8b080', r: 'Skeleton_Axe', s: 1.45 },
+    'Anjo Caído':         { m: 'Skeleton_Rogue', tint: '#8080b0', r: 'Skeleton_Blade' },
+  };
+  const NPC_MODEL = {
+    mercador: { m: 'Rogue', tint: '#c8f0d0', anim: 'Idle' },
+    ferreiro: { m: 'Barbarian', r: '1H_Axe', anim: '1H_Melee_Attack_Chop', loop: true },
+    portal:   { m: 'Mage', tint: '#b8c8ff', r: '2H_Staff', hat: 'Mage_Hat', cape: 'Mage_Cape', anim: 'Spellcast_Long', loop: true },
+    mestra:   { m: 'Mage', tint: '#fffaf0', l: 'Spellbook_open', cape: 'Mage_Cape', anim: 'Idle' },
+  };
+
+  function loadAssets() {
+    if (Assets.state !== 'idle' || !THREE.GLTFLoader || !THREE.SkeletonUtils) return;
+    Assets.state = 'loading';
+    const loader = new THREE.GLTFLoader();
+    const files = [...MODEL_FILES, 'anims'];
+    let left = files.length, fail = 0;
+    const done = () => {
+      if (--left > 0) return;
+      Assets.state = fail || !Object.keys(Assets.clips).length ? 'failed' : 'ready';
+      if (Assets.state === 'ready') { curCls = null; curZone = null; }
+    };
+    for (const f of files) {
+      loader.load(MODEL_DIR + f + '.glb', (g) => {
+        if (f === 'anims') for (const c of g.animations) Assets.clips[c.name] = c;
+        else {
+          Assets.gltf[f] = g;
+          if (f !== 'skel_props') {
+            // altura real: posição do osso da cabeça na pose de repouso
+            g.scene.updateMatrixWorld(true);
+            const hd = g.scene.getObjectByName('head'), v = new THREE.Vector3();
+            Assets.height[f] = hd ? hd.getWorldPosition(v).y * 1.9 : 2.4;
+          }
+        }
+        done();
+      }, undefined, (e) => { fail++; console.warn('Falha ao carregar modelo', f, e && e.message); done(); });
+    }
+  }
+  const modelsReady = () => Assets.state === 'ready';
+
+  // instancia um modelo com materiais próprios; esconde acessórios
+  function instModel(name, height, tint) {
+    const src = Assets.gltf[name];
+    const obj = THREE.SkeletonUtils.clone(src.scene);
+    const mats = [];
+    obj.traverse((o) => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        if (tint) o.material.color = new THREE.Color(tint);
+        o.material.userData.baseEmissive = o.material.emissive.clone(); o.material.userData.baseEI = o.material.emissiveIntensity;
+        o.castShadow = true; o.frustumCulled = false;
+        mats.push(o.material);
+      }
+    });
+    const bones = { r: obj.getObjectByName('handslotr'), l: obj.getObjectByName('handslotl'), head: obj.getObjectByName('head'), chest: obj.getObjectByName('chest') };
+    for (const k of ['r', 'l', 'head', 'chest']) if (bones[k]) for (const c of bones[k].children) if (!c.isBone && (c.isMesh || c.children.some((x) => x.isMesh))) c.visible = false;
+    const sc = height / (Assets.height[name] || 2);
+    obj.scale.setScalar(sc);
+    obj.rotation.y = Math.PI / 2; // modelos olham para +z; o jogo usa +x como frente
+    const mixer = new THREE.AnimationMixer(obj);
+    return { obj, mats, bones, mixer, scale: sc };
+  }
+  function showPart(model, name, on = true) {
+    const o = model.obj.getObjectByName(name);
+    if (o) { o.visible = on; return o; }
+    return null;
+  }
+  function propMesh(name) {
+    const p = Assets.gltf.skel_props; if (!p) return null;
+    const src = p.scene.getObjectByName(name); if (!src) return null;
+    const o = src.clone(true);
+    o.position.set(0, 0, 0); o.rotation.set(0, 0, 0);
+    o.traverse((c) => { if (c.isMesh) { c.material = c.material.clone(); c.material.userData.baseEmissive = c.material.emissive.clone(); c.material.userData.baseEI = c.material.emissiveIntensity; c.castShadow = true; } });
+    return o;
+  }
+
+  function playAnim(ent, name, o = {}) {
+    if (!ent || !ent.model) return 0;
+    const clip = Assets.clips[name]; if (!clip) return 0;
+    const md = ent.model;
+    const act = md.mixer.clipAction(clip);
+    const loop = o.loop !== false;
+    if (loop && md.curName === name) return clip.duration;
+    act.reset();
+    act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    act.clampWhenFinished = !!o.clamp;
+    act.timeScale = o.dur ? clip.duration / o.dur : (o.speed || 1);
+    act.setEffectiveWeight(1);
+    act.play();
+    if (md.cur && md.cur !== act) md.cur.crossFadeTo(act, o.fade ?? 0.12, false);
+    md.cur = act; md.curName = name;
+    md.busyUntil = loop ? 0 : now() + (o.dur || clip.duration / (o.speed || 1)) * (o.hold ?? 0.9);
+    return o.dur || clip.duration;
+  }
+
+  function attackDur() {
+    const d = typeof derived === 'function' ? derived() : null;
+    return clamp(d ? 0.95 / d.aps : 0.7, 0.45, 0.85);
+  }
+  function heroAttackClip(skill) {
+    const h = st.hero, wt = h.wt, two = h.twoHand;
+    h.swing = (h.swing || 0) + 1;
+    const alt = h.swing % 2;
+    switch (wt) {
+      case 'machado': return skill ? (two ? '2H_Melee_Attack_Spin' : '1H_Melee_Attack_Jump_Chop') : (two ? (alt ? '2H_Melee_Attack_Chop' : '2H_Melee_Attack_Slice') : (alt ? '1H_Melee_Attack_Chop' : '1H_Melee_Attack_Slice_Diagonal'));
+      case 'martelo': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? '1H_Melee_Attack_Chop' : '1H_Melee_Attack_Slice_Diagonal');
+      case 'espada': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? '1H_Melee_Attack_Slice_Horizontal' : '1H_Melee_Attack_Slice_Diagonal');
+      case 'lanca': return skill ? '2H_Melee_Attack_Spin' : (alt ? '2H_Melee_Attack_Stab' : '1H_Melee_Attack_Stab');
+      case 'arco': return two ? '2H_Ranged_Shoot' : '1H_Ranged_Shoot';
+      case 'dardo': return 'Throw';
+      default: return skill ? 'Spellcast_Long' : 'Spellcast_Shoot';
+    }
+  }
+
+  function buildHeroModel(cls) {
+    const cfg = HERO_MODEL[cls]; if (!cfg || !Assets.gltf[cfg.m]) return null;
+    const eq = {};
+    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto']) if (S.equip[k] && (k !== 'arma' || S.equip[k].wtype === CLASSES[cls].weapon)) eq[k] = S.equip[k];
+    const wt = CLASSES[cls].weapon;
+    const aT = eq.armadura ? tierOf(eq.armadura) : -1;
+    let tint = cfg.tint || '#ffffff';
+    if (aT >= 0) tint = mixCol(tint, TIER_COL[aT], 0.28);
+    const md = instModel(cfg.m, 1.75, tint);
+    const root = group(null), inner = group(root);
+    inner.rotation.y = -0.45;
+    inner.add(md.obj);
+    const M = matFactory(md.mats);
+    // arma
+    const wTier = eq.arma ? tierOf(eq.arma) : 0;
+    let weapon = null, twoHand = false;
+    if (cfg.r) { const n = cfg.r(wTier); weapon = showPart(md, n); twoHand = n.startsWith('2H'); }
+    else if (cfg.proc && md.bones.r) {
+      const holder = group(md.bones.r);
+      holder.scale.setScalar(1 / md.scale);
+      holder.rotation.set(Math.PI, 0, 0); // armas do jogo apontam para -y; as do pacote, para +y
+      const w = buildWeapon(cfg.proc, LOOK[cls], M);
+      holder.add(w); weapon = holder; holder.userData.glowMats = w.userData.glowMats;
+      twoHand = cfg.proc === 'lanca';
+    }
+    if (weapon && eq.arma) {
+      const rc = rarOf(eq.arma).color, ri = rarIdx(eq.arma);
+      const amt = (ri > 0 ? 0.12 + ri * 0.07 : 0) + (eq.arma.refine || 0) * 0.05;
+      weapon.traverse((o) => { if (o.isMesh && amt > 0) { o.material = o.material.clone(); o.material.emissive = new THREE.Color(rc); o.material.emissiveIntensity = amt; o.material.userData.baseEmissive = o.material.emissive.clone(); o.material.userData.baseEI = amt; md.mats.push(o.material); } });
+      if (wTier >= 4 || (eq.arma.refine || 0) >= 7) { const gl = glowSprite(rc, 0.9 / md.scale, 0.55); gl.position.set(0, 0.5 / md.scale, 0); weapon.add(gl); }
+    }
+    // mão esquerda
+    if (cfg.l) showPart(md, cfg.l);
+    if (ONE_HAND[wt] && !twoHand && (eq.escudo || cfg.shieldDefault)) {
+      const t = eq.escudo ? tierOf(eq.escudo) : 3;
+      const name = cfg.shields ? (eq.escudo ? cfg.shields[Math.min(t, cfg.shields.length - 1)] : cfg.shieldDefault) : null;
+      if (!(name && showPart(md, name)) && md.bones.l) {
+        const holder = group(md.bones.l); holder.scale.setScalar(1 / md.scale); holder.rotation.set(0, 0, Math.PI / 2);
+        buildShield(holder, eq.escudo, M);
+      }
+    }
+    // elmo / chapéu
+    if (cfg.hat && (eq.elmo || cfg.hatDefault)) showPart(md, cfg.hat);
+    if (eq.elmo && md.bones.head && tierOf(eq.elmo) >= 3) {
+      const t = tierOf(eq.elmo), rc = rarOf(eq.elmo).color;
+      const orn = group(md.bones.head); orn.scale.setScalar(1 / md.scale);
+      if (t === 3) for (const z of [-1, 1]) { const h = mk(G.cone(0.06, 0.34, 6), M('#e8e0c8'), orn, 0, 0.55, 0.3 * z); h.rotation.x = 0.9 * z; }
+      if (t === 4) for (let i = 0; i < 4; i++) mk(G.cone(0.05, 0.24 - i * 0.03, 4), M(rc, { e: rc, ei: 0.5 }), orn, 0, 0.72, 0.12 - i * 0.1);
+      if (t === 5) mk(G.torus(0.26, 0.03), M('#fff0a0', { e: '#ffd860', ei: 1.5 }), orn, 0, 0.95, 0).rotation.x = Math.PI / 2;
+    }
+    // capa conforme a armadura
+    if (cfg.cape && (aT >= 2 || cfg.capeDefault)) {
+      const cp = showPart(md, cfg.cape);
+      if (cp && eq.armadura && rarIdx(eq.armadura) > 0) cp.traverse((o) => { if (o.isMesh) o.material.color = new THREE.Color(rarOf(eq.armadura).color).lerp(new THREE.Color('#ffffff'), 0.25); });
+    }
+    if (eq.amuleto && md.bones.chest) {
+      const ac = rarOf(eq.amuleto).color, g = group(md.bones.chest); g.scale.setScalar(1 / md.scale);
+      mk(G.oct(0.06), M(ac, { e: ac, ei: 1.4 }), g, 0, 0.32, 0.27);
+      const gl = glowSprite(ac, 0.4, 0.8); gl.position.set(0, 0.32, 0.3); g.add(gl);
+    }
+    // aura de buff
+    const aura = mk(new THREE.RingGeometry(0.55, 0.7, 32), new THREE.MeshBasicMaterial({ color: '#ffd860', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), root, 0, 0.03, 0, false);
+    aura.rotation.x = -Math.PI / 2;
+    const auraGlow = glowSprite('#ffd860', 2.4, 0); auraGlow.position.set(0, 1, 0); root.add(auraGlow);
+    const h = { root, inner, model: md, mats: md.mats, wt, aura, auraGlow, twoHand, weapon: weapon || group(null), atk: null, hurt: -9, x: 0 };
+    playAnim(h, 'Idle');
+    return h;
+  }
+
+  function animHeroModel(t, dt) {
+    const h = st.hero, wt = h.wt, melee = !RANGED[wt], md = h.model;
+    const a = h.atk ? clamp((t - h.atk.start) / h.atk.dur, 0, 1) : 1;
+    if (h.atk && a >= 1) h.atk = null;
+    const dead = R.dead > 0;
+    if (!R.inTown) {
+      let x = heroBaseX();
+      if (h.atk && melee) {
+        const lunge = Math.max(0, monBaseX(st.mon && st.mon.boss) - x - (wt === 'lanca' ? 1.7 : 1.2) - (st.mon && st.mon.boss ? 0.4 : 0));
+        x += Math.sin(clamp((a - 0.05) / 0.75, 0, 1) * Math.PI) * lunge;
+      }
+      if (t - h.hurt < 0.15) x -= 0.08;
+      h.root.position.x = lerp(h.root.position.x, x, Math.min(1, dt * 25));
+      h.inner.rotation.y = lerp(h.inner.rotation.y, -0.45, Math.min(1, dt * 8));
+    }
+    // estado da animação
+    if (dead) { if (md.curName !== 'Death_A') playAnim(h, 'Death_A', { loop: false, clamp: true, fade: 0.1 }); }
+    else if (md.curName === 'Death_A') playAnim(h, 'Idle', { fade: 0.3 });
+    else if (now() >= (md.busyUntil || 0)) {
+      if (R.inTown) playAnim(h, h.walk ? 'Walking_A' : 'Idle', { fade: 0.2 });
+      else if (st.run) playAnim(h, 'Running_A', { fade: 0.15 });
+      else playAnim(h, st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
+    }
+    md.mixer.update(dt);
+    setFlash(h.mats, t - h.hurt < 0.15 ? 0.6 : 0, '#ff6060');
+    const buffOn = !R.inTown && R.buffs && R.buffs.length > 0;
+    h.aura.material.opacity = lerp(h.aura.material.opacity, buffOn ? 0.55 + Math.sin(t * 4) * 0.15 : 0, Math.min(1, dt * 6));
+    h.aura.rotation.z += dt; h.auraGlow.material.opacity = h.aura.material.opacity * 0.35;
+  }
+
+  function buildMonsterModel(name, boss) {
+    const cfg = MON_MODEL[name]; if (!cfg || !Assets.gltf[cfg.m]) return null;
+    const md = instModel(cfg.m, 1.8 * (cfg.s || 1), cfg.tint);
+    const root = group(null), inner = group(root), body = group(inner);
+    inner.rotation.y = 0.45;
+    md.obj.rotation.y = -Math.PI / 2;
+    body.add(md.obj);
+    for (const [slot, pn] of [['r', cfg.r], ['l', cfg.l]]) {
+      if (!pn || !md.bones[slot]) continue;
+      const p = propMesh(pn); if (!p) continue;
+      md.bones[slot].add(p);
+      p.traverse((o) => { if (o.isMesh) { if (cfg.tint) o.material.color = new THREE.Color(cfg.tint).lerp(new THREE.Color('#ffffff'), 0.5); md.mats.push(o.material); } });
+    }
+    const P = { legs: [], arms: [], wings: [], segs: [], tent: [], float: 0 };
+    if (boss) {
+      const ring = mk(new THREE.RingGeometry(0.9, 1.15, 40), new THREE.MeshBasicMaterial({ color: '#b060ff', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false }), root, 0, 0.03, 0, false);
+      ring.rotation.x = -Math.PI / 2; P.bossRing = ring;
+      const gl = glowSprite('#b060ff', 3, 0.25); gl.position.y = 1; root.add(gl);
+    }
+    root.scale.setScalar(boss ? 1.6 : 1);
+    const m = { root, inner, body, P, mats: md.mats, model: md, kind: 'humanoid', boss, color: cfg.tint || '#e0dcd0', seed: Math.random() * 10, hurt: -9, atk: 0, mage: !!cfg.mage };
+    playAnim(m, 'Spawn_Ground_Skeletons', { loop: false, speed: 1.6, hold: 0.85 });
+    return m;
+  }
+  function animMonsterModel(m, t, dt) {
+    const md = m.model;
+    if (m.dieAt && t > m.dieAt) { if (md.curName !== 'Death_C_Skeletons') playAnim(m, 'Death_C_Skeletons', { loop: false, clamp: true, fade: 0.08, speed: 1.3 }); }
+    else if (now() >= (md.busyUntil || 0)) playAnim(m, 'Idle_Combat', { fade: 0.2 });
+    md.mixer.update(dt);
+    if (m.P.bossRing) { m.P.bossRing.rotation.z += dt; m.P.bossRing.material.opacity = 0.4 + Math.sin(t * 3) * 0.15; }
+  }
+
   // ---------- cidade ----------
   const NPC_LOOK = {
     mercador: { L: { body: '#3a7a5a', trim: '#e0c050', pants: '#4a3a2a', skin: '#e8b890', head: 'ponytail', hair: '#6a3a1a', robe: true }, wt: null, pos: [-3.5, -0.3] },
@@ -758,8 +1030,19 @@ const Scene3D = (() => {
         const gl = glowSprite('#ffd860', 1.4, 0.35); gl.position.y = 0.8; g.add(gl);
         g.rotation.y = -0.4;
       } else {
-        ch = buildCharacter(d.L, d.wt, {});
-        ch.inner.rotation.y = Math.atan2(-(4 - d.pos[1]), 0 - d.pos[0]);
+        const nm = modelsReady() && NPC_MODEL[id];
+        if (nm && Assets.gltf[nm.m]) {
+          const md = instModel(nm.m, 1.75, nm.tint);
+          if (nm.r) showPart(md, nm.r); if (nm.l) showPart(md, nm.l); if (nm.hat) showPart(md, nm.hat); if (nm.cape) showPart(md, nm.cape);
+          const r0 = group(null), in0 = group(r0); in0.add(md.obj);
+          in0.rotation.y = Math.atan2(-(4 - d.pos[1]), 0 - d.pos[0]);
+          ch = { root: r0, inner: in0, model: md, npcModel: true };
+          playAnim(ch, nm.anim, { loop: true, speed: nm.loop ? 0.8 : 1 });
+          md.mixer.update(Math.random() * 2);
+        } else {
+          ch = buildCharacter(d.L, d.wt, {});
+          ch.inner.rotation.y = Math.atan2(-(4 - d.pos[1]), 0 - d.pos[0]);
+        }
         g.add(ch.root);
       }
       // cenário de cada NPC
@@ -820,6 +1103,11 @@ const Scene3D = (() => {
     const n = env.npcs;
     for (const id in n) {
       const ch = n[id].ch; if (!ch) continue;
+      if (ch.model) {
+        ch.model.mixer.update(dt);
+        if (id === 'ferreiro') { const ph = (ch.model.cur.time / ch.model.cur.getClip().duration); if (ph > 0.45 && ph < 0.6 && !n[id].hit2) { n[id].hit2 = true; const a = n[id].g.userData.anvil; for (let i = 0; i < 14; i++) spawnP({ x: a.x, y: a.y, z: a.z, vx: rand(-2, 2), vy: rand(1, 3.5), vz: rand(-2, 2), life: rand(0.3, 0.7), r: 1, gg: 0.6, b: 0.2, size: 0.07, g: -9 }); } if (ph < 0.3) n[id].hit2 = false; }
+        continue;
+      }
       ch.hips.position.y = 0.72 + Math.sin(t * 2 + id.length) * 0.012;
       ch.arms[0].rotation.z = 0.1 + Math.sin(t * 1.5 + id.length) * 0.08;
       if (id === 'ferreiro') {
@@ -1089,12 +1377,13 @@ const Scene3D = (() => {
   function playerAttack(o) {
     if (!running || document.hidden || !st.hero) return;
     const t = now(), wt = CLASSES[S.cls].weapon, melee = !RANGED[wt];
-    const dur = melee ? 0.45 : 0.55;
+    let dur = melee ? 0.45 : 0.55;
+    if (st.hero.model) { dur = attackDur(); playAnim(st.hero, heroAttackClip(!!o.skill), { loop: false, dur: dur * (melee ? 1.15 : 1.1), fade: 0.06 }); }
     st.hero.atk = { start: t, dur, skill: !!o.skill };
     const c0 = monCenter(); if (!c0) return;
     const color = skillColor(o.skill ? (o.skillName || '') : '', wt);
     const impact = () => {
-      const m = st.mon; if (m) m.hurt = now();
+      const m = st.mon; if (m) { m.hurt = now(); if (m.model && !o.miss && !m.atk && now() >= (m.model.busyUntil || 0)) playAnim(m, Math.random() < 0.5 ? 'Hit_A' : 'Hit_B', { loop: false, dur: 0.35, fade: 0.05 }); }
       const c = monCenter() || c0;
       if (!o.miss) {
         burst(c, o.crit ? '#ffb040' : color, o.skill ? 30 : 14, o.skill ? 4.5 : 3);
@@ -1133,9 +1422,11 @@ const Scene3D = (() => {
   function monsterAttack(o) {
     if (!running || document.hidden || !st.mon || !st.hero) return;
     st.mon.atk = now();
+    if (st.mon.model) playAnim(st.mon, st.mon.mage ? 'Spellcast_Shoot' : (Math.random() < 0.5 ? '1H_Melee_Attack_Chop' : '1H_Melee_Attack_Slice_Diagonal'), { loop: false, dur: 0.6, fade: 0.06 });
     later(0.2, () => {
       const h = st.hero; if (!h) return;
       const p = new THREE.Vector3(h.root.position.x, 1.1, 0.2);
+      if (o.cls !== 'miss' && h.model && !h.atk && now() >= (h.model.busyUntil || 0)) playAnim(h, 'Hit_A', { loop: false, dur: 0.4, fade: 0.05 });
       if (o.cls !== 'miss') { h.hurt = now(); burst(p, '#ff4040', 10, 2.5, 0.1); if (st.mon && st.mon.boss) st.shake = Math.max(st.shake, 0.12); }
       floatAt(new THREE.Vector3(h.root.position.x, 2.2, 0), o.text, o.cls);
     });
@@ -1150,16 +1441,19 @@ const Scene3D = (() => {
     const x = st.hero.root.position.x;
     for (let i = 0; i < 24; i++) spawnP({ x: x + rand(-0.5, 0.5), y: rand(0, 1.6), z: rand(-0.5, 0.5), vx: 0, vy: rand(1, 2), vz: 0, life: 1, r: 0.4, gg: 1, b: 0.5, size: 0.16 });
     ring(st.hero.root.position, '#70f080', 1.6, 0.6);
+    if (st.hero.model && !st.hero.atk) playAnim(st.hero, 'Spellcast_Raise', { loop: false, dur: 0.7, fade: 0.08 });
   }
   function buff() {
     if (!running || document.hidden || !st.hero) return;
     const x = st.hero.root.position.x;
     ring(st.hero.root.position, '#ffd860', 2, 0.6);
+    if (st.hero.model && !st.hero.atk) playAnim(st.hero, 'Spellcast_Raise', { loop: false, dur: 0.7, fade: 0.08 });
     for (let i = 0; i < 26; i++) { const a = Math.random() * 6.28; spawnP({ x: x + Math.cos(a) * 0.7, y: 0.1, z: Math.sin(a) * 0.7, vx: 0, vy: rand(2, 4), vz: 0, life: 0.8, r: 1, gg: 0.85, b: 0.4, size: 0.12 }); }
   }
   function levelUp() {
     if (!running || document.hidden || !st.hero) return;
     pillar(st.hero.root.position.x);
+    if (st.hero.model && !st.mon) playAnim(st.hero, 'Cheer', { loop: false, dur: 1.2, fade: 0.1 });
     floatAt(new THREE.Vector3(st.hero.root.position.x, 2.8, 0), 'LEVEL UP!', 'lvl');
   }
 
@@ -1206,13 +1500,14 @@ const Scene3D = (() => {
       });
       st.dying.push(dm); st.mon = null;
     }
-    const busy = st.dying.some((d) => t < d.dieAt + 0.35);
+    const busy = st.dying.some((d) => t < d.dieAt + (d.model ? 0.9 : 0.35));
     st.run = !st.mon && !(R.dead > 0) && !busy && !R.inTown;
   }
 
   // ---------- animação do herói ----------
   function animHero(t, dt) {
     const h = st.hero, wt = h.wt, melee = !RANGED[wt];
+    if (h.model && !R.inTown) return animHeroModel(t, dt);
     if (R.inTown) return animHeroTown(t, dt);
     const a = h.atk ? clamp((t - h.atk.start) / h.atk.dur, 0, 1) : 1;
     if (h.atk && a >= 1) h.atk = null;
@@ -1285,6 +1580,7 @@ const Scene3D = (() => {
       }
     }
     h.inner.rotation.z = 0; h.inner.position.set(0, 0, 0);
+    if (h.model) return animHeroModel(t, dt);
     const ph = t * 11;
     h.hips.position.y = 0.72 + (moving ? Math.abs(Math.sin(ph)) * 0.07 : Math.sin(t * 2.5) * 0.012);
     h.torso.rotation.z = moving ? -0.12 : 0;
@@ -1323,7 +1619,12 @@ const Scene3D = (() => {
     for (const d of st.dying) {
       animMonster(d, t, dt);
       if (st.run) d.root.position.x -= RUN_SPEED * dt;
-      if (t > d.dieAt) {
+      if (t > d.dieAt && d.model) {
+        const p = clamp((t - d.dieAt - 0.8) / 0.6, 0, 1);
+        if (p > 0 && !d.faded) { d.faded = true; setOpacity(d.mats, 1); }
+        if (p > 0) setOpacity(d.mats, 1 - p);
+        setFlash(d.mats, t - d.dieAt < 0.1 ? 1.5 : 0);
+      } else if (t > d.dieAt) {
         const p = clamp((t - d.dieAt) / 0.7, 0, 1);
         if (!d.faded) { d.faded = true; setOpacity(d.mats, 1); }
         d.inner.rotation.z = -ease(p) * 1.4; d.inner.position.y = -p * 0.3;
@@ -1331,7 +1632,7 @@ const Scene3D = (() => {
         d.root.scale.setScalar((d.boss ? 1.6 : 1) * (1 - p * 0.3));
       }
     }
-    st.dying = st.dying.filter((d) => { const keep = t < d.dieAt + 0.8; if (!keep) { scene.remove(d.root); disposeObj(d.root); } return keep; });
+    st.dying = st.dying.filter((d) => { const keep = t < d.dieAt + (d.model ? 1.45 : 0.8); if (!keep) { scene.remove(d.root); disposeObj(d.root); } return keep; });
     // efeitos
     for (const f of st.fx) {
       f.t += dt; const p = clamp(f.t / f.life, 0, 1);
@@ -1367,6 +1668,7 @@ const Scene3D = (() => {
       camera = new THREE.PerspectiveCamera(38, 2, 0.1, 120);
       GLOW = glowTex();
       initParticles();
+      loadAssets();
       bindControls();
     }
     // reinicia o estado visual
@@ -1382,7 +1684,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); if (layer) layer.innerHTML = ''; const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp, walkToNpc };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, float, heal, buff, levelUp, walkToNpc, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------

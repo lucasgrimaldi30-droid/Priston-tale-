@@ -12,6 +12,7 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - **Câmera livre**: arraste para girar, role a roda do mouse ou faça pinça para dar zoom, e dê dois cliques para voltar à posição padrão.
 - **Equipamento visível no corpo**: armadura (cor por tier, capa a partir do tier 3, ombreiras com espinhos), elmo (6 modelos), luvas, botas, escudo, amuleto brilhante e armas maiores e com runas nos tiers altos.
 - **Sons e música procedurais** (Web Audio): efeitos para golpes, flechas, magias, críticos, drops por raridade, level up e refino, e uma música para cada mapa, para a cidade e para os chefes. O volume fica nas configurações e o botão 🔊 tira o som.
+- **Modelos 3D profissionais animados** (pacotes KayKit, CC0): os heróis usam Bárbaro, Cavaleiro, Mago e Ladino, e os monstros humanoides usam os Esqueletos. São 32 animações (ataques de uma e duas mãos, estocada, tiro, arremesso, magias, dano, morte, comemoração, caminhada e corrida), e as armas, escudos, elmos e capas mudam conforme o equipamento. Se os modelos não carregarem, o jogo usa os bonecos low-poly gerados por código.
 - O combate é automático. A cada nível você ganha **5 pontos** para Força, Intelecto, Destreza, Agilidade e Vitalidade (ou use o botão **Auto**).
 - **10 mapas** do nível 1 ao 100, cada um com um **chefe** (pode ser desafiado após 25 abates).
 - **6 habilidades por classe**, liberadas por nível e usadas automaticamente (ataques, buffs e curas).
@@ -20,11 +21,24 @@ Idle MMORPG de navegador inspirado nos MMORPGs clássicos de fantasia. Não prec
 - Loja de poções com uso e compra automáticos.
 - **Progresso offline** de até 8 horas e save automático no navegador (com exportar/importar).
 
+## Rodando localmente
+Os modelos 3D são carregados por HTTP, então abra o jogo por um servidor local (abrir o `index.html` direto do disco usa os bonecos simples):
+```
+python3 -m http.server 8000
+# acesse http://localhost:8000
+```
+
+## Créditos
+- Modelos 3D: **KayKit Adventurers** e **KayKit Skeletons**, de Kay Lousberg ([kaylousberg.com](https://www.kaylousberg.com)), licença CC0. Veja `assets/models/LICENSE-KayKit.txt`.
+- Motor 3D: [three.js](https://threejs.org) r128 (MIT), incluído em `js/vendor/`.
+
 ## Estrutura
 - `index.html` — telas e layout
 - `css/style.css` — visual
 - `js/data.js` — classes, habilidades, mapas, itens e loja (fácil de editar)
 - `js/scene3d.js` — batalha e cidade 3D (Three.js), câmera livre e seletor 3D/2D
+- `assets/models/` — modelos .glb otimizados (personagens sem animação + `anims.glb` com as animações compartilhadas)
+- `js/vendor/` — three.js, GLTFLoader e SkeletonUtils (sem depender de servidor externo)
 - `js/audio.js` — efeitos sonoros e música procedurais
 - `js/scene.js` — cena de batalha 2D (canvas)
 - `js/game.js` — motor do jogo (combate, drops, níveis, save, interface)
