@@ -15,6 +15,7 @@ const DATA = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const PORT = +process.env.PORT || 8080;
 const MAX_SAVE = 600 * 1024;
 const CLASSES = ['gladiador', 'engenheiro', 'cacadora', 'lanceiro', 'paladino', 'valquiria', 'arcanista', 'cleriga'];
+const PK_ZONES = new Set(['z8', 'z9', 'z10', 'b4', 'e1']), PK_MIN = 40; // PK só nesses mapas, a partir do nível 40, com o Modo PK ligado
 const FACTION = { gladiador: 'ferro', engenheiro: 'ferro', cacadora: 'ferro', lanceiro: 'ferro', paladino: 'luz', valquiria: 'luz', arcanista: 'luz', cleriga: 'luz' };
 
 // ---------- banco de dados em arquivo JSON (troque por PostgreSQL quando crescer) ----------
@@ -112,7 +113,7 @@ async function api(req, res) {
     }
     if (url === '/api/ranking') {
       const rows = [];
-      for (const u of Object.values(db.users)) for (const s of u.saves) if (s) rows.push({ user: u.user, name: s.name, cls: s.cls, lvl: s.lvl, rebirths: s.rebirths || 0, kills: (s.stats && s.stats.kills) || 0, guild: u.guild && db.guilds[u.guild] ? db.guilds[u.guild].name : '' });
+      for (const u of Object.values(db.users)) for (const s of u.saves) if (s) rows.push({ user: u.user, name: s.name, cls: s.cls, lvl: s.lvl, rebirths: s.rebirths || 0, kills: (s.stats && s.stats.kills) || 0, guild: u.guild && db.guilds[u.guild] ? db.guilds[u.guild].name : '', honor: u.honor || 0 });
       rows.sort((a, b) => b.rebirths - a.rebirths || b.lvl - a.lvl || b.kills - a.kills);
       return send(res, 200, { list: rows.slice(0, 50) });
     }
@@ -197,7 +198,7 @@ wss.on('connection', (ws, req) => {
       Object.assign(p, {
         name: clean(m.name, 16), cls: m.cls, lvl: Math.max(1, Math.min(100, m.lvl | 0)), rb: Math.max(0, m.rb | 0), title: clean(m.title, 30),
         zone: clean(m.zone, 4), town: !!m.town, dun: !!m.dun, x: +m.x || 0, z: +m.z || 0, face: +m.face || 0, moving: !!m.moving, atk: !!m.atk,
-        coop: !!m.coop, look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
+        coop: !!m.coop, pk: !!m.pk, prot: !!m.prot, pd: Math.max(0, Math.min(1e6, +m.pd || 0)), pe: Math.max(0, Math.min(0.6, +m.pe || 0)), look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
       });
       if (U.lastName !== p.name || U.lastLvl !== p.lvl) { U.lastName = p.name; U.lastLvl = p.lvl; U.lastCls = p.cls; persist(); }
       if (!p.ready) {
@@ -212,14 +213,23 @@ wss.on('connection', (ws, req) => {
       if (ch === 'party' && !pt) return sendTo(ws, { t: 'sys', text: 'Você não está em um grupo.' });
       if (ch === 'guild' && !U.guild) return sendTo(ws, { t: 'sys', text: 'Você não está em uma guilda.' });
       broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || (ch === 'zone' && roomOf(o) === room) || (ch === 'party' && pt && pt.members.has(o)) || (ch === 'guild' && db.users[o.key] && db.users[o.key].guild === U.guild));
-    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel)$/.test(m.t)) {
-      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : ['soc:', 20];
+    } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel|pvphit|pvpdead)$/.test(m.t)) {
+      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : m.t.startsWith('pvp') ? ['pv:', 60] : ['soc:', 20];
       if (!p.ready || limited(lk[0] + p.key, lk[1], 10e3)) return;
       social(ws, p, U, m);
     }
   });
   ws.on('close', () => { endTrade(p, 'O outro jogador saiu.'); leaveParty(p); if (U.guild) setTimeout(() => pushGuild(U.guild), 50); if (p.ready) broadcast({ t: 'sys', text: `${p.name} saiu.` }, (o) => o !== p); clients.delete(ws); });
 });
+
+function canPk(a, b) {
+  if (!a || !b || a === b || !a.ready || !b.ready || !a.pk || !b.pk || b.prot) return false;
+  if (a.town || b.town || a.dun || b.dun || !PK_ZONES.has(a.zone) || roomOf(a) !== roomOf(b)) return false;
+  if ((a.lvl || 0) < PK_MIN || (b.lvl || 0) < PK_MIN) return false;
+  if (a.party && a.party === b.party) return false;
+  const ga = db.users[a.key] && db.users[a.key].guild; if (ga && db.users[b.key] && db.users[b.key].guild === ga) return false;
+  return Math.hypot((a.x || 0) - (b.x || 0), (a.z || 0) - (b.z || 0)) <= 11;
+}
 
 // ---------- trocas entre jogadores (o servidor guarda as ofertas e só fecha quando os dois confirmam) ----------
 const trades = new Map(); let nextTrade = 1;
@@ -240,6 +250,21 @@ function social(ws, p, U, m) {
     const pt = partyOf(p); if (!pt || !['start', 'sync', 'hit', 'kill', 'end', 'leave'].includes(m.k)) return;
     const raw = JSON.stringify(m.d || {}); if (raw.length > 12000) return;
     for (const o of pt.members) if (o !== p && (m.k === 'start' || m.k === 'hit' ? true : o.coop)) { if (m.k === 'hit' && o !== pt.leader) continue; sendTo(o.ws, { t: 'coop', k: m.k, d: m.d, from: p.name, fid: p.id }); }
+    return;
+  }
+  if (m.t === 'pvphit') { // golpe de um jogador em outro: o servidor confere as regras do PK antes de repassar
+    let t = null, tw = null; for (const [w2, o] of clients) if (o.id === m.id) { t = o; tw = w2; }
+    if (!canPk(p, t)) return;
+    p.hits = p.hits || {}; p.hits[t.id] = Date.now();
+    return sendTo(tw, { t: 'pvphit', from: p.name, fid: p.id, dmg: Math.max(1, Math.min(1e6, Math.round(+m.dmg || 0))), crit: !!m.crit });
+  }
+  if (m.t === 'pvpdead') { // quem morreu avisa; o servidor dá a Honra a quem bateu nos últimos 15 s
+    let k = null, kw = null; for (const [w2, o] of clients) if (o.id === m.by) { k = o; kw = w2; }
+    if (!k || !k.hits || !(k.hits[p.id] > Date.now() - 15000)) return;
+    delete k.hits[p.id];
+    const KU = db.users[k.key]; KU.honor = (KU.honor || 0) + 1; persist();
+    sendTo(kw, { t: 'pvpkill', name: p.name, honor: KU.honor });
+    broadcast({ t: 'sys', text: `⚔️ ${k.name} derrotou ${p.name} em combate!` }, (o) => roomOf(o) === roomOf(p));
     return;
   }
   if (m.t === 'tinvite') {
@@ -335,7 +360,7 @@ setInterval(() => {
     const room = roomOf(p);
     const list = [];
     if (room) for (const o of clients.values()) if (o !== p && o.ready && roomOf(o) === room) {
-      list.push({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb, title: o.title, x: o.x, z: o.z, face: o.face, moving: o.moving, atk: o.atk, look: o.look });
+      list.push({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb, title: o.title, x: o.x, z: o.z, face: o.face, moving: o.moving, atk: o.atk, look: o.look, pk: o.pk, prot: o.prot, pd: o.pd, pe: o.pe, hp: o.hp });
       if (list.length >= 40) break;
     }
     const pt = partyOf(p), gk = db.users[p.key] && db.users[p.key].guild;

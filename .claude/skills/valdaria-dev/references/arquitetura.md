@@ -182,6 +182,14 @@ Atalhos no `keydown` do fim de `game.js`.
   mandam o dano junto a cada 0,2 s (`hit`). O líder aplica, mata e manda `kill` — cada colega ganha o prêmio completo (`killMonster` com `coopKill`).
   `exitDungeon` manda `end` (líder, com `done` → colegas recebem `dungeonReward`) ou `leave`. No servidor, a sala da masmorra é `coop_<grupo>`
   para os jogadores se verem lá dentro. Sem notícia do líder por 8 s o colega sai.
+- **PK (combate entre jogadores):** só com `S.settings.pk` ligado dos dois lados, nos mapas `PK_ZONES` (z8, z9, z10, b4, e1), a partir do
+  nível 40, nunca na cidade/masmorra, nunca no mesmo grupo ou guilda, e não em quem acabou de voltar (proteção). Cliente: tocar no jogador
+  (`userData.pid` na cena → `gameOrder({type:'pvp'})`), `pvpStep` no `playerAI` (anda até ele, usa o golpe de dano mais forte pronto; dano =
+  ataque × golpe × `100/(100 + defesa×0,25)` × `PVP_SCALE`), `onPvpHit` (aplica bloqueio, resistência, escudo de mana e Laço de Equipe; no Auto
+  revida), morte no PK sem perder XP nem itens (volta em `PVP_RESPAWN` s com proteção `PVP_PROT`). Servidor: `canPk` confere tudo (inclusive
+  distância ≤ 11) antes de repassar `pvphit`; `pvpdead` dá Honra (`db.users[].honor`) a quem bateu nos últimos 15 s e avisa o mapa.
+  Estado manda `pk`, `prot`, `pd` (defesa) e `pe` (esquiva). Caixa `pkBox()` na janela Social, `/pk` no chat, etiqueta "⚔️ PK" no título do mapa,
+  nome vermelho e barra de vida do alvo na cena, Honra no ranking.
 - **Trocas:** `tinvite`/`taccept` abrem a sessão no servidor (`trades`), `toffer` (até 8 itens + ouro; mudar destrava os dois), `tlock`, `tconfirm`;
   com os dois confirmados o servidor manda `tdone` a cada lado (`tradeDone` tira o que deu e põe o que recebeu com uid novo). Janela `troca`,
   botão 🤝 na janela Social e `/trocar Nome`. Sair do jogo cancela a troca.

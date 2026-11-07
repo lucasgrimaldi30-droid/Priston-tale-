@@ -808,8 +808,9 @@ function nearMons(c, r) { return aliveMons().filter((m) => dist2(m, c) <= r); }
 // ordens do jogador (toque/clique na cena)
 window.gameOrder = (o) => {
   if (!S || !R || R.inTown || R.dead > 0) return;
-  if (o.type === 'move') { R.move = { x: clamp(o.x, -WORLD.size, WORLD.size), z: clamp(o.z, -WORLD.size, WORLD.size) }; R.mon = null; }
+  if (o.type === 'move') { R.pvp = null; R.move = { x: clamp(o.x, -WORLD.size, WORLD.size), z: clamp(o.z, -WORLD.size, WORLD.size) }; R.mon = null; }
   if (o.type === 'attack') { const m = aliveMons().find((x) => x.sid === o.sid); if (m) { R.mon = m; R.move = null; R.gather = null; } }
+  if (o.type === 'pvp') { const p = Net.st.others && Net.st.others.get(o.id), why = pkWhyNot(p); if (why) { toast(why); return; } R.pvp = { id: o.id, manual: true }; R.mon = null; R.move = null; R.gather = null; log(`⚔️ Atacando <b>${esc(p.name)}</b>!`, 'boss'); return; }
   if (o.type === 'gather' && R.nodes && R.nodes[o.id] && !R.dungeon) { if (R.nodes[o.id].cd > 0) { toast(`Volta em ${Math.ceil(R.nodes[o.id].cd)}s.`); return; } R.gather = { id: o.id, t: 0 }; R.mon = null; R.move = null; }
 };
 
@@ -1167,6 +1168,7 @@ function playerAI(dt, d) {
     R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
     return;
   }
+  if (pvpStep(dt, d, speed)) return;
   if (!R.dungeon && travelStep(dt, speed)) return;
   if (!R.dungeon && gatherStep(dt, speed)) return;
   if (!R.mon && S.settings.auto) { // no modo manual o herói só ataca o que o jogador tocar
@@ -1497,7 +1499,7 @@ function netState() {
   const look = {};
   for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (it) look[sl] = { slot: sl, wtype: it.wtype, ilvl: it.ilvl, rarity: it.rarity, refine: it.refine || 0, set: it.set || null, req: 1 }; }
   Net.sendState({ name: S.name, cls: S.cls, lvl: S.lvl, rb: S.rebirths || 0, title: S.title || '', zone: S.zone, town: !!R.inTown, dun: !!R.dungeon,
-    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp, coop: !!R.coop });
+    x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp, coop: !!R.coop, pk: pkActive(), prot: pkProtected(), pd: derived().def, pe: derived().evade });
   renderPartyHud();
 }
 
@@ -1642,6 +1644,79 @@ function awkPanel() {
     <p class="muted small-note">Depois do 80 dá para upar sozinho, só que mais devagar: o XP rende ${Math.round(SOLO_80 * 100)}% sozinho, ${Math.round(DUO_80 * 100)}% em dupla e ${Math.round(TEAM_80 * 100)}% com 3 ou mais no mesmo mapa.</p>`;
 }
 
+// ---------- PK (combate entre jogadores): só com o Modo PK ligado, nos mapas de nível alto, a partir do nível 40 ----------
+const PK_ZONES = ['z8', 'z9', 'z10', 'b4', 'e1'], PK_MIN = 40, PVP_SCALE = 0.5, PVP_RESPAWN = 6, PVP_PROT = 12000;
+const pkZone = () => PK_ZONES.includes(S.zone) && !R.inTown && !R.dungeon;
+function pkActive() { return !!(online() && S.settings.pk && pkZone() && S.lvl >= PK_MIN); }
+function pkProtected() { return (R.pvpProt || 0) > Date.now(); }
+function sameSide(o) { // grupo e guilda não se atacam
+  const pt = Net.st.party, g = Net.st.guild;
+  return !!((pt && pt.members.some((m) => m.name === o.name)) || (g && g.members.some((m) => m.name === o.name && m.online)));
+}
+function pkWhyNot(o) {
+  if (!online()) return 'O PK precisa do servidor.';
+  if (!S.settings.pk) return 'Ligue o Modo PK na janela Social.';
+  if (!pkZone()) return 'Aqui não é mapa de PK.';
+  if (S.lvl < PK_MIN) return `O PK libera no nível ${PK_MIN}.`;
+  if (!o) return 'Jogador não encontrado.';
+  if (!o.pk) return `${o.name} está com o Modo PK desligado.`;
+  if (o.lvl < PK_MIN) return `${o.name} ainda não tem nível ${PK_MIN}.`;
+  if (o.prot) return `${o.name} acabou de voltar e está protegido.`;
+  if (sameSide(o)) return 'É do seu grupo ou da sua guilda.';
+  return '';
+}
+function pvpStep(dt, d, speed) {
+  if (!R.pvp) return false;
+  const o = Net.st.others.get(R.pvp.id), why = pkWhyNot(o);
+  if (why) { if (R.pvp.manual && why) log(`⚔️ ${esc(why)}`, 'muted'); R.pvp = null; return false; }
+  R.mon = null; R.gather = null;
+  const range = weaponRange(), dd = dist2(R.pos, o);
+  R.face = Math.atan2(o.z - R.pos.z, o.x - R.pos.x);
+  if (dd > range) { stepTo(R.pos, o, speed * dt, range * 0.85); R.moving = true; return true; }
+  R.playerTimer = (R.playerTimer || 0) - dt;
+  if (R.playerTimer > 0) return true;
+  R.playerTimer = 1 / d.aps;
+  // usa o golpe de dano mais forte que estiver pronto; senão, ataque básico
+  const sk = classSkills().filter((x) => (x.type === 'dmg' || x.type === 'aoe') && S.lvl >= x.lvl && !(R.cds[x.id] > 0) && S.mp >= x.mp && !(S.skillOff && S.skillOff[x.id])).sort((a, b) => b.mult - a.mult)[0];
+  let mult = 1; if (sk) { mult = sk.mult; S.mp -= sk.mp; R.cds[sk.id] = sk.cd; }
+  if (Math.random() < (o.pe || 0)) { Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true, hits: [] }); Scene.otherHit(R.pvp.id, 'Esquiva', 'miss'); return true; }
+  const crit = Math.random() * 100 < d.crit;
+  // no PK a defesa pesa menos que contra monstros, para a luta durar segundos e não minutos
+  const dmg = Math.max(1, Math.round(rnd(d.atkMin, d.atkMax) * mult * (crit ? d.critMult : 1) * 100 / (100 + (o.pd || 0) * 0.25) * PVP_SCALE * teamBond().dmg));
+  Net.soc('pvphit', { id: R.pvp.id, dmg, crit });
+  Scene.playerAttack({ text: fmt(dmg), cls: crit ? 'crit' : 'dmg', skill: !!sk, skillName: sk && sk.name, hits: [] });
+  Scene.otherHit(R.pvp.id, fmt(dmg) + (crit ? '!' : ''), crit ? 'crit' : 'dmg');
+  attackSound(sk && sk.name, crit, false);
+  return true;
+}
+function onPvpHit(m) {
+  if (!pkActive() || R.dead > 0 || S.hp <= 0) return;
+  const d = derived();
+  if (Math.random() < d.block) { floatText('player', 'Bloqueio', 'block'); return; }
+  let dmg = Math.round(m.dmg * (1 - d.absorb) * teamBond().taken);
+  if (d.mshield > 0 && S.mp > 0) { const toMp = Math.min(S.mp, Math.round(dmg * d.mshield)); S.mp -= toMp; dmg -= toMp; }
+  S.hp -= dmg; floatText('player', '-' + fmt(dmg), 'hurt'); Sfx.play('hurt', { gap: 80 });
+  if (!R.pvpLogT || Date.now() - R.pvpLogT > 4000) { R.pvpLogT = Date.now(); log(`⚔️ <b>${esc(m.from)}</b> está atacando você!`, 'death'); }
+  if (S.settings.auto && !R.pvp) R.pvp = { id: m.fid }; // revida sozinho no modo Auto
+  if (S.hp <= 0) {
+    S.hp = 0; R.dead = PVP_RESPAWN; R.mon = null; R.pvp = null; R.pvpProt = Date.now() + PVP_RESPAWN * 1000 + PVP_PROT;
+    S.stats.pvpDeaths = (S.stats.pvpDeaths || 0) + 1;
+    Net.soc('pvpdead', { by: m.fid });
+    log(`💀 Você foi derrotado por <b>${esc(m.from)}</b> em combate. No PK você não perde XP nem itens.`, 'death'); Sfx.play('death');
+  }
+}
+function onPvpKill(m) {
+  S.stats.pvpKills = (S.stats.pvpKills || 0) + 1; R.pvp = null;
+  log(`🏆 Você derrotou <b>${esc(m.name)}</b>! Honra: ${fmt(m.honor)}.`, 'boss'); toast(`⚔️ Vitória sobre ${m.name}!`, 'good'); Sfx.play('levelup');
+}
+function pkBox() {
+  const z = pkZone();
+  return `<div class="pk-box"><b>⚔️ Modo PK</b> <label class="check"><input type="checkbox" data-set="pk" ${S.settings.pk ? 'checked' : ''} ${S.lvl < PK_MIN ? 'disabled' : ''}> Ligado</label>
+    <small>Com o Modo PK ligado, você pode atacar e ser atacado por quem também ligou. Só nos mapas ${PK_ZONES.map((id) => esc(zoneById(id).name)).join(', ')}, a partir do nível ${PK_MIN}. Grupo e guilda não se atacam.
+    Morrer no PK não tira XP nem itens; vencer dá Honra (aparece no ranking). Toque num jogador com ⚔️ para atacar.</small>
+    <small>${S.lvl < PK_MIN ? `Libera no nível ${PK_MIN}.` : z ? (S.settings.pk ? '🔴 Você está vulnerável neste mapa.' : 'Este mapa é de PK.') : 'Este mapa não é de PK: aqui você está seguro.'} Vitórias: ${S.stats.pvpKills || 0} · Derrotas: ${S.stats.pvpDeaths || 0}</small></div>`;
+}
+
 // ---------- grupo e guilda (precisam do servidor) ----------
 const GUILD_COST = 50000;
 function partyMembersNear() { const pt = online() && Net.st.party; return pt ? pt.members.filter((m) => m.name !== S.name && m.zone === S.zone && !m.town && !m.dun) : []; }
@@ -1671,7 +1746,7 @@ function tabSocial() {
     <div class="soc-list">${g.members.sort((a, b) => b.online - a.online || b.lvl - a.lvl).map((m) => `<div class="soc-row${m.online ? '' : ' off'}"><b>${m.online ? '🟢' : '⚪'} ${esc(m.name)}${m.owner ? ' 👑' : ''}</b> <small>Nv.${m.lvl || '?'} · conta ${esc(m.user)}</small>${g.owner === Net.st.user && !m.owner ? `<button class="btn small" data-gkick="${esc(m.key)}">Expulsar</button>` : ''}</div>`).join('')}</div>
     <p class="muted">Chat da guilda: /g mensagem · cada membro online dá +2% de XP (até 10%).</p><button class="btn small" data-soc="gleave">Sair da guilda</button>`
     : `<p class="muted">Funde uma guilda (nível 20, ${fmt(GUILD_COST)} ouro) ou aceite um convite.</p><div class="row-btns"><input id="guild-name" maxlength="20" placeholder="Nome da guilda"><button class="btn small primary" data-soc="gcreate" ${S.lvl < 20 || S.gold < GUILD_COST ? 'disabled' : ''}>Fundar</button></div>`;
-  return `<h3 class="soc-h">👥 Grupo</h3>${party}<h3 class="soc-h">🛡️ Guilda</h3>${guild}<h3 class="soc-h">🧭 Jogadores neste mapa</h3>${near}`;
+  return `${pkBox()}<h3 class="soc-h">👥 Grupo</h3>${party}<h3 class="soc-h">🛡️ Guilda</h3>${guild}<h3 class="soc-h">🧭 Jogadores neste mapa</h3>${near}`;
 }
 function socialAction(a) {
   if (a === 'pleave') Net.soc('pleave');
@@ -1833,7 +1908,7 @@ function renderLive() {
   if (R.dungeon && R.dungeon.tower) $('#zone-title').innerHTML = `🗼 Torre Infinita <span class="muted">(andar ${R.dungeon.floor} · recorde ${S.towerBest || 0})</span>`;
   else if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
   else if (!R.inTown) { const w = worldSky(S.zone), ev = eventNow();
-    $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> <span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} <span class="ev-name">${ev.name} </span>${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
+    $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span> ${pkZone() ? `<span class="pk-tag" title="Mapa de PK">${S.settings.pk && S.lvl >= PK_MIN ? '⚔️ PK ligado' : '⚔️ PK'}</span> ` : ''}<span class="sky-ico" title="${w.isNight ? 'Noite: +10% XP' : 'Dia'}${w.rain ? ' · Chuva: +10% ouro' : ''}">${w.rain ? '🌧️' : w.isNight ? '🌙' : '☀️'}</span>${ev.id ? ` <span class="ev-tag" title="${esc(ev.desc)}">${ev.icon} <span class="ev-name">${ev.name} </span>${Math.ceil(ev.left / 60000)}min</span>` : ''}`; }
   $('#boss-btn').classList.toggle('hidden', !!R.inTown || !!R.dungeon);
   $('#mute-btn').textContent = S.settings.muted ? '🔇' : '🔊';
   { const bb = $('#boss-bar'), bs = !R.inTown && aliveMons().find((m) => m.boss && (m.aggro || (R.pos && dist2(m, R.pos) < 22)));
@@ -2025,7 +2100,8 @@ function chatCommand(txt) {
   const arg = args.join(' ');
   switch (cmd) {
     case 'sairgrupo': if (online()) Net.soc('pleave'); break;
-    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /trocar Nome, /sairgrupo, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
+    case 'pk': if (S.lvl < PK_MIN) { log(`O PK libera no nível ${PK_MIN}.`, 'chat'); break; } S.settings.pk = !S.settings.pk; log(`⚔️ Modo PK ${S.settings.pk ? 'ligado: cuidado nos mapas de PK!' : 'desligado.'}`, 'chat'); break;
+    case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /trocar Nome, /sairgrupo, /pk, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
     case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;
     case 'auto': S.settings.auto = !S.settings.auto; log(`Modo automático ${S.settings.auto ? 'ligado' : 'desligado'}.`, 'chat'); break;
     case 'cidade': setTown(true); break;
@@ -2462,7 +2538,7 @@ function tabRanking() {
   Net.ranking().then((list) => {
     if (R.tab !== 'ranking') return;
     const el = document.getElementById('rank-list'); if (!el) return;
-    el.innerHTML = list.length ? list.map((r, i) => `<div class="rank-row ${r.user === Net.st.user ? 'me' : ''}"><b>${i + 1}º</b><span>${CLASSES[r.cls].icon} ${esc(r.name)} <small class="muted">(${esc(r.user)})</small></span><span>${r.rebirths ? '★' + r.rebirths + ' ' : ''}Nv. ${r.lvl}</span><small class="muted">${fmt(r.kills)} abates</small></div>`).join('') : '<p class="muted">Ninguém no ranking ainda.</p>';
+    el.innerHTML = list.length ? list.map((r, i) => `<div class="rank-row ${r.user === Net.st.user ? 'me' : ''}"><b>${i + 1}º</b><span>${CLASSES[r.cls].icon} ${esc(r.name)} <small class="muted">(${esc(r.user)})</small></span><span>${r.rebirths ? '★' + r.rebirths + ' ' : ''}Nv. ${r.lvl}</span><small class="muted">${fmt(r.kills)} abates${r.honor ? ` · ⚔️ ${fmt(r.honor)} honra` : ''}</small></div>`).join('') : '<p class="muted">Ninguém no ranking ainda.</p>';
   }).catch(() => {});
   return `<p class="muted">Os melhores heróis do servidor (renascimentos, nível e abates). 🌐 ${Net.st.online} online agora.</p><div id="rank-list" class="rank-list">Carregando...</div>`;
 }
@@ -2496,6 +2572,8 @@ const ACH = [
   { id: 'exp4', name: 'Desbravador', desc: 'Descubra os 4 mapas escondidos andando pelas saídas', ok: () => Object.keys(S.visited || {}).length >= 4, stones: 10, title: 'Desbravador' },
   { id: 'st6', name: 'Caçador de Cristais', desc: 'Conclua 6 capítulos da história', ok: () => storyState().ch >= 6, stones: 10 },
   { id: 'stv', name: 'Selador do Vazio', desc: 'Derrote Vaelor, o Arauto do Vazio', ok: () => !!S.stats.vaelor, stones: 30, title: 'Selador do Vazio' },
+  { id: 'pk1', name: 'Primeiro Duelo', desc: 'Vença outro jogador no PK', ok: () => (S.stats.pvpKills || 0) >= 1, stones: 5, title: 'Duelista' },
+  { id: 'pk25', name: 'Senhor da Guerra', desc: 'Vença 25 jogadores no PK', ok: () => (S.stats.pvpKills || 0) >= 25, stones: 30, title: 'Senhor da Guerra' },
   { id: 'art1', name: 'Consagrado', desc: 'Transforme um item +10 em artefato', ok: () => (S.stats.arts || 0) >= 1, stones: 10, title: 'Consagrado' },
   { id: 'soul5', name: 'Alma em Harmonia', desc: 'Forme uma combinação na grade da Alma', ok: () => S.soul && soulLines().length >= 1, stones: 10, title: 'Alma em Harmonia' },
   { id: 'ro1', name: 'Rastreador', desc: 'Derrote um monstro Errante', ok: () => (S.stats.roamers || 0) >= 1, stones: 5, title: 'Rastreador' },
@@ -3203,6 +3281,8 @@ if (typeof Net !== 'undefined') {
     else if (m.t === 'ginvite') uiConfirm('Convite de guilda', `${m.from} convidou você para a guilda ${m.guild}.`, 'Entrar').then((y) => { if (y) Net.soc('gaccept'); });
     else if (m.t === 'pshare') { gainXp(m.xp); S.gold += m.gold; R.shareLog = (R.shareLog || 0) + 1; if (R.shareLog % 5 === 1) log(`👥 Grupo: +${fmt(m.xp)} XP e +${fmt(m.gold)} ouro dos abates de ${esc(m.from)}.`, 'muted'); }
     else if (m.t === 'coop') onCoop(m);
+    else if (m.t === 'pvphit') onPvpHit(m);
+    else if (m.t === 'pvpkill') onPvpKill(m);
     else if (m.t === 'tinvite') uiConfirm('Pedido de troca', `${m.from} quer trocar itens com você.`, 'Abrir troca').then((y) => { if (y) Net.soc('taccept', { fid: m.fid }); });
     else if (m.t === 'trade') { if (m.trade && R.win !== 'troca') { R.tradeSel = R.tradeSel || new Set(); R.win = null; openWin('troca'); } if (!m.trade) { R.tradeSel = new Set(); R.tradeGold = 0; if (R.win === 'troca') closeWin(); if (m.why) log(`🤝 ${esc(m.why)}`, 'muted'); } }
     else if (m.t === 'tdone') tradeDone(m);

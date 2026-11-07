@@ -1482,6 +1482,7 @@ const Scene3D = (() => {
         const eq = p.look || {};
         const h = (modelsReady() && buildHeroModel(p.cls, eq)) || buildCharacter(LOOK[p.cls], CLASSES[p.cls].weapon, eq);
         h.root.position.set(p.x, 0, p.z); scene.add(h.root);
+        h.root.traverse((c) => { c.userData.pid = id; });
         let label = null;
         if (layer) { label = document.createElement('div'); label.className = 'npc-label pl-label'; layer.appendChild(label); }
         o = { h, sig, label }; others.set(id, o);
@@ -1498,7 +1499,8 @@ const Scene3D = (() => {
         md.mixer.update(dt);
       } else if (h.legs) { const ph = t * 11, la = p.moving ? Math.sin(ph) * 0.8 : 0; h.legs[0].rotation.z = la; h.legs[1].rotation.z = -la; }
       if (o.label) {
-        o.label.innerHTML = `<b>${esc(p.name)}</b> <span style="font-size:10px">${p.rb ? '★' + p.rb + ' ' : ''}Nv.${p.lvl}</span>${p.title ? `<small>« ${esc(p.title)} »</small>` : ''}`;
+        o.label.innerHTML = `<b>${p.pk ? '⚔️ ' : ''}${esc(p.name)}</b> <span style="font-size:10px">${p.rb ? '★' + p.rb + ' ' : ''}Nv.${p.lvl}</span>${p.title ? `<small>« ${esc(p.title)} »</small>` : ''}${p.pk && R.pvp && R.pvp.id === id ? `<i class="pk-hp"><i style="width:${Math.round((p.hp || 0) * 100)}%"></i></i>` : ''}`;
+        o.label.classList.toggle('pk', !!p.pk); o.label.classList.toggle('pk-target', !!(R.pvp && R.pvp.id === id));
         tmpV.set(rp.x, 2.35, rp.z).project(camera);
         if (tmpV.z > 1) o.label.style.display = 'none'; else { o.label.style.display = ''; o.label.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; o.label.style.top = ((1 - tmpV.y) / 2 * H) + 'px'; }
       }
@@ -1561,9 +1563,11 @@ const Scene3D = (() => {
     raycaster.setFromCamera(ndc, camera);
     const roots = [...st.ents.values()].map((e) => e.root);
     if (env && env.nodes && !R.dungeon) for (const n of env.nodes) roots.push(n.g);
+    for (const o of others.values()) roots.push(o.h.root);
     const hit = raycaster.intersectObjects(roots, true).find((h) => h.object.isMesh && h.object.material && h.object.material.visible !== false);
     if (hit) {
       if (hit.object.userData.node) { window.gameOrder && window.gameOrder({ type: 'gather', id: hit.object.userData.node - 1 }); return; }
+      if (hit.object.userData.pid) { window.gameOrder && window.gameOrder({ type: 'pvp', id: hit.object.userData.pid }); return; }
       let o = hit.object; while (o && !o.userData.sid) o = o.parent;
       if (o) { window.gameOrder && window.gameOrder({ type: 'attack', sid: o.userData.sid }); return; }
     }
@@ -2340,6 +2344,11 @@ const Scene3D = (() => {
     if (target === 'player' && st.hero) floatAt(new THREE.Vector3(st.hero.root.position.x, 2.2, st.hero.root.position.z), text, cls);
     else { const p = monTop(); if (p) floatAt(p, text, cls); }
   }
+  function otherHit(id, text, cls) {
+    if (!running || document.hidden) return; const o = others.get(id); if (!o) return;
+    floatAt(new THREE.Vector3(o.h.root.position.x, 2.2, o.h.root.position.z), text, cls);
+    if (o.h.mats) { setFlash(o.h.mats, 0.6, '#ff6060'); later(0.12, () => setFlash(o.h.mats, 0, '#ff6060')); }
+  }
   function heal(id) {
     if (!running || document.hidden || !st.hero) return;
     if (id === 'r2') fxBeam(heroPos(0), '#90ffa0', 0.6);
@@ -2715,7 +2724,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2735,7 +2744,7 @@ const Scene = (() => {
     },
     stop() { Scene2D.stop(); Scene3D.stop(); },
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
-    petAttack: fwd('petAttack'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
+    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };

@@ -40,8 +40,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   ok('Outro jogador desenhado com nome', drawn >= 1);
   await A.screenshot({ path: path.join(OUT, 'multiplayer.png') });
   await A.evaluate(() => chatCommand('Olá do Brutus!'));
-  await B.waitForTimeout(800);
-  const got = await B.evaluate(() => R.log.some((l) => l.msg.includes('Olá do Brutus!')));
+  const got = await until(B, () => R.log.some((l) => l.msg.includes('Olá do Brutus!')));
   ok('Chat chega no outro jogador', got);
   // grupo
   await B.evaluate(() => { window._inv = null; const o = Net.onSocial; Net.onSocial = (m) => { if (m.t === 'pinvite' || m.t === 'ginvite') window._inv = m; else o(m); }; });
@@ -122,6 +121,24 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   ok('Troca concluída: item por ouro', gotItem && (await A.evaluate((n) => S.inv.some((i) => i.name === n), itName)) && (await B.evaluate(() => S.gold >= 35000 && !S.inv.some((i) => i.uid === 'lumen-item'))), sides);
   await B.evaluate(() => Net.soc('pleave'));
   ok('Sair do grupo desfaz grupo de 2', await until(A, () => Net.st.party === null));
+  // PK
+  for (const P of [A, B]) await P.evaluate(() => { S.lvl = 50; S.settings.pk = true; S.settings.auto = false; S.zone = 'z8'; R.worldZone = null; if (R.inTown) setTown(false); R.dead = 0; S.hp = derived().maxHp; });
+  await A.waitForTimeout(600);
+  await A.evaluate(() => { R.mons = []; R.pos = { x: 0, z: 0 }; }); await B.evaluate(() => { R.mons = []; R.pos = { x: 1.5, z: 0 }; S.pots = {}; S.settings.autoHp = 0; });
+  ok('Os dois aparecem com PK no mapa de PK', await until(A, () => [...Net.st.others.values()].some((o) => o.name === 'Lumen' && o.pk)));
+  const bid = await A.evaluate(() => [...Net.st.others.entries()].find(([, o]) => o.name === 'Lumen')[0]);
+  const xpB2 = await B.evaluate(() => S.xp + S.lvl * 1e9);
+  await A.evaluate((id) => { window.gameOrder({ type: 'pvp', id }); }, bid);
+  ok('Golpe de PK tira vida do outro', await until(B, () => S.hp < derived().maxHp, null, 6000));
+  await B.evaluate(() => { S.hp = 5; });
+  ok('Derrota no PK sem perder XP', await until(B, (x0) => R.dead > 0 && S.stats.pvpDeaths === 1 && S.xp + S.lvl * 1e9 >= x0, xpB2, 8000));
+  ok('Vencedor ganha Honra', await until(A, () => (S.stats.pvpKills || 0) === 1, null, 5000) && (await A.evaluate(async () => (await Net.ranking()).find((r) => r.name === 'Brutus').honor)) === 1);
+  await B.evaluate(() => { R.dead = 0; S.hp = derived().maxHp; R.pvpProt = 0; S.settings.pk = false; });
+  await A.waitForTimeout(700);
+  const why = await A.evaluate((id) => pkWhyNot(Net.st.others.get(id)), bid);
+  ok('Quem desliga o PK não pode ser atacado', why.includes('desligado'), why);
+  await A.evaluate(() => { S.settings.pk = true; S.zone = 'z2'; R.worldZone = null; });
+  ok('Fora dos mapas de PK ninguém ataca', await A.evaluate(() => pkWhyNot({ name: 'X', pk: true, lvl: 60 }).includes('não é mapa de PK')));
   await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });
   await B.waitForTimeout(800);
   await B.reload(); await B.waitForSelector('.acct-on', { timeout: 10000 });
