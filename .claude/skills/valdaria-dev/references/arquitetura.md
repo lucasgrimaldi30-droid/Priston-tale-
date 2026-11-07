@@ -141,12 +141,15 @@ Atalhos no `keydown` do fim de `game.js`.
   ouro, pedras e item), conversa em fila (`storyShow`/`storyNext`, `#story-dlg` no alto da tela, não pausa o jogo), `storyTick` no `eventTick`.
   Vaelor (`spawnStoryBoss`, `m.sboss`, modelo do Lich) aparece na arena do Vale dos Titãs no capítulo 13. O Auto segue a história
   (`storyWants`: entra no desvio da história, entra na masmorra, desafia o chefe e volta a um mapa anterior se preciso). Aba no topo das Missões.
-- **Depois do 80:** `gainXp` multiplica por `teamXpFactor()` (sozinho `SOLO_80` 22%, dupla 55%, equipe de 3+ no mesmo mapa 115%).
-  **Laço de Equipe** (`teamBond`, `BOND`): cada colega no mapa = +25% de dano e −20% de dano recebido (até 3). **Despertar** (`AWK`,
-  `S.awk`): 1 ponto por nível acima de 80 (Fúria, Precisão, Vigor, Bastião, Celeridade, Ruína), painel na janela do herói, automático com `autoPts`.
-- **Fenda Primordial** (`e1`, desvio do Abismo Eterno, nível 85–100, `danger: true`): monstros com `DANGER` (vida ×4, ataque ×19, XP ×2,4),
-  bando que percebe de 8,5 m e chama os outros; chefe com vida ×5 e ataque ×8. Calibrada com `tools/test/danger.cjs`: herói médio do 88 sozinho
-  quase morre, com equipe de 3 fica tranquilo, herói muito forte (Conta Full) fica solo. O Auto sai da Fenda depois de 2 mortes sozinho.
+- **Depois do 80:** `gainXp` multiplica por `teamXpFactor()` (sozinho `SOLO_80` 60%, dupla 85%, equipe de 3+ no mesmo mapa 110%) —
+  sozinho chega ao 100, só que mais devagar. **Laço de Equipe** (`teamBond`): +10% de dano e −10% de dano recebido por colega no mapa (até 3),
+  mais o bônus de cada **função** presente (`CLASS_ROLE`/`ROLE_INFO`: dano +10% dano, tanque −15% dano recebido, mago +12% dano,
+  cura 1,5% de vida por segundo; as 4 juntas = formação completa, +10%/−10% a mais). `partyMembersNear()` lista os colegas no mapa.
+  **Despertar** (`AWK`, `S.awk`): 1 ponto por nível acima de 80 (Fúria, Precisão, Vigor, Bastião, Celeridade, Ruína), painel na janela do herói.
+- **Fenda Primordial** (`e1`, desvio do Abismo Eterno, nível 85–100, `danger: true`): monstros com `DANGER` (vida ×3, ataque ×9, XP ×2,4),
+  bando que percebe de 8,5 m e chama os outros; chefe vida ×4, ataque ×4. Calibrada com `tools/test/danger.cjs`: médio do 88 sozinho
+  sobrevive **com poções** prestando atenção, **sem poções morre**; em equipe com tanque e cura é difícil morrer; muito forte fica tranquilo.
+  O Auto sai da Fenda depois de 2 mortes sozinho.
 - **Menus aos poucos:** `UNLOCK` (Conquistas nv 3, Ranking 6, Social 10, Alma 20), `applyUnlocks()` no `renderAll`; `openWin` recusa menu trancado.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),

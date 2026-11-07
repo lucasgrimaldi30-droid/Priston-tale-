@@ -49,8 +49,9 @@ fxVortex, fxNova, fxRain, slash, ring, projectile, burst`. Bônus visível enqua
 `NPC_MODEL`. Posição também no minimapa da cidade (`drawMinimap`).
 
 ## Balanceamento (metas atuais)
-- Regra do dono: **até o 80 dá para ir sozinho seguindo a história; do 80 ao 100 é com equipe** (solo é muito lento) e cada ponto depois do 80 tem
-  que fazer diferença. A Fenda Primordial é o lugar de grupo (ou de herói muito forte). Rode `node tools/test/danger.cjs` se mexer em combate.
+- Regra do dono (não exagere): **sozinho dá para chegar ao 100, só que mais devagar e prestando atenção — sem poção morre**; não pode morrer
+  toda hora. **Em equipe é difícil morrer**, principalmente com funções diferentes (dano, tanque, mago, cura); só morre quem puxa monstro demais.
+  Cada ponto depois do 80 tem que fazer diferença. Rode `node tools/test/danger.cjs` se mexer em combate ou nos multiplicadores.
 - `node tools/test/balance.cjs 24`: **nível ~50–60 em 24 h** (com a história; mostra o capítulo alcançado) de jogo contínuo no Auto (com pontos de habilidade automáticos), poucas mortes (< 30), nenhuma classe muito à frente.
 - Se uma classe travar sem morrer, procure laços: chefe que cura, alvo inalcançável ou missão impossível ocupando espaço.
 - XP por nível: `xpNeed(l) = 40·l^2,6 (+8%/nível acima de 79) + 60`. Monstros do mundo: vida ×0,55, ataque ×0,5, XP ×0,78 (×0,6 do grupo ×1,3 do mundo).

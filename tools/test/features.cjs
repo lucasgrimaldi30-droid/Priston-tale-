@@ -131,11 +131,14 @@ const startServer = require('./server.cjs');
     novo('paladino', 80, { tut: 99 }); S.settings.auto = false; S.story = { ch: STORY.findIndex((c) => c.obj.k === 'sboss'), prog: 0, seen: 99 }; S.zone = 'z9'; initWorld(); R.evT = 0; R.sbossT = 0; tick(); tick();
     const vb = R.mons.find((m) => m.sboss); ok('Vaelor aparece na arena do Vale', !!vb && vb.name.startsWith('Vaelor'));
     if (vb) { vb.hp = 0; killMonster(vb); } ok('Vencer Vaelor avança a história', STORY[storyState().ch].zone === 'e1' && !!S.stats.vaelor);
-    S.lvl = 85; ok('Depois do 80, solo rende pouco XP', teamXpFactor() === SOLO_80);
+    S.lvl = 85; ok('Depois do 80, solo rende menos XP (mas dá para upar)', teamXpFactor() === SOLO_80 && SOLO_80 >= 0.5);
     const x0 = S.xp; gainXp(100000); ok('XP solo reduzido', S.xp - x0 === Math.round(100000 * SOLO_80) || S.lvl > 85);
     S.lvl = 90; S.awk = {}; const at0 = derived().atkMin; awkAdd('furia'); awkAdd('furia');
     ok('Despertar: 10 pontos no nível 90 e cada um conta', awkFree() === 8 && derived().atkMin >= Math.round(at0 * 1.05));
     S.zone = 'e1'; initWorld(); ok('Fenda Primordial tem monstros perigosos', R.mons.filter((m) => m.danger).length >= 8);
+    { const keep = window.partyMembersNear; window.partyMembersNear = () => [{ cls: 'gladiador' }, { cls: 'cleriga' }, { cls: 'arcanista' }];
+      const tb = teamBond(); window.partyMembersNear = keep;
+      ok('Funções no grupo dão bônus (formação completa)', tb.roles.length === 4 && tb.taken < 0.5 && tb.dmg > 1.5 && tb.regen > 0, `dano x${tb.dmg.toFixed(2)} recebido x${tb.taken.toFixed(2)}`); }
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

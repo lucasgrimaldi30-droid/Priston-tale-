@@ -436,7 +436,7 @@ function walkZone(ex) {
   R.arrive = back ? inward(back, 3.5) : null;
   log(`🚶 Você chegou a <b>${nz.icon} ${esc(nz.name)}</b> (Nv. ${nz.min}+).`, 'muted'); toast(`${nz.icon} ${nz.name}`);
   storyProgress('visit', nz.id);
-  if (nz.danger) { log('⚠️ <b>Área perigosa:</b> monstros muito fortes. Sozinho, só com um herói muito forte. Recomendado: equipe de 3 ou mais.', 'death'); toast('⚠️ Área perigosa: vá em equipe de 3+', 'bad'); }
+  if (nz.danger) { log('⚠️ <b>Área perigosa:</b> monstros fortes e em bando. Sozinho dá, mas leve muitas poções e preste atenção. Em equipe é bem mais seguro.', 'death'); toast('⚠️ Área perigosa: leve poções ou vá em equipe', 'bad'); }
   Sfx.play('portal'); R.dirty.all = true;
   if (R.win === 'mapas') renderTab();
 }
@@ -466,9 +466,9 @@ function travelStep(dt, speed) {
 }
 // monstros que vêm dos mapas vizinhos e errantes raros
 const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
-// área perigosa (Fenda Primordial): calibrada para herói médio do 88 sozinho quase morrer, com equipe de 3 ficar tranquilo
-// e herói muito forte (itens +10, Alma e artefatos) ficar solo — ver tools/test/danger.cjs
-const DANGER = { hp: 4, atk: 19, xp: 2.4, bossHp: 5, bossAtk: 8 };
+// área perigosa (Fenda Primordial), calibrada com tools/test/danger.cjs: herói médio do 88 sozinho sobrevive com poções
+// (mas precisa prestar atenção), sem poções morre; em equipe com tanque e cura é difícil morrer; herói muito forte fica tranquilo
+const DANGER = { hp: 3, atk: 9, xp: 2.4, bossHp: 4, bossAtk: 4 };
 function spawnSource() {
   const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
   if (exits.length && Math.random() < BORDER_CHANCE) {
@@ -1115,6 +1115,7 @@ function tick() {
   S.hp = Math.min(S.hp, d.maxHp);
   R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); }
 
+  if (!R.inTown && !R.dead && S.hp > 0) { const tb = teamBond(); if (tb.regen) S.hp = Math.min(d.maxHp, S.hp + d.maxHp * tb.regen * dt); }
   if (R.inTown) { // cidade: zona segura, recuperação rápida
     S.hp = Math.min(d.maxHp, S.hp + d.maxHp * 0.06 * dt);
     S.mp = Math.min(d.maxMp, S.mp + d.maxMp * 0.06 * dt);
@@ -1594,11 +1595,30 @@ function tradeDone(m) {
 }
 
 // ---------- depois do nível 80: equipe, Despertar e área perigosa ----------
-const SOLO_80 = 0.22, DUO_80 = 0.55, TEAM_80 = 1.15; // XP depois do 80: sozinho, em dupla, em equipe de 3+
+const SOLO_80 = 0.6, DUO_80 = 0.85, TEAM_80 = 1.1; // XP depois do 80: sozinho dá para chegar ao 100, só que mais devagar
 function teamXpFactor() { if (S.lvl < 80) return 1; const n = partyNear(); return n >= 2 ? TEAM_80 : n === 1 ? DUO_80 : SOLO_80; }
-// Laço de Equipe: cada colega no mesmo mapa = +25% de dano e -20% de dano recebido
-const BOND = { dmg: 0.25, taken: 0.2 };
-function teamBond() { const n = Math.min(3, partyNear()); return { dmg: 1 + BOND.dmg * n, taken: Math.max(0.35, 1 - BOND.taken * n), n }; }
+// Laço de Equipe: cada colega no mesmo mapa = +10% de dano e -10% de dano recebido, mais o bônus de cada função presente
+// funções no grupo: cada função presente (você + colegas no mesmo mapa) ajuda todo mundo
+const CLASS_ROLE = { gladiador: 'dano', cacadora: 'dano', lanceiro: 'dano', valquiria: 'dano', engenheiro: 'tanque', paladino: 'tanque', arcanista: 'mago', cleriga: 'cura' };
+const ROLE_INFO = {
+  dano:   { icon: '⚔️', name: 'Dano',   txt: '+10% de dano' },
+  tanque: { icon: '🛡️', name: 'Tanque', txt: '-15% de dano recebido' },
+  mago:   { icon: '🔮', name: 'Mago',   txt: '+12% de dano' },
+  cura:   { icon: '✨', name: 'Cura',   txt: 'recupera 1,5% da vida por segundo' },
+};
+const BOND = { dmg: 0.1, taken: 0.1 }; // por colega no mapa (até 3), além das funções
+function teamBond() {
+  const near = partyMembersNear(), n = Math.min(3, near.length);
+  if (!n) return { dmg: 1, taken: 1, regen: 0, n: 0, roles: [] };
+  const roles = [...new Set([S.cls, ...near.map((m) => m.cls)].map((c) => CLASS_ROLE[c]).filter(Boolean))];
+  let dmg = 1 + BOND.dmg * n, taken = 1 - BOND.taken * n, regen = 0;
+  if (roles.includes('dano')) dmg += 0.1;
+  if (roles.includes('mago')) dmg += 0.12;
+  if (roles.includes('tanque')) taken -= 0.15;
+  if (roles.includes('cura')) regen = 0.015;
+  if (roles.length >= 4) { dmg += 0.1; taken -= 0.1; } // formação completa
+  return { dmg, taken: Math.max(0.3, taken), regen, n, roles };
+}
 const AWK = {
   furia:      { name: 'Fúria',      icon: '🔥', k: 'atkp',    per: 3,    txt: (v) => `+${v}% ataque` },
   precisao:   { name: 'Precisão',   icon: '🎯', k: 'crit',    per: 1,    txt: (v) => `+${v}% crítico` },
@@ -1619,12 +1639,13 @@ function awkPanel() {
   if (S.lvl < 80) return `<h3>Despertar <small class="muted">(libera no nível 80)</small></h3><p class="muted small-note">Do 81 ao 100, cada nível dá 1 ponto de Despertar com efeito grande.</p>`;
   const a = awkState();
   return `<h3>Despertar <span class="pts">Pontos: <b>${awkFree()}</b></span></h3><div class="awk-grid">${Object.entries(AWK).map(([k, v]) => `<button class="awk" data-awk="${k}" ${awkFree() <= 0 ? 'disabled' : ''}><span>${v.icon} ${v.name} <b>${a[k] || 0}</b></span><small>${v.txt(v.per)} por ponto · agora ${v.txt(+(v.per * (a[k] || 0)).toFixed(2))}</small></button>`).join('')}</div>
-    <p class="muted small-note">Depois do 80, sozinho o XP rende ${Math.round(SOLO_80 * 100)}%; em dupla ${Math.round(DUO_80 * 100)}%; com 3 ou mais no mesmo mapa ${Math.round(TEAM_80 * 100)}%.</p>`;
+    <p class="muted small-note">Depois do 80 dá para upar sozinho, só que mais devagar: o XP rende ${Math.round(SOLO_80 * 100)}% sozinho, ${Math.round(DUO_80 * 100)}% em dupla e ${Math.round(TEAM_80 * 100)}% com 3 ou mais no mesmo mapa.</p>`;
 }
 
 // ---------- grupo e guilda (precisam do servidor) ----------
 const GUILD_COST = 50000;
-function partyNear() { const pt = online() && Net.st.party; return pt ? pt.members.filter((m) => m.name !== S.name && m.zone === S.zone && !m.town && !m.dun).length : 0; }
+function partyMembersNear() { const pt = online() && Net.st.party; return pt ? pt.members.filter((m) => m.name !== S.name && m.zone === S.zone && !m.town && !m.dun) : []; }
+function partyNear() { return partyMembersNear().length; }
 function guildBonus() { const g = online() && Net.st.guild; if (!g) return 0; const on = Math.max(Net.st.gOn || 0, g.members.filter((m) => m.online).length); return Math.min(0.1, Math.max(0, on - 1) * 0.02); }
 function socialXp() { return (1 + partyNear() * 0.1) * (1 + guildBonus()); }
 function renderPartyHud() {
@@ -1632,7 +1653,8 @@ function renderPartyHud() {
   const pt = online() && Net.st.party;
   if (!pt) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('div'); el.id = 'party-hud'; el.className = 'party-hud'; const st = document.getElementById('stage'); if (!st) return; st.appendChild(el); }
-  el.innerHTML = `<div class="ph-title">👥 Grupo${partyNear() ? ` · +${partyNear() * 10}% XP · Laço: +${Math.round((teamBond().dmg - 1) * 100)}% dano, -${Math.round((1 - teamBond().taken) * 100)}% dano recebido` : ''}</div>` + pt.members.filter((m) => m.name !== S.name).map((m) => {
+  const tb = teamBond();
+  el.innerHTML = `<div class="ph-title">👥 Grupo${tb.n ? ` · ${tb.roles.map((r) => ROLE_INFO[r].icon).join('')}${tb.roles.length >= 4 ? ' formação completa' : ''} · +${Math.round((tb.dmg - 1) * 100)}% dano · -${Math.round((1 - tb.taken) * 100)}% dano recebido${tb.regen ? ' · cura' : ''}` : ''}</div>` + pt.members.filter((m) => m.name !== S.name).map((m) => {
     const far = m.zone !== S.zone || m.town || m.dun;
     return `<div class="ph-row${far ? ' far' : ''}"><b>${esc(m.name)}</b> <small>Nv.${m.lvl}${m.name === pt.leader ? ' 👑' : ''}${far ? ' · ' + (m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')) : ''}</small><i style="--w:${Math.round((m.hp || 0) * 100)}%"></i></div>`;
   }).join('');
@@ -1642,7 +1664,8 @@ function tabSocial() {
   const pt = Net.st.party, g = Net.st.guild, others = [...Net.st.others.values()];
   const near = others.length ? others.map((o) => `<div class="soc-row"><b>${esc(o.name)}</b> <small>Nv.${o.lvl} ${esc(CLASSES[o.cls] ? CLASSES[o.cls].name : '')}</small><span><button class="btn small" data-pinv="${esc(o.name)}">+ Grupo</button><button class="btn small" data-tinv="${esc(o.name)}">🤝 Trocar</button>${g ? `<button class="btn small" data-ginv="${esc(o.name)}">+ Guilda</button>` : ''}</span></div>`).join('') : '<p class="muted">Ninguém neste mapa agora.</p>';
   const party = pt ? `<div class="soc-list">${pt.members.map((m) => `<div class="soc-row"><b>${esc(m.name)}${m.name === pt.leader ? ' 👑' : ''}</b> <small>Nv.${m.lvl} · ${m.town ? 'cidade' : m.dun ? 'masmorra' : esc((zoneById(m.zone) || {}).name || '')}</small></div>`).join('')}</div>
-    <p class="muted">+10% de XP por colega no mesmo mapa. Quem está junto ganha 15% do XP e 10% do ouro dos seus abates.</p><button class="btn small" data-soc="pleave">Sair do grupo</button>`
+    <p class="muted">+10% de XP por colega no mesmo mapa. Quem está junto ganha 15% do XP e 10% do ouro dos seus abates.</p>
+    <p class="muted">Funções no grupo (você é ${ROLE_INFO[CLASS_ROLE[S.cls]].icon} ${ROLE_INFO[CLASS_ROLE[S.cls]].name}): ${Object.values(ROLE_INFO).map((r) => `${r.icon} ${r.name} ${r.txt}`).join(' · ')}. Com as 4 funções juntas: formação completa (+10% dano e -10% dano recebido a mais).</p><button class="btn small" data-soc="pleave">Sair do grupo</button>`
     : '<p class="muted">Você não está em grupo. Convide alguém abaixo ou pelo chat: /convidar Nome</p>';
   const guild = g ? `<div class="guild-head"><b>🛡️ ${esc(g.name)}</b> <small>Líder: ${esc(g.owner)} · ${g.members.filter((m) => m.online).length}/${g.members.length} online · bônus +${Math.round(guildBonus() * 100)}% XP</small></div>
     <div class="soc-list">${g.members.sort((a, b) => b.online - a.online || b.lvl - a.lvl).map((m) => `<div class="soc-row${m.online ? '' : ' off'}"><b>${m.online ? '🟢' : '⚪'} ${esc(m.name)}${m.owner ? ' 👑' : ''}</b> <small>Nv.${m.lvl || '?'} · conta ${esc(m.user)}</small>${g.owner === Net.st.user && !m.owner ? `<button class="btn small" data-gkick="${esc(m.key)}">Expulsar</button>` : ''}</div>`).join('')}</div>
@@ -2277,9 +2300,9 @@ const STORY = [
   { lvl: 70, title: 'O despertar dos titãs', zone: 'z9', obj: { k: 'boss' }, intro: [['varek', 'Todo o exército do reino está no Vale dos Titãs. O Titã Primordial acordou e está esmagando nossas linhas.'], ['varek', 'Derrube o titã. É o último muro antes de Vaelor.']],
     outro: [['varek', 'O titã caiu! Os soldados estão gritando o seu nome.'], ['varek', 'Agora é com você. Fique mais forte e enfrente Vaelor na arena do Vale.']] },
   { lvl: 78, title: 'O Arauto do Vazio', zone: 'z9', obj: { k: 'sboss' }, intro: [['vaelor', 'Então você veio. Quatro selos nas mãos de um mortal... vamos ver se aguenta o peso.'], ['mirela', 'Ele está na arena ao norte do Vale dos Titãs. Use os selos. É agora ou nunca!']],
-    outro: [['vaelor', 'Os selos... ardem... Mas você não entende. Eu era só a porta. O que vem do outro lado não pode ser preso.'], ['mirela', 'Vaelor foi selado. Mas a fenda que ele abriu no Abismo Eterno continua lá, e cresce.'], ['varek', 'Daqui para frente, ninguém vai sozinho. Junte uma equipe, aventureiro.']] },
-  { lvl: 80, title: 'Além da fenda', zone: 'e1', obj: { k: 'visit' }, intro: [['elyon', 'A fenda está no Abismo Eterno. Siga a saída de baixo de lá e você chega na Fenda Primordial.'], ['elyon', 'É o lugar mais perigoso que já vi. Sozinho, só se você for muito forte. Vá com no mínimo três.']],
-    outro: [['elyon', 'Você pisou na Fenda e voltou para contar. Daqui até o nível 100, a força vem da equipe.'], ['heroi', 'Então vamos juntos.']] },
+    outro: [['vaelor', 'Os selos... ardem... Mas você não entende. Eu era só a porta. O que vem do outro lado não pode ser preso.'], ['mirela', 'Vaelor foi selado. Mas a fenda que ele abriu no Abismo Eterno continua lá, e cresce.'], ['varek', 'Daqui para frente o caminho fica mais duro. Sozinho é possível, mas com uma equipe é bem mais fácil.']] },
+  { lvl: 80, title: 'Além da fenda', zone: 'e1', obj: { k: 'visit' }, intro: [['elyon', 'A fenda está no Abismo Eterno. Siga a saída de baixo de lá e você chega na Fenda Primordial.'], ['elyon', 'É o lugar mais perigoso que já vi. Sozinho dá, mas leve muitas poções e não puxe monstro demais. Em equipe é bem mais seguro.']],
+    outro: [['elyon', 'Você pisou na Fenda e voltou para contar. Daqui até o nível 100 vai ser mais lento, e uma equipe ajuda muito.'], ['heroi', 'Então vamos juntos.']] },
 ];
 function storyState() {
   if (!S.story) { // heróis que já existiam começam no capítulo do seu nível (sem prêmio dos anteriores)
@@ -2349,7 +2372,7 @@ function tabStory() {
   const done = STORY.slice(0, st.ch).map((x, i) => `<div class="q-card ok"><h4><span>✔ ${i + 1}. ${esc(x.title)}</span><button class="btn tiny" data-sreplay="${i}">Rever</button></h4></div>`).join('');
   const cur = c ? `<div class="q-card"><h4><span>📖 ${st.ch + 1}. ${esc(c.title)}</span><small class="muted">Nível ${c.lvl}+</small></h4>
     ${S.lvl >= c.lvl ? `<p>${esc(storyObjText(c))}</p><div class="q-prog"><i style="width:${st.prog / storyNeed(c) * 100}%"></i></div><small>${st.prog}/${storyNeed(c)}</small><div class="item-actions"><button class="btn tiny" data-sreplay="${st.ch}">Ver conversa</button></div>` : `<p class="muted">Libera no nível ${c.lvl}.</p>`}</div>`
-    : '<p class="good">Você terminou a história principal! Do nível 80 ao 100, o caminho é com equipe.</p>';
+    : '<p class="good">Você terminou a história principal! Do nível 80 ao 100 dá para seguir sozinho, mas em equipe é mais rápido e seguro.</p>';
   return `<div class="q-sec">📖 História: a Marca do Vazio</div>${cur}${done}`;
 }
 
