@@ -8,6 +8,9 @@
 - **Fase 1** — mundo aberto isométrico, tocar para andar/atacar, monstros com IA, modo Auto.
 - **Fase 3** — interface de MMO em tela cheia, minimapa, chat com comandos, barra de habilidades manual, atalhos, 40 missões (Comandante Varek).
 
+- **Melhorias gerais:** níveis de habilidade, elites, chefes com mecânicas, masmorras, gemas, forja, loja nova, montarias, mascotes,
+  conquistas e títulos, tutorial, equipar melhores, qualidade gráfica.
+
 ## Planejado (o dono pediu para deixar os modelos de personagens e monstros para o final)
 - **Fase 5 — multiplayer:** servidor (Node.js), contas, salvamento online, outros jogadores no mapa, chat real, anti-trapaça (servidor calcula XP/drops).
   Docker + docker-compose para rodar num VPS. O dono contrata o servidor e o domínio.

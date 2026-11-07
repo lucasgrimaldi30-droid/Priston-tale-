@@ -33,7 +33,8 @@ Tier = `floor(ilvl/17)`. Nomes por tier em `WEAPON_NAMES`/`ARMOR_SLOTS`. Visual 
 `NPC_MODEL`. Posição também no minimapa da cidade (`drawMinimap`).
 
 ## Balanceamento (metas atuais)
-- `node tools/test/balance.cjs 24`: **nível ~44–55 em 24 h** de jogo contínuo no Auto, poucas mortes (< 50), nenhuma classe muito à frente.
+- `node tools/test/balance.cjs 24`: **nível ~45–56 em 24 h** de jogo contínuo no Auto (com pontos de habilidade automáticos), poucas mortes (< 30), nenhuma classe muito à frente.
+- Se uma classe travar sem morrer, procure laços: chefe que cura, alvo inalcançável ou missão impossível ocupando espaço.
 - XP por nível: `xpNeed(l) = 40·l^2,6 (+8%/nível acima de 79) + 60`. Monstros do mundo: vida ×0,55, ataque ×0,5, XP ×0,78 (×0,6 do grupo ×1,3 do mundo).
 - Missões: caçada = 12% do XP do nível; chefe = 35%.
 - Ouro sobra no fim do jogo (só o refino gasta): ponto conhecido para melhorar.

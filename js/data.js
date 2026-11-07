@@ -215,4 +215,19 @@ const SHOP = [
   { id: 'mp1', name: 'Poção de Mana Menor',  icon: '💧', type: 'mp', heal: 0.30, price: 15 },
   { id: 'mp2', name: 'Poção de Mana Maior',  icon: '💙', type: 'mp', heal: 0.60, price: 80 },
   { id: 'pedra', name: 'Pedra de Refino',    icon: '💎', type: 'mat', price: 250 },
+  { id: 'xp1',   name: 'Pergaminho de Experiência', icon: '📜', type: 'scroll', price: 6000, desc: '+50% de experiência por 30 minutos' },
+  { id: 'gembag', name: 'Saco de Gemas',     icon: '💠', type: 'gembag', price: 9000, desc: 'Uma gema aleatória de nível 1' },
+  { id: 'mount1', name: 'Lobo de Montaria',  icon: '🐺', type: 'mount', price: 60000, speed: 0.35, desc: '+35% de velocidade ao viajar' },
+  { id: 'mount2', name: 'Grifo Dourado',     icon: '🦅', type: 'mount', price: 450000, speed: 0.6, desc: '+60% de velocidade ao viajar' },
+  { id: 'pet1',  name: 'Mascote Gosminha',   icon: '🟢', type: 'pet', price: 35000, gold: 10, desc: '+10% de ouro' },
+  { id: 'pet2',  name: 'Fada Luminosa',      icon: '🧚', type: 'pet', price: 300000, xp: 10, gold: 5, desc: '+10% de experiência e +5% de ouro' },
 ];
+
+// Gemas: encaixe nos equipamentos (1 encaixe por nível de raridade). Combine 3 iguais para subir o nível (1–5).
+const GEMS = {
+  rubi:      { name: 'Rubi',      icon: '🔴', color: '#ff4a4a', label: '% de ataque',  per: 2 },
+  safira:    { name: 'Safira',    icon: '🔵', color: '#4a8aff', label: ' de mana',     per: 45 },
+  esmeralda: { name: 'Esmeralda', icon: '🟩', color: '#4aff7a', label: '% de crítico', per: 0.8 },
+  topazio:   { name: 'Topázio',   icon: '🟡', color: '#ffd24a', label: '% de esquiva', per: 0.6 },
+  ametista:  { name: 'Ametista',  icon: '🟣', color: '#c070ff', label: ' de vida',     per: 60 },
+};

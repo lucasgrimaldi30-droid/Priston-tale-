@@ -1156,7 +1156,7 @@ const Scene3D = (() => {
     else if (md.curName === 'Death_A') playAnim(h, 'Idle', { fade: 0.3 });
     else if (now() >= (md.busyUntil || 0)) {
       if (R.inTown) playAnim(h, h.walk ? 'Walking_A' : 'Idle', { fade: 0.2 });
-      else if (st.run) playAnim(h, 'Running_A', { fade: 0.15 });
+      else if (st.run) playAnim(h, R.mounted && S.mount ? 'Idle' : 'Running_A', { fade: 0.15 });
       else playAnim(h, st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
     }
     md.mixer.update(dt);
@@ -1200,9 +1200,10 @@ const Scene3D = (() => {
   }
 
   // ---------- mundo aberto (mapa isométrico) ----------
-  function buildWorld(zid) {
+  function buildWorld(zid, dun) {
     disposeEnv();
     const th = THEMES[zid] || THEMES.z1, M = matFactory(null), root = group(null);
+    if (dun) return buildDungeon(zid, th, M, root);
     const dark = th.cave || th.amb === 'star' || th.amb === 'wisp';
     scene.background = skyTex(th.sky[0], th.sky[1]);
     scene.fog = new THREE.Fog(th.sky[1], 24, 68);
@@ -1250,6 +1251,32 @@ const Scene3D = (() => {
     env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th, stars: null, world: true, sun, rune };
   }
 
+  function buildDungeon(zid, th, M, root) {
+    const floor = R.dungeon ? R.dungeon.floor : 1;
+    scene.background = skyTex('#05040a', '#120e1c');
+    scene.fog = new THREE.Fog('#120e1c', 12, 36);
+    root.add(new THREE.HemisphereLight('#8a80b0', '#1a1420', 0.6));
+    const sun = new THREE.DirectionalLight('#c0b0ff', 0.55); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -15, right: 15, top: 15, bottom: -15, near: 1, far: 50 }); sun.shadow.bias = -0.0015;
+    root.add(sun); root.add(sun.target);
+    const fill = new THREE.DirectionalLight('#ffffff', 0.35); fill.position.set(-6, 10, 12); root.add(fill);
+    const gtex = groundTex(new THREE.Color(th.g[0]).multiplyScalar(0.55).getStyle(), new THREE.Color(th.g[1]).multiplyScalar(0.45).getStyle()); gtex.repeat.set(14, 14);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(17, 48), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; root.add(ground);
+    const wallM = M('#3a3444'), capM = M('#4e4658');
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2, h = 3.2 + (i % 3) * 0.6;
+      const w = mk(G.box(3.9, h, 1), wallM, root, Math.cos(a) * 16.5, h / 2, Math.sin(a) * 16.5); w.rotation.y = -a + Math.PI / 2; w.receiveShadow = true;
+      if (i % 4 === 0) { mk(G.box(1.2, h + 1, 1.2), capM, root, Math.cos(a) * 15.8, (h + 1) / 2, Math.sin(a) * 15.8); const tg = glowSprite('#ff9040', 1.6, 0.85); tg.position.set(Math.cos(a) * 15.1, h * 0.75, Math.sin(a) * 15.1); root.add(tg); }
+    }
+    const r = seeded(ZONES.findIndex((z) => z.id === zid) * 53 + floor * 7);
+    for (let i = 0; i < 18; i++) { const a = r() * 6.28, d = 6 + r() * 8; const p = buildProp(th.deco === 'crystal' || th.deco === 'spike' || th.deco === 'tomb' ? th.deco : 'rock', th, M); p.position.set(Math.cos(a) * d, 0, Math.sin(a) * d - 2); p.scale.setScalar(0.9 + r() * 0.6); root.add(p); }
+    const rune = mk(new THREE.RingGeometry(3.6, 4.0, 48), new THREE.MeshBasicMaterial({ color: floor === 3 ? '#ff4060' : '#7050c0', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }), root, 0, 0.03, floor === 3 ? -7 : -3, false);
+    rune.rotation.x = -Math.PI / 2;
+    scene.add(root);
+    env = { root, gtex, far: [], mid: [], props: [], scatter: [], ceil: [], th: { amb: 'dust' }, stars: null, world: true, sun, rune };
+  }
+
   // anel do alvo, marcador de movimento e barrinhas de vida
   let tRing = null;
   const barEls = new Map();
@@ -1273,10 +1300,79 @@ const Scene3D = (() => {
       const p = monTop(e); tmpV.copy(p).project(camera);
       el.style.left = ((tmpV.x + 1) / 2 * W) + 'px'; el.style.top = ((1 - tmpV.y) / 2 * H) + 'px';
       el.firstChild.style.width = Math.max(0, ref.hp / ref.maxHp * 100) + '%';
-      el.classList.toggle('tgt', ref === R.mon);
+      el.classList.toggle('tgt', ref === R.mon); if (ref.elite) el.classList.add('elite');
     }
     for (const [sid, el] of barEls) if (!seen.has(sid)) { el.remove(); barEls.delete(sid); }
   }
+  // marcas de ataque do chefe
+  const teleObjs = new Map();
+  function updateTelegraphs() {
+    const live = new Set();
+    for (const t of (R.tele || [])) {
+      if (t.done) continue;
+      live.add(t.id);
+      let o = teleObjs.get(t.id);
+      if (!o) {
+        o = new THREE.Group();
+        const edge = new THREE.Mesh(new THREE.RingGeometry(t.r - 0.12, t.r, 48), fxMat('#ff3020', 0.9)); edge.rotation.x = -Math.PI / 2; o.add(edge);
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(t.r, 48), fxMat('#ff2010', 0.35)); fill.rotation.x = -Math.PI / 2; fill.position.y = 0.01; o.add(fill);
+        o.position.set(t.x, 0.05, t.z); scene.add(o); teleObjs.set(t.id, o); o.userData.fill = fill; o.userData.edge = edge;
+      }
+      const k = 1 - Math.max(0, t.t) / t.max;
+      o.userData.fill.scale.setScalar(Math.max(0.02, k));
+      o.userData.edge.material.opacity = 0.5 + Math.sin(now() * 18) * 0.4;
+    }
+    for (const [id, o] of teleObjs) if (!live.has(id)) { scene.remove(o); disposeObj(o); teleObjs.delete(id); }
+  }
+  function teleBoom(t) {
+    if (!running || document.hidden) return;
+    const c = V3(t.x, 0, t.z);
+    burst(V3(t.x, 0.6, t.z), '#ff5020', t.kind === 'nova' ? 70 : 45, t.kind === 'nova' ? 8 : 5, 0.2, 3);
+    fxShock(c, '#ff6030', 2, t.r * 1.2); fxCracks(c, '#ff4010', 8, t.r);
+    st.shake = Math.max(st.shake, 0.3);
+  }
+  function bossRage(sid) { const e = st.ents.get(sid); if (!e) return; fxShock(e.root.position, '#ff2010', 3, 6); burst(V3(e.root.position.x, 1.5, e.root.position.z), '#ff3010', 60, 6, 0.2); st.shake = 0.4; }
+
+  // montaria e mascote
+  function updateCompanions(t, dt) {
+    const h = st.hero; if (!h) return;
+    const hp = h.root.position;
+    // montaria aparece enquanto o herói viaja
+    const wantMount = !R.inTown && R.mounted && R.moving && S.mount;
+    if (wantMount && (!st.mount || st.mount.id !== S.mount)) {
+      if (st.mount) { scene.remove(st.mount.e.root); disposeObj(st.mount.e.root); }
+      const e = buildMonster(S.mount === 'mount2' ? 'Grifo' : 'Lobo Filhote', false);
+      e.root.scale.setScalar(S.mount === 'mount2' ? 1.5 : 1.7); e.P.float = 0; scene.add(e.root); st.mount = { id: S.mount, e };
+    }
+    if (st.mount) {
+      const e = st.mount.e, show = wantMount;
+      e.root.visible = show;
+      if (show) {
+        e.root.position.set(hp.x, 0, hp.z);
+        e.inner.rotation.y = h.inner.rotation.y + Math.PI;
+        e.body.position.y = 0; animMonster(e, t * 2, dt);
+        h.root.position.y = Math.max(h.root.position.y, 0.55);
+        if (Math.random() < 0.5) spawnP({ x: hp.x + rand(-0.4, 0.4), y: 0.1, z: hp.z + rand(-0.4, 0.4), vx: 0, vy: 0.4, vz: 0, life: 0.5, r: 0.6, gg: 0.55, b: 0.45, size: 0.18 });
+      } else if (!h.motion) h.root.position.y = 0;
+    }
+    // mascote segue o herói
+    const pid = !R.inTown && S.companion;
+    if (pid && (!st.comp || st.comp.id !== pid)) {
+      if (st.comp) { scene.remove(st.comp.e.root); disposeObj(st.comp.e.root); }
+      const e = buildMonster(pid === 'pet2' ? 'Elemental de Gelo' : 'Lesma Verde', false);
+      e.root.scale.setScalar(pid === 'pet2' ? 0.35 : 0.45);
+      if (pid === 'pet2') { e.P.float = 2.6; const gl = glowSprite('#c0f0ff', 2, 0.8); gl.position.y = 2.8; e.root.add(gl); }
+      e.root.position.set(hp.x - 1, 0, hp.z + 0.6); scene.add(e.root); st.comp = { id: pid, e };
+    }
+    if (!pid && st.comp) { scene.remove(st.comp.e.root); disposeObj(st.comp.e.root); st.comp = null; }
+    if (st.comp) {
+      const e = st.comp.e, f = R.face || 0, tx = hp.x - Math.cos(f) * 1.1 + Math.sin(f) * 0.6, tz = hp.z - Math.sin(f) * 1.1 - Math.cos(f) * 0.6;
+      e.root.position.x = lerp(e.root.position.x, tx, Math.min(1, dt * 4)); e.root.position.z = lerp(e.root.position.z, tz, Math.min(1, dt * 4));
+      e.inner.rotation.y = h.inner.rotation.y + Math.PI;
+      animMonster(e, t, dt);
+    }
+  }
+
   function moveMarker(x, z) {
     const m = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.32, 24), fxMat('#80ff9a', 0.9));
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z);
@@ -1637,7 +1733,9 @@ const Scene3D = (() => {
     pts = new THREE.Points(g, mat); pts.frustumCulled = false;
     scene.add(pts);
   }
-  function spawnP(p) { if (parts.length < PMAX) parts.push(Object.assign({ t: 0, g: 0, drag: 0, size: 0.12 }, p)); }
+  let Q = 'alta';
+  const plim = () => (Q === 'baixa' ? 400 : Q === 'media' ? 900 : PMAX);
+  function spawnP(p) { if (parts.length < plim()) parts.push(Object.assign({ t: 0, g: 0, drag: 0, size: 0.12 }, p)); }
   function burst(pos, color, n = 14, spd = 3, size = 0.13, up = 1.5) {
     const c = col(color);
     for (let i = 0; i < n; i++) {
@@ -1669,7 +1767,8 @@ const Scene3D = (() => {
   }
   function ambient(dt) {
     const th = env.th, a = th.amb;
-    const rate = { snow: 40, ember: 25, leaf: 6, firefly: 10, wisp: 8, bubble: 10, sand: 30, dust: 10, star: 4 }[a] || 6;
+    const qm = Q === 'baixa' ? 0.3 : Q === 'media' ? 0.6 : 1;
+    const rate = qm * { snow: 40, ember: 25, leaf: 6, firefly: 10, wisp: 8, bubble: 10, sand: 30, dust: 10, star: 4 }[a] || 6;
     let k = rate * dt;
     while (k > 0) {
       if (Math.random() < k) {
@@ -2064,10 +2163,10 @@ const Scene3D = (() => {
   // ---------- sincronização ----------
   function disposeObj(o) { o.traverse((c) => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); }
   function sync(t) {
-    const zk = R.inTown ? 'town' : S.zone;
+    const zk = R.inTown ? 'town' : R.dungeon ? `dun_${R.dungeon.zone}_${R.dungeon.floor}` : S.zone;
     if (curZone !== zk) {
       curZone = zk;
-      if (R.inTown) buildTown(); else buildWorld(zk);
+      if (R.inTown) buildTown(); else if (R.dungeon) buildWorld(R.dungeon.zone, true); else buildWorld(zk);
       cam.yaw = 0; cam.pitch = 0;
       if (st.hero) { st.hero.walk = null; st.hero.root.position.set(R.inTown ? HERO_TOWN.x : (R.pos ? R.pos.x : 0), 0, R.inTown ? HERO_TOWN.z : (R.pos ? R.pos.z : 0)); st.hero.inner.rotation.y = R.inTown ? -1.25 : -0.45; }
       for (const d of st.dying) { scene.remove(d.root); disposeObj(d.root); }
@@ -2096,6 +2195,12 @@ const Scene3D = (() => {
         const sp = slotPos(i, m.boss);
         e.root.position.set(m.x != null ? m.x : sp.x, 0, m.z != null ? m.z : sp.z);
         e.root.userData.sid = m.sid;
+        if (m.elite) { // elite: maior, aura dourada
+          e.root.scale.multiplyScalar(1.28); e.elite = true;
+          const gl = glowSprite('#ffd040', 2.4, 0.45); gl.position.y = 1; e.root.add(gl);
+          const rg = mk(new THREE.RingGeometry(0.75, 0.95, 32), new THREE.MeshBasicMaterial({ color: '#ffd040', transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), e.root, 0, 0.04, 0, false);
+          rg.rotation.x = -Math.PI / 2; e.eliteRing = rg;
+        }
         scene.add(e.root); st.ents.set(m.sid, e);
         if (m.x != null) burst(new THREE.Vector3(m.x, 0.4, m.z), '#c8b8ff', 12, 2, 0.12, 2);
         if (m.boss) { st.shake = Math.max(st.shake, 0.15); ring(new THREE.Vector3(m.x || 0, 0, m.z || 0), '#b060ff', 4, 0.9); }
@@ -2277,6 +2382,8 @@ const Scene3D = (() => {
       const ref = m.ref || {};
       if (t - m.hurt < 0.07) setFlash(m.mats, 0.55);
       else if (ref.slow > 0) setFlash(m.mats, 0.45, '#4aa8ff');
+      else if (ref.enraged) { setFlash(m.mats, 0.3 + Math.sin(t * 8) * 0.15, '#ff2010'); if (Math.random() < 0.4) spawnP({ x: m.root.position.x + rand(-0.6, 0.6), y: rand(0.3, 2.5), z: m.root.position.z + rand(-0.6, 0.6), vx: 0, vy: 1.5, vz: 0, life: 0.6, r: 1, gg: 0.25, b: 0.1, size: 0.18 }); }
+      else if (m.elite) setFlash(m.mats, 0.12 + Math.sin(t * 3) * 0.06, '#ffc020');
       else setFlash(m.mats, 0);
       // estrelas de atordoamento
       if (ref.stun > 0) {
@@ -2333,11 +2440,23 @@ const Scene3D = (() => {
     st.fx = st.fx.filter((f) => { const keep = f.t < f.life; if (!keep) { scene.remove(f.obj); if (f.dispose) disposeObj(f.obj); } return keep; });
     animTown(t, dt);
     updateWorldUI(t);
+    updateTelegraphs();
+    updateCompanions(t, dt);
     ambient(dt);
     updateParticles(dt);
     if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
     updateCamera(t, dt);
     renderer.render(scene, camera);
+  }
+
+  function setQuality(q) {
+    Q = q || 'alta';
+    if (!renderer) return;
+    const dpr0 = window.devicePixelRatio || 1;
+    renderer.setPixelRatio(Q === 'alta' ? Math.min(2, dpr0) : Q === 'media' ? Math.min(1.25, dpr0) : 1);
+    const sh = Q !== 'baixa';
+    if (renderer.shadowMap.enabled !== sh) { renderer.shadowMap.enabled = sh; scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); }); }
+    resize();
   }
 
   function resize() {
@@ -2361,6 +2480,7 @@ const Scene3D = (() => {
       GLOW = glowTex();
       initParticles();
       loadAssets();
+      setQuality((typeof S !== 'undefined' && S && S.settings && S.settings.quality) || 'alta');
       bindControls();
     }
     // reinicia o estado visual
@@ -2371,6 +2491,8 @@ const Scene3D = (() => {
     if (st.pet) { scene.remove(st.pet.root); disposeObj(st.pet.root); st.pet = null; }
     for (const d of st.dying) { scene.remove(d.root); disposeObj(d.root); }
     for (const f of st.fx) scene.remove(f.obj);
+    if (st.mount) { scene.remove(st.mount.e.root); st.mount = null; } if (st.comp) { scene.remove(st.comp.e.root); st.comp = null; }
+    for (const o of teleObjs.values()) scene.remove(o); teleObjs.clear();
     st.hero = null; st.mon = null; st.dying = []; st.fx = []; st.timers = []; parts.length = 0;
     curZone = null; curCls = null;
     cam.yaw = 0; cam.pitch = 0; cam.zoom = 1;
@@ -2380,7 +2502,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, float, heal, buff, levelUp, walkToNpc, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2400,7 +2522,7 @@ const Scene = (() => {
     },
     stop() { Scene2D.stop(); Scene3D.stop(); },
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
-    petAttack: fwd('petAttack'), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
+    petAttack: fwd('petAttack'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };

@@ -60,9 +60,9 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
-    lastSave: Date.now(),
+    lastSave: Date.now(), tut: 0,
   };
 }
 
@@ -123,10 +123,119 @@ function canUseWeapon(it) { return it.slot !== 'arma' || CLASSES[S.cls].anyWeapo
 
 function canEquip(it) { return S.lvl >= it.req && canUseWeapon(it); }
 
+// ---------- níveis de habilidade (1 a 10) ----------
+const SKILL_MAX = 10;
+function skLv(id) { return (S.skillLv && S.skillLv[id]) || 1; }
+function skillPointsTotal() { return Math.floor(S.lvl * 0.6); }
+function skillPointsFree() { return skillPointsTotal() - Object.values(S.skillLv || {}).reduce((a, v) => a + (v - 1), 0); }
+// versão da habilidade com os bônus do nível atual
+function skillAt(s) {
+  const L = skLv(s.id) - 1;
+  const o = { ...s, lv: L + 1 };
+  if (!L) return o;
+  if (s.mult != null) o.mult = +(s.mult * (1 + (s.type === 'heal' ? 0.08 : s.type === 'summon' ? 0.1 : 0.12) * L)).toFixed(3);
+  if (s.cd) o.cd = +(s.cd * (1 - 0.03 * L)).toFixed(1);
+  if (s.mp) o.mp = Math.round(s.mp * (1 + 0.05 * L));
+  if (s.val != null) o.val = +(s.val * (1 + 0.06 * L)).toFixed(3);
+  if (s.also) o.also = { ...s.also, val: +(s.also.val * (1 + 0.06 * L)).toFixed(3) };
+  if (s.dur) o.dur = +(s.dur + (s.type === 'stealth' ? 0.2 : s.type === 'summon' ? 2 : 1) * L).toFixed(1);
+  if (s.stun) o.stun = +(s.stun + 0.1 * L).toFixed(2);
+  if (s.slow) o.slow = +(s.slow + 0.3 * L).toFixed(1);
+  if (s.healPct) o.healPct = +(s.healPct * (1 + 0.06 * L)).toFixed(3);
+  if (s.revive) o.revive = Math.round(s.revive * (1 - 0.04 * L));
+  return o;
+}
+function classSkills() { return CLASSES[S.cls].skills.map(skillAt); }
+// gasta os pontos automaticamente: primeiro as habilidades de dano e área, depois o resto
+function autoSkillPoints() {
+  if (!S.settings.autoSkill) return;
+  const order = { aoe: 0, dmg: 1, summon: 2, buff: 3, heal: 3, passive: 4, stealth: 5 };
+  let guard = 60;
+  while (skillPointsFree() > 0 && guard-- > 0) {
+    const c = CLASSES[S.cls].skills.filter((x) => S.lvl >= x.lvl && skLv(x.id) < SKILL_MAX).sort((a, b) => skLv(a.id) - skLv(b.id) || order[a.type] - order[b.type])[0];
+    if (!c) break;
+    S.skillLv = S.skillLv || {}; S.skillLv[c.id] = skLv(c.id) + 1;
+  }
+}
+function upgradeSkill(id) {
+  const sk = CLASSES[S.cls].skills.find((x) => x.id === id);
+  if (!sk || S.lvl < sk.lvl || skLv(id) >= SKILL_MAX || skillPointsFree() <= 0) return;
+  S.skillLv = S.skillLv || {}; S.skillLv[id] = skLv(id) + 1;
+  Sfx.play('refineOk'); log(`📈 ${esc(sk.name)} subiu para o nível ${S.skillLv[id]}!`, 'lvl');
+  renderSkillBar(); renderTab();
+}
+
+// ---------- gemas e forja ----------
+function gemBag() { if (!S.gems) S.gems = {}; for (const k in GEMS) if (!S.gems[k]) S.gems[k] = [0, 0, 0, 0, 0]; return S.gems; }
+function sockets(it) { return Math.max(0, RARITIES.findIndex((r) => r.id === it.rarity)); }
+function dropGem(chance, lvl) {
+  if (Math.random() >= chance) return;
+  const types = Object.keys(GEMS), t = types[rint(0, types.length - 1)];
+  const l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 40)));
+  gemBag()[t][l]++;
+  log(`${GEMS[t].icon} Você encontrou ${GEMS[t].name} nível ${l + 1}!`, 'loot'); Sfx.play('loot', { rarity: 2 + l, gap: 100 });
+}
+function gemBonus(bonus) {
+  for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (!it || !it.gems) continue;
+    for (const g of it.gems) { const v = GEMS[g.t].per * g.l;
+      if (g.t === 'rubi') bonus.atkp += v; else if (g.t === 'safira') bonus.mp += v; else if (g.t === 'esmeralda') bonus.crit += v; else if (g.t === 'topazio') bonus.evadep += v; else bonus.hp += v; } }
+}
+function socketGem(uid, t) {
+  const it = allItems().find((x) => x.uid === uid); const bag = gemBag()[t];
+  if (!it || (it.gems || []).length >= sockets(it)) return;
+  let l = 4; while (l >= 0 && !bag[l]) l--; if (l < 0) return;
+  bag[l]--; (it.gems = it.gems || []).push({ t, l: l + 1 });
+  Sfx.play('refineOk'); log(`${GEMS[t].icon} ${GEMS[t].name} nv ${l + 1} encaixada em ${esc(it.name)}.`, 'lvl'); R.dirty.all = true;
+}
+function unsocketGem(uid, i) {
+  const it = allItems().find((x) => x.uid === uid); if (!it || !it.gems || !it.gems[i]) return;
+  const g = it.gems[i], cost = 500 * g.l;
+  if (S.gold < cost) { toast(`Remover custa ${fmt(cost)} ouro.`, 'bad'); return; }
+  S.gold -= cost; gemBag()[g.t][g.l - 1]++; it.gems.splice(i, 1); Sfx.play('coin'); R.dirty.all = true;
+}
+function combineGem(t, l) {
+  const bag = gemBag()[t], cost = 1000 * (l + 1);
+  if (l >= 4 || bag[l] < 3 || S.gold < cost) return;
+  bag[l] -= 3; bag[l + 1]++; S.gold -= cost;
+  Sfx.play('refineOk'); log(`✨ 3 ${GEMS[t].name} nv ${l + 1} viraram 1 ${GEMS[t].name} nv ${l + 2}!`, 'lvl'); renderTab();
+}
+function forgeCost() { return { gold: 400 * S.lvl, stones: 3 + Math.floor(S.lvl / 20) }; }
+function forgeItem(slotName) {
+  const c = forgeCost();
+  if (S.gold < c.gold || S.stones < c.stones) { toast('Ouro ou pedras insuficientes.', 'bad'); return; }
+  if (S.inv.length >= 40) { toast('Mochila cheia.', 'bad'); return; }
+  S.gold -= c.gold; S.stones -= c.stones;
+  const it = genItem(S.lvl, 6, slotName); it.req = Math.min(it.req, S.lvl);
+  S.inv.push(it); Sfx.play('refineOk');
+  log(`🔨 O Ferreiro forjou <span style="color:${rarityOf(it).color}">${esc(it.name)}</span> (${rarityOf(it).name})!`, 'loot');
+  R.sel = it.uid; R.refSel = it.uid; renderTab();
+}
+function allItems() { return [...SLOT_ORDER.map((sl) => S.equip[sl]).filter(Boolean), ...S.inv]; }
+function buyShop(id, n) {
+  const p = SHOP.find((x) => x.id === id); if (!p) return;
+  S.owned = S.owned || {};
+  if ((p.type === 'mount' || p.type === 'pet') && S.owned[id]) { // usar/guardar
+    if (p.type === 'mount') S.mount = S.mount === id ? null : id; else S.companion = S.companion === id ? null : id;
+    Sfx.play('click'); return renderTab();
+  }
+  const cost = p.price * (p.type === 'mount' || p.type === 'pet' ? 1 : n);
+  if (S.gold < cost) return;
+  S.gold -= cost; Sfx.play('coin');
+  if (p.type === 'mat') S.stones += n;
+  else if (p.type === 'scroll') { S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + n * 30 * 60000; toast('Experiência +50% ativada!', 'good'); }
+  else if (p.type === 'gembag') for (let i = 0; i < n; i++) { const types = Object.keys(GEMS), t = types[rint(0, types.length - 1)]; gemBag()[t][0]++; }
+  else if (p.type === 'mount') { S.owned[id] = true; S.mount = id; toast(`${p.name} é seu!`, 'good'); }
+  else if (p.type === 'pet') { S.owned[id] = true; S.companion = id; toast(`${p.name} agora te acompanha!`, 'good'); }
+  else S.pots[p.id] = (S.pots[p.id] || 0) + n;
+  renderTab();
+}
+function xpBoostOn() { return (S.xpBoostUntil || 0) > Date.now(); }
+function mountSpeed() { const m = S.mount && SHOP.find((x) => x.id === S.mount); return m ? m.speed : 0; }
+
 // ---------- atributos derivados ----------
 function derived() {
   const c = CLASSES[S.cls];
-  const bonus = { for: 0, int: 0, des: 0, agi: 0, vit: 0, hp: 0, mp: 0, crit: 0, xpb: 0, gold: 0 };
+  const bonus = { for: 0, int: 0, des: 0, agi: 0, vit: 0, hp: 0, mp: 0, crit: 0, xpb: 0, gold: 0, atkp: 0, evadep: 0 };
   let wmin = 1, wmax = 3, def = 0;
   for (const sl of SLOT_ORDER) {
     const it = S.equip[sl];
@@ -137,16 +246,18 @@ function derived() {
     } else def += it.def * m;
     for (const a of it.affixes) bonus[a.stat] += a.val;
   }
+  gemBonus(bonus);
+  { const pc = S.companion && SHOP.find((x) => x.id === S.companion); if (pc) { bonus.gold += pc.gold || 0; bonus.xpb += pc.xp || 0; } }
   const A = {};
   for (const k of ['for', 'int', 'des', 'agi', 'vit']) A[k] = S.attr[k] + bonus[k];
   const main = A[c.main];
   // buffs ativos + passivas aprendidas
   const B = {};
   for (const b of (R.buffs || [])) B[b.stat] = (B[b.stat] || 0) + b.val;
-  for (const sk of c.skills) if (sk.type === 'passive' && sk.stat && S.lvl >= sk.lvl) B[sk.stat] = (B[sk.stat] || 0) + sk.val;
+  for (const sk of classSkills()) if (sk.type === 'passive' && sk.stat && S.lvl >= sk.lvl) B[sk.stat] = (B[sk.stat] || 0) + sk.val;
   const buff = (k) => B[k] || 0;
   if (R.pet && PETS[R.pet.kind].spd) B.spd = (B.spd || 0) + PETS[R.pet.kind].spd;
-  const atkMul = 1 + buff('atk');
+  const atkMul = 1 + buff('atk') + bonus.atkp / 100;
   const baseHp = 40 + A.vit * 8 + S.lvl * 10 + bonus.hp;
   const d = {
     A,
@@ -158,7 +269,7 @@ function derived() {
     crit: clamp(5 + A.des * 0.08 + bonus.crit + buff('crit') * 100, 0, 75),
     critMult: (c.critMult || 1.75) + buff('critdmg'),
     aps: c.speed * (1 + A.agi / 400) * (1 + buff('spd')),
-    evade: clamp(A.agi * 0.0012 + buff('evade'), 0, 0.55),
+    evade: clamp(A.agi * 0.0012 + buff('evade') + bonus.evadep / 100, 0, 0.55),
     block: clamp((S.equip.escudo ? 0.08 : 0) + buff('block'), 0, 0.6),
     absorb: clamp(buff('absorb'), 0, 0.6),
     reflect: buff('reflect'),
@@ -219,6 +330,10 @@ function spawnWorldMonster(initial = false) {
     const m = makeMonster(z.monsters[i][0], z.monsters[i][1], lvl, false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
     m.xp = Math.round(m.xp * 1.3); m.gold = Math.round(m.gold * 1.15); // compensa o tempo andando
+    if (Math.random() < (R.dungeon ? 0.18 : 0.07)) { // monstro elite
+      m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 2.6); m.atk = Math.round(m.atk * 1.35); m.def = Math.round(m.def * 1.15);
+      m.xp *= 4; m.gold *= 4;
+    }
     R.mons.push(m);
     return m;
   }
@@ -235,10 +350,78 @@ function spawnBoss() {
   return m;
 }
 function initWorld() {
-  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3;
+  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = [];
   R.pos = { ...WORLD.entry };
   for (let i = 0; i < WORLD.cap; i++) spawnWorldMonster(true);
 }
+// ---------- masmorras (3 andares + chefe) ----------
+const DUN_CD = 5 * 60000;
+function dunCost(z) { return 300 * z.min; }
+function dunReady(zid) { return !S.dunCd || !S.dunCd[zid] || S.dunCd[zid] <= Date.now(); }
+function enterDungeon(zid) {
+  const z = zoneById(zid);
+  if (R.dead > 0) { toast('Espere renascer para entrar.', 'bad'); return; }
+  if (S.lvl < z.min) { toast(`Nível ${z.min} necessário.`, 'bad'); return; }
+  if (!dunReady(zid)) { toast(`Masmorra disponível em ${Math.ceil((S.dunCd[zid] - Date.now()) / 60000)} min.`, 'bad'); return; }
+  if (S.gold < dunCost(z)) { toast(`Entrada custa ${fmt(dunCost(z))} ouro.`, 'bad'); return; }
+  S.gold -= dunCost(z); S.dunCd = S.dunCd || {}; S.dunCd[zid] = Date.now() + DUN_CD;
+  S.zone = zid; R.inTown = false; R.dungeon = { zone: zid, floor: 1, floors: 3, next: 0 }; R.worldZone = 'dun';
+  if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
+  closeWin && closeWin();
+  Sfx.play('portal'); log(`🕳️ Você entrou na masmorra de <b>${esc(z.name)}</b>. Limpe os 3 andares!`, 'boss');
+  dungeonFloor();
+  R.dirty.all = true;
+}
+function dungeonFloor() {
+  const D = R.dungeon, z = zoneById(D.zone), span = zoneSpan(z);
+  R.mons = []; R.mon = null; R.move = null; R.tele = []; R.pos = { x: 0, z: 11 }; R.playerTimer = 0.3;
+  const lvl = z.min + span;
+  const n = D.floor === 3 ? 3 : 6 + D.floor * 2;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, r = D.floor === 3 ? 4 : 3 + Math.random() * 6;
+    const mi = rint(0, 2), m = makeMonster(z.monsters[mi][0], z.monsters[mi][1], lvl, false, 2);
+    Object.assign(m, { x: Math.cos(a) * r, z: -3 + Math.sin(a) * r, wp: null, wait: 1, dun: true });
+    m.home = { x: m.x, z: m.z };
+    m.xp = Math.round(m.xp * 1.6); m.gold = Math.round(m.gold * 1.5);
+    if (D.floor === 3 || Math.random() < 0.15 * D.floor) { m.elite = true; m.maxHp = m.hp = Math.round(m.maxHp * 3.2); m.atk = Math.round(m.atk * 1.6); m.xp *= 4; m.gold *= 4; }
+    R.mons.push(m);
+  }
+  if (D.floor === 3) {
+    const b = makeMonster(z.boss[0], z.boss[1], lvl + 4, true, 1);
+    Object.assign(b, { x: 0, z: -7, home: { x: 0, z: -7 }, wp: null, wait: 2, dun: true });
+    b.maxHp = b.hp = Math.round(b.maxHp * 1.3);
+    R.mons.push(b);
+    log(`👑 Andar final: <b>${esc(b.name)}</b> te espera!`, 'boss'); Sfx.play('boss');
+  } else log(`🕳️ Andar ${D.floor}/${D.floors}: derrote todos os monstros.`, 'boss');
+  if (S.settings.auto) R.mon = R.mons[0];
+}
+function dungeonTick(dt) {
+  const D = R.dungeon;
+  if (aliveMons().length) return;
+  if (!D.next) { D.next = 2.5; if (D.floor < D.floors) log(`✅ Andar ${D.floor} limpo! Descendo...`, 'lvl'); else dungeonReward(); }
+  D.next -= dt;
+  if (D.next <= 0) {
+    if (D.floor < D.floors) { D.floor++; D.next = 0; Sfx.play('portal'); dungeonFloor(); }
+    else exitDungeon(false);
+  }
+}
+function dungeonReward() {
+  const z = zoneById(R.dungeon.zone), tier = ZONES.indexOf(z) + 1;
+  const gold = 2500 * tier, stones = 2 + tier;
+  S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
+  for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
+  dropGem(1, z.min + 20);
+  log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
+  toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
+}
+function exitDungeon(failed) {
+  if (!R.dungeon) return;
+  R.dungeon = null; R.worldZone = null; R.mons = []; R.mon = null; R.tele = [];
+  if (failed) log('💀 Você foi expulso da masmorra.', 'death');
+  else log('🌀 Você voltou ao mapa.', 'muted');
+  R.dirty.all = true;
+}
+
 // compatibilidade: chamado ao renascer/desafiar
 function spawnMonster(boss = false) { if (boss) spawnBoss(); else if (!R.mons || !R.mons.length) initWorld(); }
 function aliveMons() { return (R.mons || []).filter((m) => m.hp > 0); }
@@ -344,20 +527,27 @@ function killMonster(m) {
   const d = derived();
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
-  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100));
+  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1));
   const gold = Math.round(m.gold * (1 + d.goldb / 100));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++;
   S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
-  log(`${m.icon} <b>${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
+  log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
     S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.stats.bosses++;
     S.zoneKills[S.zone] = 0;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
-    S.stones += rint(1, 3);
+    S.stones += rint(1, 3); dropGem(1, m.lvl);
     log(`👑 Chefe derrotado! Você recebeu Pedras de Refino.`, 'boss');
+  } else if (m.elite) {
+    S.stats.elites = (S.stats.elites || 0) + 1;
+    log(`⭐ Monstro elite derrotado!`, 'boss');
+    if (Math.random() < 0.6) dropItem(genItem(m.lvl, 3));
+    if (Math.random() < 0.3) { S.stones++; log('💎 O elite deixou uma Pedra de Refino!', 'loot'); }
+    dropGem(0.35, m.lvl);
   } else {
     if (Math.random() < 0.09) dropItem(genItem(m.lvl));
+    dropGem(0.025, m.lvl);
     if (Math.random() < 0.012) { S.stones++; log('💎 Você encontrou uma Pedra de Refino!', 'loot'); }
   }
   gainXp(xp);
@@ -402,6 +592,7 @@ function gainXp(xp) {
     R.dirty.all = true;
   }
   if (S.settings.autoPts) autoDistribute();
+  autoSkillPoints();
   if (S.lvl >= MAX_LEVEL) S.xp = 0;
 }
 
@@ -416,7 +607,7 @@ function autoDistribute() {
 }
 
 function die(killer) {
-  const rev = CLASSES[S.cls].skills.find((s) => s.type === 'passive' && s.revive && S.lvl >= s.lvl);
+  const rev = classSkills().find((s) => s.type === 'passive' && s.revive && S.lvl >= s.lvl);
   if (rev && !(R.reviveCd > 0)) {
     const d = derived();
     S.hp = Math.round(d.maxHp * 0.6); S.mp = Math.max(S.mp, Math.round(d.maxMp * 0.3));
@@ -431,8 +622,10 @@ function die(killer) {
   S.xp = Math.max(0, S.xp - loss);
   Sfx.play('death');
   log(`☠️ Você foi derrotado por ${esc(killer ? killer.name : 'monstros')}! Perdeu ${fmt(loss)} XP. Renascendo...`, 'death');
+  R.tele = [];
   if (killer && killer.boss) { S.zoneKills[S.zone] = 0; R.mons = R.mons.filter((m) => !m.boss); log('O chefe venceu desta vez e voltou para as sombras. Derrote mais 25 monstros para desafiá-lo de novo.', 'muted'); }
   R.dead = 5;
+  if (R.dungeon) exitDungeon(true);
   for (const m of aliveMons()) { m.aggro = false; m.returning = true; }
   R.mon = null; R.move = null; R.pet = null; R.stealth = 0;
   R.buffs = [];
@@ -440,7 +633,7 @@ function die(killer) {
 }
 
 function trySkills(d) {
-  const c = CLASSES[S.cls];
+  const c = { skills: classSkills() };
   const ready = (s) => s.type !== 'passive' && S.lvl >= s.lvl && (R.cds[s.id] || 0) <= 0 && S.mp >= s.mp;
   // habilidade pedida pelo jogador tem prioridade
   if (R.forceSkill) {
@@ -524,18 +717,20 @@ function tick() {
     R.mon = null; R.dead = 0; R.bossFight = false; R.pet = null;
     return;
   }
-  if (R.worldZone !== S.zone || !R.pos) initWorld();
+  if (!R.dungeon && (R.worldZone !== S.zone || !R.pos)) initWorld();
   if (R.dead > 0) {
     R.dead -= dt;
     if (R.dead <= 0) { S.hp = d.maxHp; S.mp = d.maxMp; R.pos = { ...WORLD.entry }; log('Você renasceu na entrada do mapa.', 'muted'); }
     return;
   }
+  if (R.dungeon) dungeonTick(dt);
   // população do mapa
-  if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
-  if (R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25 && !R.mons.some((m) => m.boss))) { R.bossFight = false; spawnBoss(); }
+  else if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
+  if (!R.dungeon && (R.bossFight || (S.settings.autoBoss && (S.zoneKills[S.zone] || 0) >= 25 && S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1 && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
   usePotions(d);
   if (S.hp <= 0) return;
   monstersAI(dt);
+  resolveTelegraphs(dt);
   if (R.dead > 0 || S.hp <= 0) return;
   // invocação
   if (R.pet) {
@@ -553,8 +748,11 @@ function tick() {
 
 function playerAI(dt, d) {
   retarget();
-  const speed = 4.4 * (1 + Math.min(0.5, d.aps / 4 - 0.25));
+  const traveling = !R.mon || dist2(R.pos, R.mon) > weaponRange() + 2;
+  const speed = 4.4 * (1 + Math.min(0.5, d.aps / 4 - 0.25)) * (traveling ? 1 + mountSpeed() : 1);
+  R.mounted = !!S.mount && traveling;
   R.moving = false;
+  autoDodge();
   if (R.move) {
     if (stepTo(R.pos, R.move, speed * dt)) R.move = null;
     R.moving = true; R.face = R.move ? Math.atan2(R.move.z - R.pos.z, R.move.x - R.pos.x) : R.face;
@@ -582,6 +780,58 @@ function playerAI(dt, d) {
   }
 }
 
+// ataques do chefe marcados no chão, fúria e reforços
+function bossMechanics(m, dt) {
+  if (!m.enraged && m.hp < m.maxHp * 0.3) {
+    m.enraged = true; m.atk = Math.round(m.atk * 1.18);
+    log(`💢 <b>${esc(m.name)}</b> entrou em fúria!`, 'boss'); Sfx.play('boss'); Scene.bossRage && Scene.bossRage(m.sid);
+  }
+  if (!m.summoned && m.hp < m.maxHp * 0.5) {
+    m.summoned = true;
+    const z = zoneById(S.zone);
+    for (let i = 0; i < 1; i++) { const a = Math.random() * 6.28; const add = makeMonster(z.monsters[i][0], z.monsters[i][1], z.min + zoneSpan(z), false, 2); Object.assign(add, { x: m.x + Math.cos(a) * 2.5, z: m.z + Math.sin(a) * 2.5, home: { ...m.home }, aggro: true, wait: 0 }); R.mons.push(add); }
+    log(`👥 ${esc(m.name)} chamou reforços!`, 'boss');
+  }
+  m.skillT = (m.skillT == null ? 4 : m.skillT) - dt;
+  if (m.skillT <= 0) {
+    m.skillT = m.enraged ? 4.5 : 7;
+    const slam = Math.random() < 0.6;
+    const t = { id: uid(), kind: slam ? 'slam' : 'nova', x: slam ? R.pos.x : m.x, z: slam ? R.pos.z : m.z, r: slam ? 2.6 : 4.8, t: slam ? 1.4 : 1.7, dmg: Math.round(m.atk * (slam ? 1.5 : 1.25)), src: m.sid };
+    t.max = t.t;
+    R.tele.push(t);
+    log(`⚠️ ${esc(m.name)} prepara um ${slam ? 'golpe esmagador' : 'ataque em área'}! Saia da marca vermelha!`, 'boss');
+  }
+}
+function resolveTelegraphs(dt) {
+  if (!R.tele || !R.tele.length) return;
+  const d = derived();
+  for (const t of R.tele) {
+    t.t -= dt;
+    if (t.t <= 0 && !t.done) {
+      t.done = true;
+      Scene.teleBoom && Scene.teleBoom(t);
+      if (R.dead > 0 || !R.pos) continue;
+      if (dist2(R.pos, t) <= t.r) {
+        let dmg = Math.max(1, Math.round(t.dmg * 150 / (150 + d.def) * (1 - d.absorb)));
+        if (d.mshield > 0 && S.mp > 0) { const toMp = Math.min(S.mp, Math.round(dmg * d.mshield)); S.mp -= toMp; dmg -= toMp; }
+        S.hp -= dmg; floatText('player', '-' + fmt(dmg), 'hurt'); Sfx.play('boom');
+        if (S.hp <= 0) die(aliveMons().find((m) => m.sid === t.src));
+      } else floatText('player', 'Desviou!', 'miss');
+    }
+  }
+  R.tele = R.tele.filter((t) => !t.done);
+}
+// no modo Auto o herói sai sozinho das marcas no chão
+function autoDodge() {
+  if (!S.settings.auto || !R.tele || !R.tele.length || !R.pos) return false;
+  const t = R.tele.find((x) => !x.done && dist2(R.pos, x) < x.r + 0.4);
+  if (!t) return false;
+  let dx = R.pos.x - t.x, dz = R.pos.z - t.z, dd = Math.hypot(dx, dz);
+  if (dd < 0.01) { dx = 1; dz = 0; dd = 1; }
+  R.move = { x: t.x + dx / dd * (t.r + 1.2), z: t.z + dz / dd * (t.r + 1.2) };
+  return true;
+}
+
 function monstersAI(dt) {
   const live = aliveMons();
   for (const m of live) {
@@ -589,22 +839,23 @@ function monstersAI(dt) {
     if (m.stun > 0) { m.stun -= dt; continue; }
     if (m.slow > 0) m.slow -= dt;
     const sp = m.slow > 0 ? 0.5 : 1, dp = dist2(m, R.pos);
-    if (!m.aggro && !m.returning && dp < (m.boss ? 9 : 5) && !(R.stealth > 0)) {
+    if (!m.aggro && !m.returning && dp < (m.dun ? 9 : m.boss ? 9 : 5) && !(R.stealth > 0)) {
       m.aggro = true;
       for (const o of live) if (!o.aggro && !o.boss && o !== m && o.name === m.name && dist2(o, m) < 4.5) o.aggro = true; // matilha
     }
+    if (m.boss && m.aggro) bossMechanics(m, dt);
     if (m.aggro) {
-      if (dist2(m, m.home) > (m.boss ? 15 : 17) || (R.stealth > 0 && dp > 3)) { m.aggro = false; m.returning = true; if (R.mon === m && !S.settings.auto) R.mon = null; continue; }
+      if ((!m.dun && dist2(m, m.home) > (m.boss ? 26 : 17)) || (R.stealth > 0 && dp > 3)) { m.aggro = false; m.returning = true; if (R.mon === m && !S.settings.auto) R.mon = null; continue; }
       const reach = m.boss ? 2.1 : 1.35;
       m.face = Math.atan2(R.pos.z - m.z, R.pos.x - m.x);
       if (dp > reach) { stepTo(m, R.pos, (m.boss ? 2.6 : 3.0) * sp * dt, reach * 0.9); m.moving = true; }
       else {
         m.timer -= dt * sp;
-        if (m.timer <= 0) { m.timer = (m.boss ? 1.1 : 1.3) + Math.random() * 0.3; monsterHit(m); if (R.dead > 0 || S.hp <= 0) return; }
+        if (m.timer <= 0) { m.timer = (m.boss ? (m.enraged ? 0.75 : 1.1) : 1.3) + Math.random() * 0.3; monsterHit(m); if (R.dead > 0 || S.hp <= 0) return; }
       }
     } else if (m.returning) {
       m.face = Math.atan2(m.home.z - m.z, m.home.x - m.x);
-      if (stepTo(m, m.home, 4 * dt)) { m.returning = false; m.hp = m.maxHp; }
+      if (stepTo(m, m.home, 4 * dt)) { m.returning = false; if (!m.boss) m.hp = m.maxHp; }
       m.moving = true;
     } else {
       // passeia perto do acampamento
@@ -721,7 +972,11 @@ function makeFullChar(name, cls, wtype) {
   for (const sl of ['armadura', 'elmo', 'luvas', 'botas', 'amuleto', 'anel']) S.equip[sl] = makeLegendary(sl);
   if (wtype !== 'foice' && wtype !== 'cajado' && wtype !== 'arco') S.equip.escudo = makeLegendary('escudo');
   S.gold = 5000000; S.stones = 250; S.pots = { hp1: 300, mp1: 300, hp2: 300, mp2: 300 };
-  S.zone = 'z10';
+  S.zone = 'z10'; S.tut = 99;
+  S.skillLv = {}; for (const sk of CLASSES[cls].skills) S.skillLv[sk.id] = SKILL_MAX;
+  const gemOrder = ['rubi', 'ametista', 'esmeralda', 'safira'];
+  for (const sl of SLOT_ORDER) if (S.equip[sl]) S.equip[sl].gems = gemOrder.slice(0, sockets(S.equip[sl])).map((t) => ({ t, l: 5 }));
+  S.owned = { mount2: true, pet2: true }; S.mount = 'mount2'; S.companion = 'pet2';
   S.settings.autoPts = true; S.settings.autoBoss = true;
   S.zoneKills = { z10: 25 };
   const made = S; S = keep;
@@ -759,11 +1014,12 @@ function startGame(i) {
   slot = i;
   S = loadSlot(i);
   if (!S) return renderSelect();
-  S.skillOff = S.skillOff || {};
+  S.skillOff = S.skillOff || {}; S.skillLv = S.skillLv || {}; S.stats.elites = S.stats.elites || 0;
+  if (!S.settings.quality) S.settings.quality = matchMedia('(max-width: 760px)').matches ? 'media' : 'alta';
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
-  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, ...S.settings };
-  R = { mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, dirty: { all: true } };
+  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, ...S.settings };
+  R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, dirty: { all: true } };
   const off = offlineProgress();
   const d = derived();
   S.hp = d.maxHp; S.mp = d.maxMp;
@@ -772,6 +1028,7 @@ function startGame(i) {
   log(`Bem-vindo(a) de volta, <b>${esc(S.name)}</b>!`, 'lvl');
   if (off) showOffline(off);
   renderAll();
+  renderTut();
   startLoop();
 }
 
@@ -850,11 +1107,12 @@ function drawMinimap() {
     for (const id in npc) { const [px, py] = PT(npc[id][0], npc[id][1]); g.fillText(ic[id], px, py); }
     const [hx, hy] = PT(0, 1.4); g.beginPath(); g.arc(hx, hy, 4, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
   } else {
-    label = zoneById(S.zone).name;
-    for (const c of zoneCamps(S.zone)) dot(c.x, c.z, 4, 'rgba(120,80,40,.6)');
-    { const [ax, ay] = P(WORLD.arena.x, WORLD.arena.z); g.beginPath(); g.arc(ax, ay, 6 * k, 0, Math.PI * 2); g.strokeStyle = '#b060ff'; g.lineWidth = 2; g.stroke(); }
-    dot(WORLD.entry.x, WORLD.entry.z, 3.5, '#60e080', '#000');
-    for (const m of aliveMons()) dot(m.x, m.z, m.boss ? 5 : 2.6, m.boss ? '#c070ff' : m.aggro ? '#ff4040' : '#ffaa40', '#000');
+    label = R.dungeon ? `Masmorra ${R.dungeon.floor}/3` : zoneById(S.zone).name;
+    if (R.dungeon) { g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3; g.beginPath(); g.arc(C, C, 16 * k, 0, Math.PI * 2); g.stroke(); }
+    if (!R.dungeon) for (const c of zoneCamps(S.zone)) dot(c.x, c.z, 4, 'rgba(120,80,40,.6)');
+    if (!R.dungeon) { const [ax, ay] = P(WORLD.arena.x, WORLD.arena.z); g.beginPath(); g.arc(ax, ay, 6 * k, 0, Math.PI * 2); g.strokeStyle = '#b060ff'; g.lineWidth = 2; g.stroke(); }
+    if (!R.dungeon) dot(WORLD.entry.x, WORLD.entry.z, 3.5, '#60e080', '#000');
+    for (const m of aliveMons()) dot(m.x, m.z, m.boss ? 5 : m.elite ? 3.6 : 2.6, m.boss ? '#c070ff' : m.elite ? '#ffd040' : m.aggro ? '#ff4040' : '#ffaa40', '#000');
     if (R.move) dot(R.move.x, R.move.z, 2, '#80ff9a');
     if (R.pos) {
       const [px, py] = P(R.pos.x, R.pos.z), f = R.face || 0;
@@ -867,7 +1125,7 @@ function drawMinimap() {
 
 function renderHeader() {
   const c = CLASSES[S.cls];
-  $('#p-name').textContent = `${S.name}`;
+  $('#p-name').innerHTML = `${esc(S.name)}${S.title ? ` <small class="p-title">« ${esc(S.title)} »</small>` : ''}`;
   $('#hdr-name').innerHTML = `${c.icon} ${esc(S.name)} <span class="muted">· ${c.name} · ${FACTIONS[c.faction].name}</span>`;
 }
 
@@ -909,11 +1167,16 @@ function renderLive() {
   // chefe
   const z = zoneById(S.zone);
   const k = S.zoneKills[S.zone] || 0;
-  if (!R.inTown) $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span>`;
+  if (R.dungeon) $('#zone-title').innerHTML = `🕳️ Masmorra: ${z.name} <span class="muted">(andar ${R.dungeon.floor}/${R.dungeon.floors})</span>`;
+  else if (!R.inTown) $('#zone-title').innerHTML = `${z.icon} ${z.name} <span class="muted">(Nv. ${z.min}+)</span>`;
+  $('#boss-btn').classList.toggle('hidden', !!R.inTown || !!R.dungeon);
   $('#mute-btn').textContent = S.settings.muted ? '🔇' : '🔊';
+  { const bb = $('#boss-bar'), bs = !R.inTown && aliveMons().find((m) => m.boss && (m.aggro || (R.pos && dist2(m, R.pos) < 22)));
+    bb.classList.toggle('hidden', !bs);
+    if (bs) bb.innerHTML = `<div class="bb-name">👑 ${esc(bs.name)} <small>Nv. ${bs.lvl}</small>${bs.enraged ? ' <span class="bb-rage">FÚRIA</span>' : ''}</div><div class="bb-bar"><i style="width:${Math.max(0, bs.hp / bs.maxHp * 100)}%"></i><span>${fmt(Math.max(0, bs.hp))} / ${fmt(bs.maxHp)}</span></div>`; }
   $('#pot-hp').textContent = (S.pots.hp1 || 0) + (S.pots.hp2 || 0);
   $('#pot-mp').textContent = (S.pots.mp1 || 0) + (S.pots.mp2 || 0);
-  R.mmT = (R.mmT || 0) + 1; if (R.mmT % 2 === 0) drawMinimap(); if (R.mmT % 10 === 0) renderQuestTrack();
+  R.mmT = (R.mmT || 0) + 1; if (R.mmT % 2 === 0) drawMinimap(); if (R.mmT % 10 === 0) renderQuestTrack(); if (R.mmT % 5 === 0) tutTick(); if (R.mmT % 50 === 0) checkAch();
   const bb = $('#boss-btn');
   bb.disabled = k < 25 || R.bossFight || (m && m.boss) || R.dead > 0;
   bb.textContent = k < 25 ? `👑 Chefe: ${k}/25 abates` : (m && m.boss ? '👑 Lutando contra o chefe!' : `👑 Desafiar ${z.boss[0]}`);
@@ -986,6 +1249,7 @@ function itemDetail(it, compare = true) {
       }
     }
   }
+  if (sockets(it)) h += `<div class="affix">Encaixes: ${(it.gems || []).map((g) => `${GEMS[g.t].icon}+${GEMS[g.t].per * g.l}${GEMS[g.t].label}`).join(' ') || ''} ${'◇'.repeat(sockets(it) - (it.gems || []).length)}</div>`;
   h += `<div class="muted">Valor: ${fmt(itemValue(it))} ouro</div></div>`;
   return h;
 }
@@ -1000,16 +1264,16 @@ function renderEquip() {
 }
 
 function renderSkillBar() {
-  $('#skill-bar').innerHTML = CLASSES[S.cls].skills.map((s, i) => {
+  $('#skill-bar').innerHTML = classSkills().map((s, i) => {
     const locked = S.lvl < s.lvl, off = S.skillOff[s.id], pas = s.type === 'passive';
     return `<div class="skill ${locked ? 'locked' : ''} ${off ? 'off' : ''}" id="sk-${s.id}" data-cast="${s.id}" title="${esc(s.name)} — ${skillDesc(s)}${locked ? ' (Nv. ' + s.lvl + ')' : ''}">
-      <div class="cd"></div><kbd>${i + 1}</kbd><span>${esc(s.name)}</span>${locked ? `<em>Nv.${s.lvl}</em>` : ''}${!locked && !pas ? `<b class="auto-dot" data-skill="${s.id}" title="Uso automático">A</b>` : ''}</div>`;
+      <div class="cd"></div><kbd>${i + 1}</kbd>${!locked && s.lv > 1 ? `<i class="sk-lv">${s.lv}</i>` : ''}<span>${esc(s.name)}</span>${locked ? `<em>Nv.${s.lvl}</em>` : ''}${!locked && !pas ? `<b class="auto-dot" data-skill="${s.id}" title="Uso automático">A</b>` : ''}</div>`;
   }).join('');
 }
 
 // usa uma habilidade agora (toque na barra ou teclas 1–6)
 function castSkill(id) {
-  const sk = CLASSES[S.cls].skills.find((x) => x.id === id);
+  const sk = classSkills().find((x) => x.id === id);
   if (!sk || S.lvl < sk.lvl || sk.type === 'passive' || R.dead > 0 || R.inTown) return;
   if ((R.cds[sk.id] || 0) > 0) { toast(`${sk.name}: recarregando (${Math.ceil(R.cds[sk.id])}s)`); return; }
   if (S.mp < sk.mp) { toast('Mana insuficiente.', 'bad'); return; }
@@ -1096,6 +1360,77 @@ function chatCommand(txt) {
   R.dirty.log = true; renderLog();
 }
 
+// ---------- conquistas ----------
+const anyEquip = (f) => SLOT_ORDER.some((sl) => S.equip[sl] && f(S.equip[sl]));
+const ACH = [
+  { id: 'k100', name: 'Primeiro Sangue', desc: 'Derrote 100 monstros', ok: () => S.stats.kills >= 100, gold: 2000 },
+  { id: 'k1000', name: 'Exterminador', desc: 'Derrote 1.000 monstros', ok: () => S.stats.kills >= 1000, stones: 5, title: 'Exterminador' },
+  { id: 'k10000', name: 'Lenda da Caçada', desc: 'Derrote 10.000 monstros', ok: () => S.stats.kills >= 10000, stones: 25, title: 'Lenda da Caçada' },
+  { id: 'b1', name: 'Matador de Chefes', desc: 'Derrote um chefe', ok: () => S.stats.bosses >= 1, gold: 5000 },
+  { id: 'b10', name: 'Terror dos Chefes', desc: 'Derrote 10 chefes', ok: () => S.stats.bosses >= 10, stones: 5, title: 'Terror dos Chefes' },
+  { id: 'b50', name: 'Rei da Arena', desc: 'Derrote 50 chefes', ok: () => S.stats.bosses >= 50, stones: 20, title: 'Rei da Arena' },
+  { id: 'e10', name: 'Caçador de Elites', desc: 'Derrote 10 elites', ok: () => (S.stats.elites || 0) >= 10, gold: 10000, title: 'Caçador de Elites' },
+  { id: 'e100', name: 'Flagelo Dourado', desc: 'Derrote 100 elites', ok: () => (S.stats.elites || 0) >= 100, stones: 15 },
+  { id: 'l10', name: 'Aventureiro', desc: 'Chegue ao nível 10', ok: () => S.lvl >= 10, gold: 1000 },
+  { id: 'l25', name: 'Veterano', desc: 'Chegue ao nível 25', ok: () => S.lvl >= 25, gold: 8000, title: 'Veterano' },
+  { id: 'l50', name: 'Herói do Reino', desc: 'Chegue ao nível 50', ok: () => S.lvl >= 50, stones: 10, title: 'Herói do Reino' },
+  { id: 'l75', name: 'Campeão', desc: 'Chegue ao nível 75', ok: () => S.lvl >= 75, stones: 20, title: 'Campeão' },
+  { id: 'l100', name: 'Lenda de Valdária', desc: 'Chegue ao nível 100', ok: () => S.lvl >= 100, stones: 50, title: 'Lenda de Valdária' },
+  { id: 'r5', name: 'Aprendiz de Ferreiro', desc: 'Use um item +5', ok: () => anyEquip((it) => it.refine >= 5), gold: 5000 },
+  { id: 'r10', name: 'Mestre Ferreiro', desc: 'Use um item +10', ok: () => anyEquip((it) => it.refine >= 10), stones: 10, title: 'Mestre Ferreiro' },
+  { id: 'leg', name: 'Brilho Lendário', desc: 'Equipe um item lendário', ok: () => anyEquip((it) => it.rarity === 'lendario'), stones: 5, title: 'Portador Lendário' },
+  { id: 'gem5', name: 'Joalheiro', desc: 'Tenha uma gema nível 5', ok: () => Object.values(gemBag()).some((v) => v[4] > 0) || anyEquip((it) => (it.gems || []).some((g) => g.l >= 5)), stones: 10, title: 'Joalheiro' },
+  { id: 'q10', name: 'Prestativo', desc: 'Conclua 10 missões', ok: () => Object.keys(questState().done).length >= 10, gold: 15000 },
+  { id: 'q40', name: 'Herói do Povo', desc: 'Conclua as 40 missões', ok: () => Object.keys(questState().done).length >= 40, stones: 30, title: 'Herói do Povo' },
+  { id: 'd1', name: 'Explorador de Masmorras', desc: 'Conclua uma masmorra', ok: () => (S.stats.dungeons || 0) >= 1, stones: 3 },
+  { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
+  { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.owned && (S.owned.mount1 || S.owned.mount2), gold: 10000 },
+];
+function checkAch() {
+  S.ach = S.ach || {};
+  for (const a of ACH) if (!S.ach[a.id] && a.ok()) {
+    S.ach[a.id] = true;
+    if (a.gold) S.gold += a.gold; if (a.stones) S.stones += a.stones;
+    if (a.title && !S.title) S.title = a.title;
+    log(`🏆 Conquista: <b>${esc(a.name)}</b>! ${a.gold ? '+' + fmt(a.gold) + ' ouro ' : ''}${a.stones ? '+' + a.stones + ' 💎 ' : ''}${a.title ? '· título “' + esc(a.title) + '”' : ''}`, 'lvl');
+    toast(`🏆 ${a.name}`, 'good'); Sfx.play('levelup');
+    renderHeader();
+  }
+}
+function tabAch() {
+  S.ach = S.ach || {};
+  const done = ACH.filter((a) => S.ach[a.id]).length, titles = ACH.filter((a) => a.title && S.ach[a.id]).map((a) => a.title);
+  return `<p class="muted">Conquistas: <b>${done}/${ACH.length}</b>. Títulos aparecem embaixo do seu nome.</p>
+  ${titles.length ? `<div class="q-sec">Título</div><div class="row-btns"><button class="btn small ${!S.title ? 'primary' : ''}" data-ach="-">Nenhum</button>${titles.map((t) => `<button class="btn small ${S.title === t ? 'primary' : ''}" data-ach="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
+  <div class="q-sec">Lista</div>${ACH.map((a) => `<div class="q-card ${S.ach[a.id] ? 'ok' : ''}"><h4><span>${S.ach[a.id] ? '🏆' : '🔒'} ${esc(a.name)}</span><small class="q-rew">${a.gold ? fmt(a.gold) + ' ouro ' : ''}${a.stones ? a.stones + ' 💎 ' : ''}${a.title ? '· título' : ''}</small></h4><p>${esc(a.desc)}</p></div>`).join('')}`;
+}
+
+// ---------- tutorial ----------
+const TUT = [
+  { text: '👆 Toque no chão para andar até lá.', ok: () => R.pos && dist2(R.pos, WORLD.entry) > 3 },
+  { text: '⚔️ Toque num monstro para atacar. Derrote um!', ok: () => S.stats.kills >= 1 },
+  { text: '✨ Toque numa habilidade na barra de baixo para usá-la.', ok: () => R.castCount > 0 },
+  { text: '🎒 Abra a mochila (Itens) e toque em “Equipar melhores”.', ok: () => R.equipped, start: () => { if (!S.inv.length) dropItem(genItem(Math.max(2, S.lvl), 2, 'armadura')); } },
+  { text: '🤖 Ligue o Auto: o herói passa a caçar sozinho.', ok: () => S.settings.auto },
+  { text: '🏰 Vá à Cidade e fale com o ⚔️ Comandante para pegar missões.', ok: () => R.npc === 'guarda' },
+];
+function tutTick() {
+  if (S.tut == null || S.tut >= TUT.length) return;
+  const st0 = TUT[S.tut];
+  if (!R.tutStarted) { R.tutStarted = true; st0.start && st0.start(); }
+  if (st0.ok()) {
+    S.tut++; R.tutStarted = false; Sfx.play('open');
+    if (S.tut >= TUT.length) { S.gold += 1000; S.pots.hp1 += 20; S.pots.mp1 += 20; log('🎓 Tutorial concluído! +1.000 ouro e 40 poções.', 'lvl'); toast('Tutorial concluído!', 'good'); S.tut = 99; }
+    renderTut();
+  }
+}
+function renderTut() {
+  const el = document.getElementById('tut'); if (!el) return;
+  const on = S && S.tut != null && S.tut < TUT.length;
+  el.classList.toggle('hidden', !on);
+  if (on) el.innerHTML = `<b>Tutorial ${S.tut + 1}/${TUT.length}</b><span>${TUT[S.tut].text}</span><button class="btn tiny" data-tutskip>Pular</button>`;
+}
+
 // ---------- missões ----------
 function questDefs() {
   if (questDefs.cache) return questDefs.cache;
@@ -1150,6 +1485,7 @@ function questProgress(m) {
 // modo automático: aceita e entrega as missões do mapa atual
 function autoQuests() {
   const q = questState();
+  for (const id in q.active) { const def = questDefs().find((x) => x.id === id); if (def && def.zone !== S.zone && q.active[id] < def.need) delete q.active[id]; }
   for (const id in q.active) { const def = questDefs().find((x) => x.id === id); if (def && q.active[id] >= def.need) turnInQuest(id); }
   for (const def of questDefs()) {
     if (Object.keys(q.active).length >= MAX_QUESTS) break;
@@ -1211,6 +1547,7 @@ function renderNpc() {
 function cityName() { return CITIES[CLASSES[S.cls].faction].name; }
 
 function setTown(on) {
+  if (R.dungeon && on) exitDungeon(false);
   if (!!R.inTown === on) return;
   R.inTown = on;
   Sfx.play('portal');
@@ -1219,7 +1556,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { conquistas: 'Conquistas', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   R.win = name;
@@ -1239,7 +1576,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -1255,14 +1592,14 @@ function tabMaps() {
       <small class="muted">${z.monsters.map((m) => m[1] + ' ' + m[0]).join(' · ')}</small>
       <small class="muted">Chefes derrotados: ${S.bosses[z.id] || 0}</small></span>
       ${locked ? `<span class="lock">🔒 Nv.${z.min - 3}</span>` : ''}
-    </button>`;
+    </button>${S.lvl >= z.min ? `<button class="btn small dun-btn" data-dun="${z.id}" ${!dunReady(z.id) || S.gold < dunCost(z) ? 'disabled' : ''}>🕳️ Masmorra · ${fmt(dunCost(z))} ouro${dunReady(z.id) ? '' : ` · ${Math.ceil((S.dunCd[z.id] - Date.now()) / 60000)} min`}</button>` : ''}`;
   }).join('')}</div>`;
 }
 
 function tabInv() {
   const sel = S.inv.find((i) => i.uid === R.sel) || (R.selEq && S.equip[R.selEq]);
   let html = `<div class="inv-head"><span>Mochila ${S.inv.length}/40</span>
-    <span><button class="btn small" data-act="sort">Ordenar</button>
+    <span><button class="btn small primary" data-act="equip-best">Equipar melhores</button><button class="btn small" data-act="sort">Ordenar</button>
     <button class="btn small" data-act="sell-common">Vender comuns</button>
     <button class="btn small" data-act="sell-magic">Vender ≤ mágicos</button></span></div>
     <div class="inv-grid">`;
@@ -1284,6 +1621,23 @@ function tabInv() {
   return html;
 }
 
+function itemScore(it) {
+  const ri = RARITIES.findIndex((r) => r.id === it.rarity);
+  const base = it.slot === 'arma' ? (it.min + it.max) / 2 : it.def;
+  return base * refineMult(it) * 1.5 + it.affixes.length * it.ilvl * 0.6 + ri * it.ilvl * 0.4 + (it.gems || []).reduce((a, g) => a + g.l * 8, 0);
+}
+function equipBest() {
+  let changed = 0;
+  for (const sl of SLOT_ORDER) {
+    const cands = S.inv.filter((it) => it.slot === sl && canEquip(it) && (sl !== 'arma' || CLASSES[S.cls].anyWeapon || it.wtype === CLASSES[S.cls].weapon));
+    if (!cands.length) continue;
+    const best = cands.sort((a, b) => itemScore(b) - itemScore(a))[0];
+    if (!S.equip[sl] || itemScore(best) > itemScore(S.equip[sl])) { equipItem(best.uid); changed++; }
+  }
+  toast(changed ? `${changed} ${changed > 1 ? 'itens equipados' : 'item equipado'}!` : 'Você já está com os melhores itens.', changed ? 'good' : '');
+  R.dirty.all = true;
+}
+
 function isUpgrade(it) {
   if (!canEquip(it)) return false;
   const cur = S.equip[it.slot];
@@ -1294,27 +1648,69 @@ function isUpgrade(it) {
 }
 
 function tabSkills() {
-  const c = CLASSES[S.cls];
-  return `<p class="muted">As habilidades são usadas automaticamente em combate. Clique para ligar/desligar.</p>
-  <div class="skill-list">${c.skills.map((s) => {
-    const locked = S.lvl < s.lvl;
-    const on = !S.skillOff[s.id];
+  const free = skillPointsFree();
+  return `<p class="muted">Você ganha 1 ponto de habilidade a cada ~2 níveis. Cada nível aumenta o dano, a duração e o efeito, e reduz a recarga. Toque em "Ligada" para controlar o uso automático.</p>
+  <div class="sk-points">Pontos de habilidade: <b>${free}</b> <label class="check" style="display:inline-flex;margin-left:10px"><input type="checkbox" data-set="autoSkill" ${S.settings.autoSkill ? 'checked' : ''}> distribuir automaticamente</label></div>
+  <div class="skill-list">${classSkills().map((s) => {
+    const locked = S.lvl < s.lvl, on = !S.skillOff[s.id], max = s.lv >= SKILL_MAX;
+    const next = !max ? skillAt({ ...CLASSES[S.cls].skills.find((x) => x.id === s.id) }) : null;
     return `<div class="skill-row ${locked ? 'locked' : ''}">
-      <div><b>${esc(s.name)}</b> <span class="tag ${s.type}">${{ dmg: 'Ataque', aoe: 'Área', buff: 'Bônus', heal: 'Cura', summon: 'Invocação', stealth: 'Furtividade', passive: 'Passiva' }[s.type]}</span><br><small class="muted">${skillDesc(s)}</small></div>
-      ${locked ? `<span class="lock">🔒 Nv.${s.lvl}</span>` : s.type === 'passive' ? '<span class="tag passive">Sempre ativa</span>' : `<button class="btn small ${on ? 'primary' : ''}" data-toggle-skill="${s.id}">${on ? 'Ligada' : 'Desligada'}</button>`}
+      <div><b>${esc(s.name)}</b> <span class="tag ${s.type}">${{ dmg: 'Ataque', aoe: 'Área', buff: 'Bônus', heal: 'Cura', summon: 'Invocação', stealth: 'Furtividade', passive: 'Passiva' }[s.type]}</span>
+        ${locked ? '' : `<span class="sk-lvl">Nv. ${s.lv}/${SKILL_MAX}</span>`}<br><small class="muted">${skillDesc(s)}</small></div>
+      <div class="sk-btns">${locked ? `<span class="lock">🔒 Nv.${s.lvl}</span>` : `
+        <button class="btn small primary" data-skup="${s.id}" ${free <= 0 || max ? 'disabled' : ''} title="Subir nível">${max ? 'MÁX' : '＋'}</button>
+        ${s.type === 'passive' ? '<span class="tag passive">Sempre ativa</span>' : `<button class="btn small ${on ? 'primary' : ''}" data-toggle-skill="${s.id}">${on ? 'Ligada' : 'Desligada'}</button>`}`}</div>
     </div>`;
   }).join('')}</div>`;
 }
 
 function tabShop() {
-  return `<p class="muted">Loja da cidade. Poções são usadas automaticamente conforme suas configurações.</p>
-  <div class="shop-list">${SHOP.map((p) => {
-    const have = p.type === 'mat' ? S.stones : S.pots[p.id];
+  S.owned = S.owned || {};
+  const row = (p) => {
+    const unique = p.type === 'mount' || p.type === 'pet', own = unique && S.owned[p.id];
+    const active = (p.type === 'mount' && S.mount === p.id) || (p.type === 'pet' && S.companion === p.id);
+    const have = p.type === 'mat' ? S.stones : p.type === 'scroll' ? (xpBoostOn() ? `ativo (${Math.ceil((S.xpBoostUntil - Date.now()) / 60000)} min)` : '-') : p.type === 'gembag' ? Object.values(gemBag()).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0) + ' gemas' : unique ? (own ? (active ? 'em uso' : 'guardado') : 'não tem') : S.pots[p.id];
+    const desc = p.desc || (p.type === 'mat' ? 'Usada para refinar e forjar equipamentos' : `Restaura ${p.heal * 100}% de ${p.type === 'hp' ? 'vida' : 'mana'}`);
     return `<div class="shop-row"><span class="shop-ico">${p.icon}</span>
-      <div><b>${p.name}</b><br><small class="muted">${p.type === 'mat' ? 'Usada para refinar equipamentos' : `Restaura ${p.heal * 100}% de ${p.type === 'hp' ? 'vida' : 'mana'}`} · Você tem: <b>${have}</b></small></div>
-      <span class="price">💰 ${fmt(p.price)}</span>
-      <span class="buy">${[1, 10, 50].map((n) => `<button class="btn small" data-buy="${p.id}" data-n="${n}" ${S.gold < p.price * n ? 'disabled' : ''}>x${n}</button>`).join('')}</span></div>`;
-  }).join('')}</div>`;
+      <div><b>${p.name}</b><br><small class="muted">${desc} · Você tem: <b>${have}</b></small></div>
+      <span class="price">${own ? '' : '💰 ' + fmt(p.price)}</span>
+      <span class="buy">${unique ? `<button class="btn small ${own ? '' : 'primary'}" data-buy="${p.id}" data-n="1" ${!own && S.gold < p.price ? 'disabled' : ''}>${own ? (active ? 'Guardar' : 'Usar') : 'Comprar'}</button>`
+        : [1, 10, 50].filter((n) => p.type === 'scroll' || p.type === 'gembag' ? n <= 10 : true).map((n) => `<button class="btn small" data-buy="${p.id}" data-n="${n}" ${S.gold < p.price * n ? 'disabled' : ''}>x${n}</button>`).join('')}</span></div>`;
+  };
+  return `<p class="muted">Poções são usadas automaticamente conforme suas configurações. Montarias deixam o herói mais rápido ao viajar; mascotes dão bônus permanentes.</p>
+  <div class="q-sec">Consumíveis</div><div class="shop-list">${SHOP.filter((p) => !['mount', 'pet'].includes(p.type)).map(row).join('')}</div>
+  <div class="q-sec">Montarias e mascotes</div><div class="shop-list">${SHOP.filter((p) => ['mount', 'pet'].includes(p.type)).map(row).join('')}</div>`;
+}
+
+function tabRefine() {
+  const ft = R.forgeTab || 'refinar';
+  const tabs = `<div class="sub-tabs">${[['refinar', '🔨 Refinar'], ['gemas', '💠 Gemas'], ['forjar', '⚒️ Forjar']].map(([k, n]) => `<button class="btn small ${ft === k ? 'primary' : ''}" data-ftab="${k}">${n}</button>`).join('')}</div>`;
+  if (ft === 'gemas') return tabs + tabGems();
+  if (ft === 'forjar') return tabs + tabForge();
+  return tabs + tabRefineItems();
+}
+function tabGems() {
+  const bag = gemBag(), all = allItems(), sel = all.find((i) => i.uid === R.refSel);
+  let h = `<p class="muted">Cada raridade dá encaixes: Mágico 1, Raro 2, Épico 3, Lendário 4. Junte 3 gemas iguais para subir de nível (até 5).</p>
+  <div class="gem-bag">${Object.entries(GEMS).map(([k, g]) => `<div class="gem-row"><span>${g.icon} <b>${g.name}</b> <small class="muted">+${g.per}${g.label}/nv</small></span>
+    <span class="gem-lv">${bag[k].map((n, l) => `<span title="Nível ${l + 1}">N${l + 1}: <b>${n}</b>${n >= 3 && l < 4 ? ` <button class="btn tiny" data-gcomb="${k}:${l}" ${S.gold < 1000 * (l + 1) ? 'disabled' : ''} title="Combinar 3 (${fmt(1000 * (l + 1))} ouro)">⇧</button>` : ''}</span>`).join('')}</span></div>`).join('')}</div>
+  <div class="q-sec">Escolha um equipamento</div>
+  <div class="inv-grid">${all.filter((it) => sockets(it) > 0).map((it) => `<div class="inv-item ${it.uid === R.refSel ? 'sel' : ''}" data-ref="${it.uid}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}">${itemIcon(it)}<i>${(it.gems || []).length}/${sockets(it)}</i></div>`).join('') || '<p class="muted">Nenhum item com encaixe (precisa ser Mágico ou melhor).</p>'}</div>`;
+  if (sel && sockets(sel) > 0) {
+    h += `<div class="refine-box"><b>${itemTitle(sel)}</b><div class="sockets">`;
+    for (let i = 0; i < sockets(sel); i++) {
+      const g = (sel.gems || [])[i];
+      h += g ? `<span class="sock full" style="--gc:${GEMS[g.t].color}">${GEMS[g.t].icon} ${GEMS[g.t].name} ${g.l} <button class="btn tiny" data-gout="${sel.uid}:${i}" title="Remover (${fmt(500 * g.l)} ouro)">✕</button></span>`
+        : `<span class="sock">Vazio ${Object.keys(GEMS).filter((k) => bag[k].some((n) => n > 0)).map((k) => `<button class="btn tiny" data-gin="${sel.uid}:${k}" title="Encaixar a melhor ${GEMS[k].name}">${GEMS[k].icon}</button>`).join('')}</span>`;
+    }
+    h += `</div></div>`;
+  }
+  return h;
+}
+function tabForge() {
+  const c = forgeCost();
+  return `<p class="muted">O Ferreiro forja um item do seu nível com boa chance de raridade alta. Custo: <b>${fmt(c.gold)}</b> ouro + <b>${c.stones}</b> 💎 (você tem ${fmt(S.gold)} e ${S.stones}).</p>
+  <div class="forge-grid">${SLOT_ORDER.map((sl) => `<button class="btn" data-forge="${sl}" ${S.gold < c.gold || S.stones < c.stones ? 'disabled' : ''}>${sl === 'arma' ? '⚔️ Arma' : ARMOR_SLOTS[sl].icon + ' ' + ARMOR_SLOTS[sl].label}</button>`).join('')}</div>`;
 }
 
 function refineInfo(it) {
@@ -1327,7 +1723,7 @@ function refineInfo(it) {
   };
 }
 
-function tabRefine() {
+function tabRefineItems() {
   const all = [...SLOT_ORDER.map((s) => S.equip[s]).filter(Boolean), ...S.inv];
   const sel = all.find((i) => i.uid === R.refSel);
   let html = `<p class="muted">Refine seus itens até <b>+10</b>. Cada nível aumenta 8% do dano/defesa base. A partir de +5, falhar faz o item perder um nível. Você tem <b>${S.stones}</b> 💎.</p>
@@ -1358,12 +1754,18 @@ function tabConfig() {
       </select></label>
     <label>Volume dos efeitos <b>${st.sfxVol ?? 70}%</b><input type="range" min="0" max="100" step="5" value="${st.sfxVol ?? 70}" data-set="sfxVol"></label>
     <label>Volume da música <b>${st.musVol ?? 45}%</b><input type="range" min="0" max="100" step="5" value="${st.musVol ?? 45}" data-set="musVol"></label>
+    <label>Qualidade gráfica:
+      <select data-set="quality">
+        <option value="alta" ${st.quality === 'alta' ? 'selected' : ''}>Alta (sombras e muitas partículas)</option>
+        <option value="media" ${st.quality === 'media' ? 'selected' : ''}>Média</option>
+        <option value="baixa" ${st.quality === 'baixa' ? 'selected' : ''}>Baixa (celulares mais simples)</option>
+      </select></label>
     <label>Gráficos da batalha:
       <select data-set="gfx">
         <option value="3d" ${st.gfx !== '2d' ? 'selected' : ''}>3D (Three.js)</option>
         <option value="2d" ${st.gfx === '2d' ? 'selected' : ''}>2D (mais leve)</option>
       </select></label>
-    <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates)</label>
+    <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates, quando tiver nível para ele)</label>
     <label class="check"><input type="checkbox" data-set="autoBuyPots" ${st.autoBuyPots ? 'checked' : ''}> Comprar poções menores automaticamente quando acabarem</label>
     <hr>
     <div class="row-btns">
@@ -1379,6 +1781,7 @@ function resetCost() { return S.lvl * 200; }
 
 // ---------- ações ----------
 function equipItem(id) {
+  R.equipped = true;
   const idx = S.inv.findIndex((i) => i.uid === id);
   if (idx < 0) return;
   const it = S.inv[idx];
@@ -1450,7 +1853,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-dun],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -1468,6 +1871,7 @@ document.addEventListener('click', (e) => {
     if (!createState.cls) return;
     slot = createState.slot;
     S = newCharacter(name, createState.cls);
+    S.settings.auto = false;
     save();
     return startGame(slot);
   }
@@ -1483,10 +1887,19 @@ document.addEventListener('click', (e) => {
   if (t.id === 'town-btn') { setTown(!R.inTown); return; }
   if (ds.win) { openWin(ds.win); return; }
   if (t.id === 'gwin-close') { closeWin(); return; }
-  if (ds.cast) { if (!e.target.closest('[data-skill]')) castSkill(ds.cast); return; }
+  if (ds.cast) { if (!e.target.closest('[data-skill]')) { castSkill(ds.cast); R.castCount = (R.castCount || 0) + 1; } return; }
   if (ds.pot) { usePotionNow(ds.pot); return; }
   if (ds.chat) { R.chatTab = ds.chat; for (const b of document.querySelectorAll('.chat-tab[data-chat]')) b.classList.toggle('active', b.dataset.chat === ds.chat); renderLog(); return; }
   if (t.id === 'chat-min') { $('#chat').classList.toggle('min'); t.textContent = $('#chat').classList.contains('min') ? '▴' : '▾'; return; }
+  if (ds.dun) { enterDungeon(ds.dun); return; }
+  if (ds.ftab) { R.forgeTab = ds.ftab; return renderTab(); }
+  if (ds.gcomb) { const [k, l] = ds.gcomb.split(':'); combineGem(k, +l); return; }
+  if (ds.gin) { const [u, k] = ds.gin.split(':'); socketGem(u, k); return; }
+  if (ds.gout) { const [u, i] = ds.gout.split(':'); unsocketGem(u, +i); return; }
+  if (ds.forge) { forgeItem(ds.forge); return; }
+  if (ds.ach) { S.title = ds.ach === '-' ? '' : ds.ach; renderHeader(); return renderTab(); }
+  if (ds.tutskip !== undefined) { S.tut = 99; renderTut(); return; }
+  if (ds.skup) { upgradeSkill(ds.skup); return; }
   if (ds.qacc) { acceptQuest(ds.qacc); renderTab(); return; }
   if (ds.qturn) { turnInQuest(ds.qturn); renderTab(); return; }
   if (ds.qdrop) { delete questState().active[ds.qdrop]; renderTab(); return; }
@@ -1497,6 +1910,7 @@ document.addEventListener('click', (e) => {
   if (ds.zone) {
     const changed = ds.zone !== S.zone;
     if (changed) { S.zone = ds.zone; R.worldZone = null; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
+    if (R.dungeon) exitDungeon(false);
     if (R.inTown) setTown(false); else if (changed) Sfx.play('portal');
     if (R.npc) { R.npc = null; $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); }
     return renderTab();
@@ -1507,7 +1921,8 @@ document.addEventListener('click', (e) => {
   if (ds.ref) { R.refSel = ds.ref; return renderTab(); }
   if (ds.toggleSkill) { S.skillOff[ds.toggleSkill] = !S.skillOff[ds.toggleSkill]; renderSkillBar(); return renderTab(); }
   if (ds.skill) { e.stopPropagation(); if (S.lvl >= CLASSES[S.cls].skills.find((s) => s.id === ds.skill).lvl) { S.skillOff[ds.skill] = !S.skillOff[ds.skill]; renderSkillBar(); if (R.tab === 'habilidades') renderTab(); } return; }
-  if (ds.buy) {
+  if (ds.buy) { buyShop(ds.buy, +ds.n); return; }
+  if (ds.buyOld) {
     const p = SHOP.find((x) => x.id === ds.buy), n = +ds.n;
     if (S.gold >= p.price * n) { Sfx.play('coin'); S.gold -= p.price * n; if (p.type === 'mat') S.stones += n; else S.pots[p.id] += n; }
     return renderTab();
@@ -1523,6 +1938,7 @@ document.addEventListener('click', (e) => {
       renderTab(); break;
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
+    case 'equip-best': equipBest(); break;
     case 'auto-pts': S.settings.autoPts = !S.settings.autoPts; if (S.settings.autoPts) autoDistribute(); renderChar(); break;
     case 'reset-pts': {
       const cost = resetCost();
@@ -1565,6 +1981,7 @@ document.addEventListener('input', (e) => {
   const v = e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' ? +e.target.value : e.target.value);
   S.settings[k] = v;
   if (k === 'gfx') Scene.start();
+  if (k === 'quality') Scene.setQuality && Scene.setQuality(v);
   if (k === 'sfxVol' || k === 'musVol') Sfx.applyVolume();
   if (e.target.type === 'range') e.target.previousElementSibling.textContent = v + '%';
 });
@@ -1587,7 +2004,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
   const k = e.key.toLowerCase();
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
-  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas' };
+  const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas' };
   if (wins[k]) { openWin(wins[k]); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');

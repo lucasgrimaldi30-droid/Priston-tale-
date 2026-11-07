@@ -61,3 +61,20 @@ Atalhos no `keydown` do fim de `game.js`.
 - Efeitos: `projectile`, `slash`, `ring`, `pillar`, partículas por shader (`spawnP`, `burst`), números (`floatAt`, DOM), `updateWorldUI` (anel do alvo, barras).
 - Câmera: `updateCamera` (isométrica no mundo, fixa na cidade), controles em `bindControls` (arrastar, roda, pinça, duplo clique), toque → `pickWorld`/`pickNpc`.
 - Tiers visuais: `floor(ilvl/17)` → 0–5; `TIER_COL`, `METAL`, `GRIP`; raridade dá cor e brilho, refino aumenta a intensidade.
+
+## Sistemas de progressão (melhorias gerais)
+- **Níveis de habilidade:** `S.skillLv[id]` (1–10), pontos `skillPointsTotal() = floor(nível × 0,6)`, `skillAt(s)` aplica os bônus do nível
+  (dano +12%/nv, recarga −3%/nv, duração, efeito; custo de mana +5%/nv). Use sempre `classSkills()` no lugar de `CLASSES[x].skills` em combate.
+  `autoSkillPoints()` gasta os pontos quando `S.settings.autoSkill`.
+- **Elites:** 7% dos monstros (18% nas masmorras): vida ×2,6, ataque ×1,35, XP e ouro ×4, drops melhores. Aura dourada na cena.
+- **Chefes:** `bossMechanics` (golpe esmagador ou ataque em área marcados no chão em `R.tele`, fúria abaixo de 30%, 1 reforço a 50%),
+  `resolveTelegraphs`, `autoDodge` (o Auto sai das marcas). Barra grande `#boss-bar`. O chefe não cura ao voltar para a arena.
+  O Auto só desafia o chefe com nível suficiente.
+- **Masmorras:** `enterDungeon(zid)` (custo `dunCost`, recarga de 5 min), `dungeonFloor` (3 andares; o último tem chefe + elites), `dungeonTick`,
+  `dungeonReward`, `exitDungeon`. Cena: `buildDungeon` (arena fechada com muralhas e tochas). Morrer expulsa da masmorra.
+- **Economia:** gemas (`GEMS`, `S.gems[tipo][nível]`, `socketGem`, `combineGem`, `gemBonus`, encaixes = índice da raridade), forja (`forgeItem`),
+  loja com pergaminho de XP, saco de gemas, montarias (`S.mount`, velocidade ao viajar) e mascotes (`S.companion`, bônus de ouro e XP) em `buyShop`.
+  O Ferreiro tem abas (`R.forgeTab`: refinar, gemas, forjar).
+- **Conquistas:** `ACH` (22) com recompensas e títulos (`S.ach`, `S.title`), verificadas a cada 50 ticks em `checkAch`. Janela `conquistas` (tecla L).
+- **Tutorial:** `TUT` (6 passos), `S.tut` (heróis novos começam em 0 e com o Auto desligado; saves antigos sem `tut` não veem o tutorial).
+- **Equipar melhores:** `equipBest()` usa `itemScore()`. **Qualidade gráfica:** `S.settings.quality` (alta/média/baixa) → `Scene.setQuality`.
