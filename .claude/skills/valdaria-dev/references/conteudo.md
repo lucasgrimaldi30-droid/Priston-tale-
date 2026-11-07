@@ -4,6 +4,7 @@
 `CLASSES` em `js/data.js`: `name, faction ('ferro'|'luz'), icon, weapon, role, desc, base {for,int,des,agi,vit}, main, speed, skills` e opcionais
 `anyWeapon`, `critMult`. Depois: `LOOK` (aparência procedural, em `scene.js`), `HERO_MODEL` (modelo KayKit e peças padrão, em `scene3d.js`),
 `heroAttackClip` se for um tipo de arma novo, e o arquétipo do item inicial (`makeStarterWeapon`).
+**Também:** perfil em `CLASS_BUILD` (`js/game.js`) para a montagem automática da Alma e dos artefatos (veja "Equilíbrio por personagem").
 
 ## Habilidade (6 por classe, níveis 1/10/20/35/50/70 em geral)
 | tipo | campos |
@@ -53,6 +54,25 @@ fxVortex, fxNova, fxRain, slash, ring, projectile, burst`. Bônus visível enqua
 - XP por nível: `xpNeed(l) = 40·l^2,6 (+8%/nível acima de 79) + 60`. Monstros do mundo: vida ×0,55, ataque ×0,5, XP ×0,78 (×0,6 do grupo ×1,3 do mundo).
 - Missões: caçada = 12% do XP do nível; chefe = 35%.
 - Ouro sobra no fim do jogo (só o refino gasta): ponto conhecido para melhorar.
+
+## Equilíbrio por personagem (Alma e artefatos)
+Regra do dono: **cada personagem reforça o que falta**. Quem já bate muito busca defesa; quem já aguenta (ou tem vitalidade) busca ataque.
+- `CLASS_BUILD[classe].w` dá o peso de cada pedra (`atk`, `crit`, `vit`, `def`, `res`) e `why` explica em uma frase para o jogador.
+  | Classe | Prioridade | Por quê |
+  |---|---|---|
+  | Gladiador | defesa, vida, resistência | bate muito e luta colado |
+  | Lanceiro | defesa, resistência, vida | dano em área, fica cercado |
+  | Caçadora | vida, defesa, crítico | já tem crítico, pouca vida |
+  | Valquíria | vida, ataque, defesa (equilibrada) | híbrida |
+  | Engenheiro | ataque, crítico | resistente e tem o autômato |
+  | Paladino | ataque, crítico | aguenta muito, mata devagar |
+  | Arcanista | ataque, crítico, resistência | maga com escudo de mana e vitalidade |
+  | Clériga | ataque, vida, resistência | cura bem, pouco dano |
+- `buildWeights()` ajusta pelos pontos do herói: parte em vitalidade acima de 40% puxa para ataque; abaixo puxa para defesa (×0,6 a ×1,6).
+- `autoSoul()` monta linhas inteiras do mesmo tipo para as prioridades (centro primeiro), usa Harmonia quando não dá linha igual e respeita
+  os espaços abertos. `autoArts()` põe no centro a peça ligada à prioridade (`T2SLOT`: ataque = luvas, crítico = arma, defesa = armadura,
+  vida = elmo, resistência = anel) e nos lados os que mais ampliam. Com `S.settings.autoAlma` (ligado por padrão) remonta ao cair pedra ou artefato.
+- Ao mexer em números de classe, confira se a prioridade continua fazendo sentido e rode `balance.cjs`.
 
 ## Mapas escondidos (desvios)
 | Id | Mapa | Nível | Sai de | Monstros | Chefe |

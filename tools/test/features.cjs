@@ -107,6 +107,17 @@ const startServer = require('./server.cjs');
     ok('Janela Alma abre', (R.almaTab = 'grade', tabAlma().includes('soul-grid')) && (R.almaTab = 'art', tabAlma().includes('art-cross')));
     const W = weeklyState(); dailyProgress('bosses', 12); ok('Missão semanal avança e paga', W.prog[1] === 12 && (claimWeekly(1), W.claimed[1]));
     const sb = JSON.stringify(soulState().bag); for (let i = 0; i < 20; i++) dropSoul(1, 100); ok('Pedras da Alma caem', JSON.stringify(soulState().bag) !== sb);
+    // montagem automática conforme o personagem
+    novo('gladiador', 100, { tut: 99 }); const bg = buildWeights();
+    novo('arcanista', 100, { tut: 99 }); const ba = buildWeights();
+    ok('Gladiador prioriza defesa, maga prioriza ataque', DEF_T.includes(bg.order[0]) && OFF_T.includes(ba.order[0]), bg.order[0] + ' / ' + ba.order[0]);
+    S.attr.vit += 300; const bv = buildWeights(); ok('Muitos pontos em vitalidade puxam para ataque', bv.w.atk > ba.w.atk && bv.tilt !== '');
+    novo('gladiador', 100, { tut: 99 }); soulState(); for (const t of Object.keys(SOUL)) S.soul.bag[t] = [10, 0, 0, 0, 0];
+    autoSoul(true); const SL = soulLines();
+    ok('Montar Alma forma combinações com a prioridade da classe', S.soul.grid.every(Boolean) && SL.length >= 3 && SL.some((x) => x.kind === 'same' && DEF_T.includes(x.t)), SL.map((x) => x.kind + ':' + (x.t || '')).join(','));
+    S.arts = []; ['luvas', 'armadura', 'arma', 'elmo', 'anel', 'botas'].forEach((sl, k) => S.arts.push({ uid: 'z' + k, name: sl, slot: sl, rarity: 'epico', ilvl: 80 }));
+    autoArts(true); ok('Montar artefatos põe no centro a peça da prioridade', ['armadura', 'elmo', 'anel'].includes(artAt('c').slot) && ART_SPOTS.every((k) => artAt(k)), artAt('c').slot);
+    novo('cacadora', 30, { tut: 99 }); soulState(); const g0 = JSON.stringify(S.soul.grid); dropSoul(1, 30, 3); ok('Remonta sozinho quando cai pedra', JSON.stringify(S.soul.grid) !== g0);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

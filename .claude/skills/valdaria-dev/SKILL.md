@@ -1,6 +1,6 @@
 ---
 name: valdaria-dev
-description: Guia para desenvolver, testar, balancear e publicar "Crônicas de Valdária", o MMORPG de navegador deste repositório — mundo aberto isométrico com modo Auto, 8 classes com habilidades de nível 1–10, combate em grupo, elites, chefes com marcas no chão, masmorras, equipamento visível por tier, conjuntos, gemas e forja, missões e diárias, renascimento, conquistas, interface de MMO, cena 3D (Three.js + modelos KayKit) e app instalável (PWA). Use sempre que for mexer no jogo — adicionar classe, habilidade, monstro, mapa, item, missão, NPC ou sistema; corrigir bug; ajustar balanceamento ou efeitos visuais; rodar testes; publicar uma nova versão; ou planejar as próximas fases.
+description: Guia para desenvolver, testar, balancear e publicar "Crônicas de Valdária", o MMORPG de navegador deste repositório — mundo aberto isométrico com modo Auto, 8 classes com habilidades de nível 1–10, combate em grupo, elites, chefes com marcas no chão, masmorras, equipamento visível por tier, conjuntos, gemas e forja, missões e diárias, renascimento, conquistas, mapas ligados, eventos, coleta, grupos, guildas, trocas, artefatos e Alma equilibrados por classe, interface de MMO, cena 3D (Three.js + modelos KayKit) e app instalável (PWA). Use sempre que for mexer no jogo — adicionar classe, habilidade, monstro, mapa, item, missão, NPC ou sistema; corrigir bug; ajustar balanceamento ou efeitos visuais; rodar testes; publicar uma nova versão; ou planejar as próximas fases.
 ---
 
 # Crônicas de Valdária — guia de desenvolvimento
@@ -15,6 +15,9 @@ isométrica (tipo Eldevin), com mecânicas de MMORPGs clássicos — mas sempre 
 - Gosta de ver o jogo funcionando: depois de cada mudança relevante, publique (veja "Publicar") e passe o link.
 - Vai revisar **golpe por golpe** cada classe; ajustes de efeito ficam em `SFX` (`js/scene3d.js`) e números em `CLASSES` (`js/data.js`).
 - Modelos 3D de personagens humanos e de monstros ficam **para o final** (ver `references/roadmap.md`).
+- Quer tudo **equilibrado por personagem**: sistemas de bônus (Alma, artefatos) devem reforçar o ponto fraco de cada classe —
+  quem bate muito busca defesa, quem é mago com vitalidade busca ataque (`CLASS_BUILD` em `references/conteudo.md`).
+- Às vezes traz ideias de outros jogos (vídeos, prints). Pergunte como funciona, proponha a versão própria e só faça depois do "pode fazer".
 
 ## Regras de conteúdo
 Pode reproduzir *mecânicas* de outros jogos (funções de classe, área, invocação, furtividade, bloqueio, missões, renascimento...), mas nunca nomes,

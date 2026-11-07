@@ -566,3 +566,5 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .art-item.sel { border-color: #ffd060; background: rgba(120, 90, 20, .45); }
 .art-item.on { opacity: .75; }
 @media (max-width: 600px) { .soul-grid { grid-template-columns: repeat(5, 1fr); width: 100%; } .soul-cell { width: auto; aspect-ratio: 1; } .art-cross { grid-template-columns: repeat(3, 1fr); width: 100%; } }
+.build-box { background: rgba(255, 210, 120, .06); border: 1px solid rgba(255, 210, 120, .3); border-radius: 10px; padding: 8px 10px; margin: 8px 0; display: grid; gap: 4px; font-size: 13px; }
+.build-box small { color: #c8c8d0; }

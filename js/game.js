@@ -71,7 +71,7 @@ function newCharacter(name, cls) {
     equip: { arma: makeStarterWeapon(cls) },
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
-    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true },
+    settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true, autoAlma: true },
     stats: { kills: 0, deaths: 0, bosses: 0, goldEarned: 0, created: Date.now() },
     lastSave: Date.now(), tut: 0,
   };
@@ -1452,7 +1452,7 @@ function startGame(i) {
   if (!S.settings.quality) S.settings.quality = matchMedia('(max-width: 760px)').matches ? 'media' : 'alta';
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
-  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, ...S.settings };
+  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, autoAlma: true, ...S.settings };
   R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, tradeSel: new Set(), tradeGold: 0, coop: null, dirty: { all: true } };
   const off = offlineProgress();
   const d = derived();
@@ -1990,7 +1990,7 @@ function consecrate(uidv) {
     if (eqSlot) S.equip[eqSlot] = null; else S.inv = S.inv.filter((i) => i !== it);
     const slot = it.slot || 'arma';
     S.arts.push({ uid: uid(), name: it.name, slot, rarity: it.rarity, ilvl: it.ilvl, set: it.set || null, wtype: it.wtype || null });
-    S.stats.arts = (S.stats.arts || 0) + 1;
+    S.stats.arts = (S.stats.arts || 0) + 1; autoAlmaMaybe();
     log(`🏺 <b>${esc(it.name)}</b> virou artefato! Coloque na cruz da janela Alma.`, 'lvl'); Sfx.play('levelup'); toast('Artefato criado!', 'good');
     R.sel = null; R.refSel = null; R.dirty.all = true; R.win = null; R.almaTab = 'art'; openWin('alma');
   });
@@ -2044,6 +2044,7 @@ function dropSoul(chance, lvl, n = 1) {
     log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível ${l + 1}!`, 'loot');
   }
   Sfx.play('loot', { rarity: 3, gap: 100 }); R.dirty.inv = true;
+  autoAlmaMaybe();
 }
 function soulPlace(i) {
   const so = soulState();
@@ -2064,7 +2065,7 @@ function soulCombine(t, l) {
 function tabAlma() {
   const t = R.almaTab || 'grade';
   const tabs = `<div class="sub-tabs"><button class="btn small ${t === 'grade' ? 'primary' : ''}" data-alab="grade">🔮 Alma</button><button class="btn small ${t === 'art' ? 'primary' : ''}" data-alab="art">🏺 Artefatos</button></div>`;
-  return tabs + (t === 'art' ? tabArts() : tabSoul());
+  return tabs + buildBox() + (t === 'art' ? tabArts() : tabSoul());
 }
 function tabSoul() {
   const so = soulState(), lines = soulLines(), B = soulBonus();
@@ -2091,6 +2092,69 @@ function tabArts() {
     <div class="art-info">${tot ? `<h4>Poder ativo</h4><p><b>${tot.P.fmt(tot.v)}</b> ${tot.P.label}</p><p class="muted">Ampliação total ×${tot.amp.toFixed(2)}</p>` : '<p class="muted">Coloque um artefato no centro.</p>'}
     <h4>Poder de cada peça</h4>${Object.entries(ART_POWER).map(([k, v]) => `<div class="muted small-note">${k === 'arma' ? '⚔️ Arma' : ARMOR_SLOTS[k].icon + ' ' + ARMOR_SLOTS[k].label}: ${v.label.replace(/^de /, '')}</div>`).join('')}</div></div>
     <h4>Seus artefatos (${S.arts.length}/${ART_MAX})</h4><p class="muted small-note">Toque num artefato e depois num espaço da cruz. Toque num espaço sem escolher nada para tirar.</p><div class="art-list">${list || '<p class="muted">Nenhum ainda. Refine um item até +10 e consagre.</p>'}</div>`;
+}
+
+// ---------- montagem automática da Alma e dos artefatos, conforme o personagem ----------
+// perfil base de cada classe: quem bate muito busca defesa; quem é frágil ou tanque busca o que falta
+const CLASS_BUILD = {
+  gladiador:  { w: { def: 3, vit: 3, res: 2, atk: 1, crit: 1 }, why: 'bate muito forte e luta colado nos monstros' },
+  lanceiro:   { w: { def: 3, res: 2.5, vit: 2, crit: 1, atk: 1 }, why: 'causa muito dano em área e fica cercado' },
+  cacadora:   { w: { vit: 3, def: 2, crit: 2, atk: 1, res: 1.5 }, why: 'já tem muito crítico e pouca vida' },
+  valquiria:  { w: { vit: 2, atk: 2, def: 2, crit: 1.5, res: 1 }, why: 'é equilibrada entre ataque e defesa' },
+  engenheiro: { w: { atk: 3, crit: 2, vit: 1, def: 1, res: 1 }, why: 'é resistente e tem o autômato para segurar os golpes' },
+  paladino:   { w: { atk: 3, crit: 2.5, vit: 1, def: 1, res: 0.5 }, why: 'aguenta muito, mas demora para matar' },
+  arcanista:  { w: { atk: 3, crit: 2, vit: 1, res: 1.5, def: 0.5 }, why: 'é maga com escudo de mana e vitalidade' },
+  cleriga:    { w: { atk: 3, vit: 2, crit: 1, res: 1.5, def: 1 }, why: 'cura bem, mas tem pouco dano' },
+};
+const OFF_T = ['atk', 'crit'], DEF_T = ['def', 'vit', 'res'];
+const T2SLOT = { atk: 'luvas', crit: 'arma', def: 'armadura', vit: 'elmo', res: 'anel' };
+// pesos finais: perfil da classe ajustado pelos pontos do herói (muito em vitalidade = puxa para ataque, e o contrário)
+function buildWeights() {
+  const c = CLASSES[S.cls], P = CLASS_BUILD[S.cls] || { w: { atk: 1, crit: 1, vit: 1, def: 1, res: 1 }, why: '' };
+  const vit = S.attr.vit - c.base.vit, main = S.attr[c.main] - c.base[c.main];
+  const share = vit + main > 10 ? vit / (vit + main) : 0.4; // o normal (distribuir automático) fica perto de 0,4
+  const adj = clamp(share / 0.4, 0.6, 1.6), w = {};
+  for (const t in P.w) w[t] = P.w[t] * (OFF_T.includes(t) ? adj : 1 / adj);
+  const tilt = adj > 1.15 ? 'Você pôs muitos pontos em vitalidade, então puxei mais para ataque.' : adj < 0.85 ? 'Você pôs muitos pontos em ataque, então puxei mais para defesa.' : '';
+  return { w, why: P.why, tilt, order: Object.keys(w).sort((a, b) => w[b] - w[a]) };
+}
+function autoSoul(quiet) {
+  const so = soulState(), { w, order } = buildWeights();
+  for (let i = 0; i < 25; i++) if (so.grid[i]) { so.bag[so.grid[i].t][so.grid[i].l - 1]++; so.grid[i] = null; } // devolve tudo
+  const take = (t) => { for (let l = 4; l >= 0; l--) if (so.bag[t][l] > 0) { so.bag[t][l]--; return { t, l: l + 1 }; } return null; };
+  const count = (t) => so.bag[t].reduce((a, n) => a + n, 0);
+  const open = (i) => soulCellOpen(i);
+  // linhas inteiras do mesmo tipo para os atributos mais importantes (dão o bônus forte)
+  const totalW = order.reduce((a, t) => a + w[t], 0), rows = [0, 1, 2, 3, 4].sort((a, b) => Math.abs(a - 2) - Math.abs(b - 2)); // centro primeiro
+  const plan = []; for (const t of order) { const n = Math.round(5 * w[t] / totalW); for (let k = 0; k < n && plan.length < 5; k++) plan.push(t); }
+  while (plan.length < 5) plan.push(order[plan.length % order.length]);
+  rows.forEach((r, idx) => {
+    const t = plan[idx], cells = [0, 1, 2, 3, 4].map((j) => r * 5 + j).filter(open);
+    if (cells.length === 5 && count(t) >= 5) { for (const i of cells) so.grid[i] = take(t); return; }
+    // linha incompleta: tenta Harmonia (um de cada) se houver; se não, põe o que for mais útil
+    if (cells.length === 5 && Object.keys(SOUL).every((x) => count(x) >= 1)) { Object.keys(SOUL).sort((a, b) => w[b] - w[a]).forEach((x, j) => { so.grid[cells[j]] = take(x); }); return; }
+    for (const i of cells) { const x = order.find((y) => count(y) > 0); if (x) so.grid[i] = take(x); }
+  });
+  if (!quiet) { log(`🔮 Alma montada para ${CLASSES[S.cls].name}: prioridade ${order.slice(0, 2).map((t) => SOUL[t].name).join(' e ')}.`, 'lvl'); renderTab(); }
+  R.dirty.all = true;
+}
+function autoArts(quiet) {
+  artState(); if (!S.arts.length) { if (!quiet) toast('Você ainda não tem artefatos.'); return; }
+  const { order } = buildWeights();
+  const prio = [...order.map((t) => T2SLOT[t]), 'amuleto', 'botas', 'escudo'];
+  const score = (a) => (10 - Math.max(0, prio.indexOf(a.slot))) * 100 + artForce(a) * 10; // tipo preferido primeiro, depois força
+  const sorted = [...S.arts].sort((a, b) => score(b) - score(a)), c = sorted[0];
+  const sides = S.arts.filter((a) => a !== c).sort((a, b) => artAmp(b, c) - artAmp(a, c)).slice(0, 4);
+  S.artCross = { c: c.uid }; sides.forEach((a, k) => { S.artCross[ART_SPOTS[k + 1]] = a.uid; });
+  if (!quiet) { const P = ART_POWER[c.slot]; log(`🏺 Artefatos montados: centro ${esc(c.name)} (${P.label.replace(/^de /, '')}).`, 'lvl'); renderTab(); }
+  R.dirty.all = true;
+}
+// no modo Auto (ou com a opção ligada), remonta sozinho quando chega pedra ou artefato novo
+function autoAlmaMaybe() { if (S.settings.autoAlma) { autoSoul(true); autoArts(true); } }
+function buildBox() {
+  const b = buildWeights();
+  return `<div class="build-box"><b>✨ Sugestão para ${esc(CLASSES[S.cls].name)}</b><small>Ela ${esc(b.why)}: prioridade <b>${b.order.slice(0, 3).map((t) => SOUL[t].icon + ' ' + SOUL[t].name).join(', ')}</b>. ${esc(b.tilt)}</small>
+    <div class="row-btns"><button class="btn small primary" data-act="auto-alma">Montar Alma e Artefatos</button><label class="check"><input type="checkbox" data-set="autoAlma" ${S.settings.autoAlma ? 'checked' : ''}> Remontar sozinho</label></div></div>`;
 }
 
 // ---------- missão semanal (dá pedras da Alma) ----------
@@ -2833,6 +2897,7 @@ document.addEventListener('click', (e) => {
       renderTab(); break;
     case 'to-refine': R.refSel = R.sel || (R.selEq && S.equip[R.selEq].uid); R.win = null; openWin('refino'); break;
     case 'refine': doRefine(); break;
+    case 'auto-alma': autoSoul(true); autoArts(true); log(`✨ Alma e artefatos montados para ${CLASSES[S.cls].name} (prioridade ${buildWeights().order.slice(0, 2).map((t) => SOUL[t].name).join(' e ')}).`, 'lvl'); Sfx.play('refineOk'); renderTab(); break;
     case 'consagrar': consecrate(R.win === 'refino' ? R.refSel : (R.sel || (R.selEq && S.equip[R.selEq] && S.equip[R.selEq].uid))); break;
     case 'equip-best': equipBest(); break;
     case 'meter-reset': R.meter = null; renderTab(); break;
