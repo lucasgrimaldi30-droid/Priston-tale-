@@ -384,6 +384,16 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
   .menu-btns { flex-direction: column; bottom: 90px; }
   .chat { width: 28vw; }
 }
+/* coluna de menus em telas baixas: botões menores para caber os 12 */
+@media (max-width: 1250px) and (min-width: 761px) and (max-height: 820px) {
+  .menu-btns { gap: 3px; bottom: 84px; }
+  .menu-btns button { width: 40px; height: 40px; font-size: 15px; }
+  .menu-btns button small { font-size: 7px; }
+}
+@media (max-width: 1250px) and (min-width: 761px) and (max-height: 640px) {
+  .menu-btns button small { display: none; }
+  .menu-btns button { width: 36px; height: 36px; }
+}
 /* celular */
 @media (max-width: 760px) {
   .stage .hud-left { width: 50vw; padding: 4px 6px; }
@@ -605,3 +615,8 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .gw-box small, .arena-box small { color: #c8c8d0; }
 .gw-board { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
 .gw-board span { background: rgba(0, 0, 0, .3); border-radius: 6px; padding: 2px 6px; }
+
+/* almas do Lanceiro */
+.soul-pips { display: inline-flex; align-items: center; gap: 3px; background: rgba(120, 60, 200, .25) !important; border-color: rgba(190, 140, 255, .5) !important; }
+.soul-pips i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .15); display: inline-block; }
+.soul-pips i.on { background: #c090ff; box-shadow: 0 0 6px #c090ff; }

@@ -580,7 +580,7 @@ function spawnWorldBoss(slot) {
   m.name = 'Avatar de ' + z.boss[0];
   m.maxHp = m.hp = Math.round(m.maxHp * 5); m.atk = Math.round(m.atk * 1.15);
   m.xp *= 3; m.gold *= 4;
-  R.mons = R.mons.filter((x) => !x.boss); R.mons.push(m);
+  R.mons = R.mons.filter((x) => !x.boss || x.sboss || x.aggro); R.mons.push(m); // não apaga o chefe da história nem um chefe em luta
   log(`🔥 <b>${esc(m.name)}</b> despertou na arena ao norte! Derrote-o antes do fim do evento.`, 'boss'); Sfx.play('boss');
 }
 function worldBossReward(m) {
@@ -860,6 +860,7 @@ function hitMonster(m, mult, sk, d, forceCrit, src) {
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def) * teamBond().dmg));
   m.hp -= dmg; m.aggro = true;
   if (isMember()) R.coop.hits.set(m.sid, (R.coop.hits.get(m.sid) || 0) + dmg);
+  if (!(R.pet && src === R.pet.name)) soulGain(dmg, sk, d);
   meterHit(dmg, src || (sk ? sk.name : 'Ataque básico'));
   if (sk && sk.stun) m.stun = Math.max(m.stun, sk.stun * (m.boss ? 0.4 : 1));
   if (sk && sk.slow) m.slow = Math.max(m.slow, sk.slow);
@@ -874,7 +875,9 @@ function playerHit(mult = 1, sk = null) {
   const stealth = R.stealth > 0;
   const hitChance = clamp(0.85 + (d.A.des - m.lvl * 2.5) * 0.003, 0.6, 0.98);
   if (!sk && !stealth && Math.random() > hitChance) { attackSound(null, false, true); Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true, hits: [{ sid: m.sid, text: 'Errou', cls: 'miss' }] }); return; }
-  if (stealth) { R.stealth = 0; }
+  if (stealth) { R.stealth = 0; if (hasSouls()) { addSoul(1); log('👻 Golpe saindo das sombras: +1 alma!', 'skill'); } }
+  const sp = soulSpend(sk);
+  if (sp) { mult *= sp.mult; sk = { ...sk, hits: (sk.hits || 0) + sp.hits, stun: sp.stun || sk.stun }; }
   const targets = sk && sk.type === 'aoe' ? [m, ...nearMons(m, 4.2).filter((x) => x !== m)].slice(0, sk.targets || 9) : [m];
   const hits = [];
   let total = 0, anyCrit = false;
@@ -1055,7 +1058,7 @@ function trySkills(d) {
     const fs = c.skills.find((x) => x.id === R.forceSkill); R.forceSkill = null;
     if (fs && ready(fs) && (fs.type === 'dmg' || fs.type === 'aoe')) return fs;
   }
-  const avail = c.skills.filter((s) => ready(s) && !(S.skillOff || {})[s.id]);
+  const avail = c.skills.filter((s) => ready(s) && !(S.skillOff || {})[s.id] && !soulWait(s));
   for (const s of avail.filter((s) => s.type !== 'dmg' && s.type !== 'aoe')) {
     if (useUtility(s, d, false)) { S.mp -= s.mp; R.cds[s.id] = s.cd; return null; }
   }
@@ -1127,6 +1130,7 @@ function tick() {
   S.hp = Math.min(S.hp, d.maxHp);
   R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); checkTitles(); }
   if (!R.dead) { titleState(); S.streak.alive += dt; }
+  soulTick(dt);
 
   if (!R.inTown && !R.dead && S.hp > 0) { const tb = teamBond(); if (tb.regen) S.hp = Math.min(d.maxHp, S.hp + d.maxHp * tb.regen * dt); }
   if (R.inTown) { // cidade: zona segura, recuperação rápida
@@ -1663,6 +1667,39 @@ function awkPanel() {
     <p class="muted small-note">Depois do 80 dá para upar sozinho, só que mais devagar: o XP rende ${Math.round(SOLO_80 * 100)}% sozinho, ${Math.round(DUO_80 * 100)}% em dupla e ${Math.round(TEAM_80 * 100)}% com 3 ou mais no mesmo mapa.</p>`;
 }
 
+// ---------- 👻 Colheita de Almas (Lanceiro): o dano causado enche a foice; os golpes grandes gastam as almas ----------
+const SOUL_MAX = 5, SOUL_HITS = 5; // ~5 golpes normais = 1 alma (vale igual contra monstro e jogador)
+const hasSouls = () => CLASSES[S.cls].mech === 'souls';
+function soulNeed(d) { return ((d.atkMin + d.atkMax) / 2) * SOUL_HITS; }
+function soulGain(dmg, sk, d) {
+  if (!hasSouls() || R.inTown) return;
+  R.soulIdle = 0; if ((R.souls || 0) >= SOUL_MAX) return;
+  R.soulDmg = (R.soulDmg || 0) + dmg * (sk && sk.soul && sk.soul.gain ? sk.soul.gain : 1);
+  const need = soulNeed(d || derived());
+  while (R.soulDmg >= need && (R.souls || 0) < SOUL_MAX) { R.soulDmg -= need; addSoul(1); }
+}
+function addSoul(n) { const b = R.souls || 0; R.souls = Math.min(SOUL_MAX, b + n); if (R.souls > b) { if (R.souls === SOUL_MAX) Sfx.play('buff'); } if (R.souls >= SOUL_MAX) R.soulDmg = 0; }
+// golpe que gasta almas: devolve o multiplicador e os extras
+function soulSpend(sk) {
+  if (!hasSouls() || !sk || !sk.soul || !sk.soul.max || !R.souls) return null;
+  const n = Math.min(R.souls, sk.soul.max); R.souls -= n;
+  const out = { n, mult: 1 + sk.soul.per * n, hits: sk.soul.hitEvery ? Math.floor(n / sk.soul.hitEvery) : 0, stun: sk.soul.stun5 && n >= SOUL_MAX ? sk.soul.stun5 : 0 };
+  Scene.soulBurst && Scene.soulBurst(n);
+  log(`👻 ${esc(sk.name)} consumiu ${n} alma${n > 1 ? 's' : ''}: +${Math.round((out.mult - 1) * 100)}% de dano${out.hits ? `, +${out.hits} golpe${out.hits > 1 ? 's' : ''}` : ''}${out.stun ? ', atordoando todos' : ''}!`, 'skill');
+  return out;
+}
+function soulTick(dt) { // fora de combate as almas se apagam aos poucos
+  if (!hasSouls() || !R.souls) return;
+  const fighting = R.mon || R.pvp || aliveMons().some((m) => m.aggro && !m.returning);
+  R.soulIdle = fighting ? 0 : (R.soulIdle || 0) + dt;
+  if (R.soulIdle > 15) { R.soulIdle = 10; R.souls--; }
+}
+function soulWait(s) { // no Auto, guarda as almas para os golpes grandes
+  if (!hasSouls() || !s.soul || !s.soul.max || s.soul.max < 5) return false;
+  const m = R.mon, n = m ? nearMons(m, 4.2).length : 0;
+  return (R.souls || 0) < 3 && !(m && (m.boss || m.elite)) && !(s.type === 'aoe' && n >= 4);
+}
+
 // ---------- PK (combate entre jogadores): só com o Modo PK ligado, nos mapas de nível alto, a partir do nível 40 ----------
 const PK_ZONES = ['z8', 'z9', 'z10', 'b4', 'e1'], PK_MIN = 40, PVP_SCALE = 0.5, PVP_RESPAWN = 6, PVP_PROT = 12000;
 const pkZone = () => PK_ZONES.includes(S.zone) && !R.inTown && !R.dungeon;
@@ -1702,12 +1739,13 @@ function pvpStep(dt, d, speed) {
   R.playerTimer = 1 / d.aps;
   // usa o golpe de dano mais forte que estiver pronto; senão, ataque básico
   const sk = classSkills().filter((x) => (x.type === 'dmg' || x.type === 'aoe') && S.lvl >= x.lvl && !(R.cds[x.id] > 0) && S.mp >= x.mp && !(S.skillOff && S.skillOff[x.id])).sort((a, b) => b.mult - a.mult)[0];
-  let mult = 1; if (sk) { mult = sk.mult; S.mp -= sk.mp; R.cds[sk.id] = sk.cd; }
+  let mult = 1; if (sk) { mult = sk.mult; S.mp -= sk.mp; R.cds[sk.id] = sk.cd; const sp = soulSpend(sk); if (sp) mult *= sp.mult * (1 + sp.hits * 0.25); }
   if (Math.random() < (o.pe || 0)) { Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true, hits: [] }); Scene.otherHit(R.pvp.id, 'Esquiva', 'miss'); return true; }
   const crit = Math.random() * 100 < d.crit;
   // no PK a defesa pesa menos que contra monstros, para a luta durar segundos e não minutos
   const dmg = Math.max(1, Math.round(rnd(d.atkMin, d.atkMax) * mult * (crit ? d.critMult : 1) * 100 / (100 + (o.pd || 0) * 0.25) * PVP_SCALE * teamBond().dmg));
   Net.soc('pvphit', { id: R.pvp.id, dmg, crit });
+  soulGain(dmg / (PVP_SCALE * 100 / (100 + (o.pd || 0) * 0.25)) * 100 / (100 + (o.pd || 0)), sk, d); // no PK conta o dano cheio, como contra monstro
   Scene.playerAttack({ text: fmt(dmg), cls: crit ? 'crit' : 'dmg', skill: !!sk, skillName: sk && sk.name, hits: [] });
   Scene.otherHit(R.pvp.id, fmt(dmg) + (crit ? '!' : ''), crit ? 'crit' : 'dmg');
   attackSound(sk && sk.name, crit, false);
@@ -1992,7 +2030,7 @@ function renderLive() {
   $('#xp-bar').innerHTML = bar(S.lvl >= MAX_LEVEL ? 1 : S.xp, S.lvl >= MAX_LEVEL ? 1 : need, 'xp', S.lvl >= MAX_LEVEL ? 'NÍVEL MÁXIMO' : `XP ${fmt(S.xp)} / ${fmt(need)} (${(S.xp / need * 100).toFixed(2)}%)`);
   // jogador
   $('#p-bars').innerHTML = bar(S.hp, d.maxHp, 'hp', `${fmt(Math.max(0, S.hp))} / ${fmt(d.maxHp)}`) + bar(S.mp, d.maxMp, 'mp', `${fmt(S.mp)} / ${fmt(d.maxMp)}`);
-  $('#p-buffs').innerHTML = (R.pet ? `<span class="buff pet">${R.pet.icon} ${esc(R.pet.name)} ${Math.ceil(R.pet.t)}s</span>` : '') + (R.stealth > 0 ? '<span class="buff stealth">🌑 Furtivo</span>' : '') + R.buffs.filter((b) => !b.hidden).map((b) => `<span class="buff">${esc(b.name)} ${Math.ceil(b.t)}s</span>`).join('');
+  $('#p-buffs').innerHTML = (hasSouls() && !R.inTown ? `<span class="buff soul-pips" title="Almas: o dano que você causa enche a foice; os golpes grandes gastam">👻 ${'<i class="on"></i>'.repeat(R.souls || 0)}${'<i></i>'.repeat(SOUL_MAX - (R.souls || 0))}</span>` : '') + (R.pet ? `<span class="buff pet">${R.pet.icon} ${esc(R.pet.name)} ${Math.ceil(R.pet.t)}s</span>` : '') + (R.stealth > 0 ? '<span class="buff stealth">🌑 Furtivo</span>' : '') + R.buffs.filter((b) => !b.hidden).map((b) => `<span class="buff">${esc(b.name)} ${Math.ceil(b.t)}s</span>`).join('');
   // monstro
   const m = R.mon;
   Sfx.music(R.inTown ? 'town' : (m && m.boss ? 'boss' : S.zone));
@@ -2184,7 +2222,13 @@ function useUtility(s, d, forced) {
   return false;
 }
 
-function skillDesc(s) {
+function skillDesc(s) { return skillDescBase(s) + soulDesc(s); }
+function soulDesc(s) {
+  if (!s.soul) return '';
+  if (s.soul.gain) return ` 👻 Enche as almas ${Math.round((s.soul.gain - 1) * 100)}% mais rápido.`;
+  return ` 👻 Gasta até ${s.soul.max} alma${s.soul.max > 1 ? 's' : ''}: +${Math.round(s.soul.per * 100)}% de dano cada${s.soul.hitEvery ? `, +1 golpe a cada ${s.soul.hitEvery}` : ''}${s.soul.stun5 ? `; com ${SOUL_MAX} almas atordoa todos por ${s.soul.stun5}s` : ''}.`;
+}
+function skillDescBase(s) {
   const lbl = { atk: 'ataque', def: 'defesa', crit: 'chance de crítico', critdmg: 'dano crítico', spd: 'velocidade', evade: 'esquiva', block: 'bloqueio', absorb: 'redução de dano', reflect: 'reflexo de dano', hpmax: 'vida máxima', undead: 'dano contra mortos-vivos', mshield: 'dano convertido em mana' };
   const cost = s.cd ? ` Recarga ${s.cd}s, ${s.mp} MP.` : '';
   const extra = s.also ? ` e +${Math.round(s.also.val * 100)}% de ${lbl[s.also.stat]}` : '';
@@ -2193,7 +2237,7 @@ function skillDesc(s) {
     case 'aoe': return `${s.mult < 1 ? 'Atinge' : `Causa ${Math.round(s.mult * 100)}% de dano em`} ${s.targets ? `até ${s.targets} monstros` : 'todos os monstros'}${s.holy ? ' (sagrado)' : ''}${s.stun ? `, atordoando por ${s.stun}s` : ''}${s.slow ? `, deixando lentos por ${s.slow}s` : ''}${s.healPct ? ` e cura ${Math.round(s.healPct * 100)}% da vida` : ''}.` + cost;
     case 'heal': return `Cura ${Math.round(s.mult * 100)}% da vida máxima.` + cost;
     case 'summon': return `Invoca ${PETS[s.pet].icon} ${PETS[s.pet].name} por ${s.dur}s${PETS[s.pet].taunt ? ', que atrai os ataques dos monstros' : ''}${PETS[s.pet].spd ? ' e aumenta sua velocidade' : ''}.` + cost;
-    case 'stealth': return `Fica invisível por ${s.dur}s: os monstros erram e o próximo golpe é um crítico reforçado.` + cost;
+    case 'stealth': return `Fica invisível por ${s.dur}s: os monstros erram e o próximo golpe é um crítico reforçado${CLASSES[S.cls].mech === 'souls' ? ' que rende +1 alma' : ''}.` + cost;
     case 'passive': return s.revive ? `Passiva: ao morrer, volta com 60% da vida sem perder XP (a cada ${s.revive}s).` : `Passiva: +${Math.round(s.val * 100)}% de ${lbl[s.stat]} permanente.`;
     default: return `+${Math.round(s.val * 100)}% de ${lbl[s.stat]}${extra} por ${s.dur}s.` + cost;
   }
@@ -2557,7 +2601,7 @@ function spawnStoryBoss() {
   const m = makeMonster(STORY_BOSS.name, STORY_BOSS.icon, 84, true, 1);
   Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2, sboss: true, skin: STORY_BOSS.skin, type: 'demon' });
   m.maxHp = m.hp = Math.round(m.maxHp * 3.2); m.atk = Math.round(m.atk * 1.1); m.xp *= 4; m.gold *= 5;
-  R.mons = R.mons.filter((x) => !x.boss); R.mons.push(m);
+  R.mons = R.mons.filter((x) => !x.boss || x.wboss || x.aggro); R.mons.push(m);
   log(`🌑 <b>${esc(m.name)}</b> espera você na arena ao norte!`, 'boss'); Sfx.play('boss');
 }
 function tabStory() {

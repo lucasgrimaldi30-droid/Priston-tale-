@@ -58,15 +58,16 @@ const CLASSES = {
   },
   lanceiro: {
     name: 'Lanceiro', faction: 'ferro', icon: '⚔️', weapon: 'foice', critMult: 2.3, role: 'Corpo a corpo · Crítico explosivo',
-    desc: 'Ceifador com foices de duas mãos. Some nas sombras e tem o maior dano crítico do jogo.',
+    desc: 'Ceifador com foices de duas mãos. Colhe almas com o dano que causa e solta tudo nos golpes finais. Some nas sombras e tem o maior dano crítico do jogo.',
+    mech: 'souls',
     base: { for: 24, int: 6, des: 22, agi: 20, vit: 18 }, main: 'for', speed: 1.2,
     skills: [
-      { id: 'l1', name: 'Corte da Foice',      lvl: 1,  type: 'dmg',     mult: 1.9, cd: 4,  mp: 6 },
+      { id: 'l1', name: 'Corte da Foice',      lvl: 1,  type: 'dmg',     mult: 1.9, cd: 4,  mp: 6, soul: { gain: 1.5 } },
       { id: 'l2', name: 'Desvanecer',          lvl: 10, type: 'stealth', dur: 3, cd: 18, mp: 15 },
-      { id: 'l3', name: 'Espetos do Chão',     lvl: 20, type: 'aoe',     mult: 2.4, cd: 9,  mp: 22 },
+      { id: 'l3', name: 'Espetos do Chão',     lvl: 20, type: 'aoe',     mult: 2.4, cd: 9,  mp: 22, soul: { max: 2, per: 0.25 } },
       { id: 'l4', name: 'Mestre das Sombras',  lvl: 35, type: 'buff',    stat: 'critdmg', val: 0.6, dur: 20, cd: 36, mp: 30, also: { stat: 'crit', val: 0.2 } },
-      { id: 'l5', name: 'Dança das Sombras',   lvl: 50, type: 'dmg',     mult: 7.2, hits: 4, cd: 13, mp: 45 },
-      { id: 'l6', name: 'Ceifa Final',         lvl: 70, type: 'aoe',     mult: 6.5, cd: 17, mp: 72 },
+      { id: 'l5', name: 'Dança das Sombras',   lvl: 50, type: 'dmg',     mult: 7.2, hits: 4, cd: 13, mp: 45, soul: { max: 5, per: 0.2, hitEvery: 2 } },
+      { id: 'l6', name: 'Ceifa Final',         lvl: 70, type: 'aoe',     mult: 6.5, cd: 17, mp: 72, soul: { max: 5, per: 0.3, stun5: 1.5 } },
     ],
   },
   paladino: {

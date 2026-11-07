@@ -2205,7 +2205,21 @@ const Scene3D = (() => {
     e5: ['orbs', '#80e0ff'], g2: ['speed', '#ff5030'], v4: ['speed', '#c8e8ff'], c4: ['speed', '#a0ffb0'],
     v2: ['flame', '#ff8a20'], p3: ['holy', '#ffe070'], l4: ['shadow', '#6a2aaa'], c5: ['aim', '#ff4040'], r3: ['life', '#70f090'],
   };
+  // almas do Lanceiro girando em volta do herói
+  const soulSpr = [];
+  function updateSouls(h, t) {
+    const n = !R.inTown && typeof hasSouls === 'function' && hasSouls() ? (R.souls || 0) : 0;
+    while (soulSpr.length < n) { const sp = glowSprite('#c090ff', 0.55, 0.95); scene.add(sp); soulSpr.push(sp); }
+    while (soulSpr.length > n) { const sp = soulSpr.pop(); scene.remove(sp); }
+    const hp = h.root.position;
+    soulSpr.forEach((sp, i) => { const a = t * 2.2 + (i / Math.max(1, n)) * Math.PI * 2; sp.position.set(hp.x + Math.cos(a) * 0.85, 1.25 + Math.sin(t * 3 + i) * 0.15, hp.z + Math.sin(a) * 0.85); sp.material.opacity = 0.75 + Math.sin(t * 5 + i) * 0.2; });
+  }
+  function soulBurst(n) {
+    if (!running || document.hidden || !st.hero) return; const p = st.hero.root.position;
+    burst(new THREE.Vector3(p.x, 1.2, p.z), '#c090ff', 10 + n * 8, 4, 0.16, 2); if (n >= 5) { ring(new THREE.Vector3(p.x, 0, p.z), '#c090ff', 5, 0.7); st.shake = Math.max(st.shake, 0.25); }
+  }
   function updateBuffVisuals(h, t) {
+    updateSouls(h, t);
     h.bv = h.bv || {};
     const on = new Set((R.inTown ? [] : R.buffs || []).map((b) => b.id));
     // aura do conjunto (2 peças: brilho; 4 peças: anel no chão também)
@@ -2735,7 +2749,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2755,7 +2769,7 @@ const Scene = (() => {
     },
     stop() { Scene2D.stop(); Scene3D.stop(); },
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
-    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
+    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };

@@ -159,6 +159,17 @@ const startServer = require('./server.cjs');
     S.zone = 'gw'; initWorld(); for (let i = 0; i < 60; i++) spawnWorldMonster();
     ok('Fortaleza tem cristais parados', R.mons.some((m) => m.crystal && m.static && m.atk === 0) && R.mons.every((m) => Math.abs(m.lvl - S.lvl) <= 3 || m.crystal));
     ok('Sem servidor o bônus semanal é zero', wkBonus() === 0 && dropMult() === 1 && tabMaps().includes('Cerco da Coroa') && tabMaps().includes('Arena da Sobrevivência'));
+    // Lanceiro: colheita de almas
+    novo('lanceiro', 80, { tut: 99 }); S.settings.auto = false; R.souls = 0; R.soulDmg = 0;
+    { const d = derived(); soulGain(soulNeed(d) * 2.1, null, d); }
+    ok('Dano causado gera almas', R.souls === 2);
+    { const d = derived(); soulGain(soulNeed(d) * 10, null, d); } ok('Máximo de 5 almas', R.souls === 5);
+    const l6 = classSkills().find((x) => x.id === 'l6'), spx = soulSpend(l6);
+    ok('Ceifa Final gasta 5 almas: +150% e atordoa', spx && spx.n === 5 && Math.abs(spx.mult - 2.5) < 1e-9 && spx.stun > 0 && R.souls === 0);
+    R.souls = 1; R.mon = { boss: false, elite: false, x: 0, z: 0 }; R.mons = [];
+    ok('Auto guarda as almas para os golpes grandes', soulWait(l6) === true && soulWait(classSkills().find((x) => x.id === 'l3')) === false);
+    R.souls = 2; R.soulIdle = 0; R.mon = null; for (let i = 0; i < 200; i++) soulTick(0.1); ok('Fora de combate as almas somem', R.souls < 2);
+    ok('Descrição mostra as almas', skillDesc(l6).includes('alma'));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });
