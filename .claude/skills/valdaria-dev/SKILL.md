@@ -42,6 +42,9 @@ Para ver o equipamento de perto, defina `window.__camFocusHero = true` e role a 
 Uma chamada `tick()` equivale a 0,1 s de jogo, então dá para simular horas num loop (36000 ticks = 1 h).
 Alvos de balanceamento (simulação jogando sozinho com auto-equipar e mapa ideal): nível ~50–60 em 24 h e ~55–72 em 48 h, poucas mortes, nenhuma classe muito à frente.
 
+**Nunca use `confirm()`, `prompt()` ou `alert()`**: a página publicada roda num iframe sem `allow-modals`, e o navegador ignora essas chamadas em silêncio. Use `uiDialog()` / `uiConfirm()` de `js/game.js`. Para reproduzir esse ambiente, carregue o jogo dentro de `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-forms">`.
+O `localStorage` pode falhar nesse ambiente; `loadSlot`/`save` caem para `memSlots` (memória).
+
 Sempre confira: `node --check js/*.js`, nenhum `pageerror` no console, capturas das 8 classes e das duas cidades, modo 2D e celular (390×844).
 
 ## Modelos 3D

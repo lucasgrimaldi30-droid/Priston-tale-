@@ -37,16 +37,19 @@ const MAX_LEVEL = 100;
 const POINTS_PER_LEVEL = 5;
 
 // ---------- slots / save ----------
+const memSlots = {}; // usado quando o navegador bloqueia o localStorage
 function loadSlot(i) {
-  try { const raw = localStorage.getItem(SAVE_PREFIX + i); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  try { const raw = localStorage.getItem(SAVE_PREFIX + i); if (raw) return JSON.parse(raw); } catch (e) { /* armazenamento bloqueado */ }
+  return memSlots[i] ? JSON.parse(JSON.stringify(memSlots[i])) : null;
 }
 function save() {
   if (!S) return;
   S.lastSave = Date.now();
-  try { localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(S)); } catch (e) { /* armazenamento indisponível */ }
+  try { localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(S)); } catch (e) { memSlots[slot] = JSON.parse(JSON.stringify(S)); }
 }
 function deleteSlot(i) {
   try { localStorage.removeItem(SAVE_PREFIX + i); } catch (e) {}
+  delete memSlots[i];
 }
 
 function newCharacter(name, cls) {
@@ -606,6 +609,25 @@ function renderSelect() {
 
 let createState = { slot: 0, faction: 'ferro', cls: null };
 
+// ---------- diálogo próprio (confirm/prompt do navegador são bloqueados em páginas incorporadas) ----------
+function uiDialog({ title = '', text = '', ok = 'Confirmar', cancel = 'Cancelar', input = null, value = '', readonly = false }) {
+  return new Promise((resolve) => {
+    let el = document.getElementById('dialog');
+    if (!el) { el = document.createElement('div'); el.id = 'dialog'; el.className = 'modal'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="modal-box dialog-box">
+      ${title ? `<h2>${esc(title)}</h2>` : ''}<p>${esc(text)}</p>
+      ${input ? `<textarea id="dlg-input" rows="4" ${readonly ? 'readonly' : ''} placeholder="${esc(input)}">${esc(value)}</textarea>` : ''}
+      <div class="row-btns">${cancel ? `<button class="btn" id="dlg-no">${esc(cancel)}</button>` : ''}<button class="btn primary" id="dlg-ok">${esc(ok)}</button></div></div>`;
+    el.classList.remove('hidden');
+    const ta = el.querySelector('#dlg-input');
+    if (ta) { ta.focus(); if (readonly) ta.select(); }
+    const close = (res) => { el.classList.add('hidden'); el.innerHTML = ''; resolve(res); };
+    el.querySelector('#dlg-ok').onclick = () => close({ ok: true, value: ta ? ta.value : '' });
+    const no = el.querySelector('#dlg-no'); if (no) no.onclick = () => close({ ok: false, value: '' });
+  });
+}
+const uiConfirm = async (title, text, ok = 'Confirmar') => (await uiDialog({ title, text, ok })).ok;
+
 // ---------- conta de demonstração: 3 heróis no ápice ----------
 function makeLegendary(slotName, wtype) {
   let it = null;
@@ -630,11 +652,13 @@ function makeFullChar(name, cls, wtype) {
   const made = S; S = keep;
   return made;
 }
-function createFullAccount() {
+async function createFullAccount() {
   const used = [0, 1, 2].some((i) => loadSlot(i));
-  if (used && !confirm('Isso vai substituir os heróis dos 3 espaços pela Conta Full (nível 100, tudo lendário +10). Continuar?')) return;
+  if (used && !(await uiConfirm('Conta Full', 'Isso vai substituir os heróis dos 3 espaços pela Conta Full (nível 100, tudo lendário +10). Continuar?', 'Substituir'))) return;
   const chars = [makeFullChar('Ferreus', 'engenheiro', 'martelo'), makeFullChar('Ceifador', 'lanceiro', 'foice'), makeFullChar('Arcana', 'arcanista', 'cajado')];
-  chars.forEach((c, i) => { try { localStorage.setItem(SAVE_PREFIX + i, JSON.stringify(c)); } catch (e) {} });
+  let okSave = true;
+  chars.forEach((c, i) => { try { localStorage.setItem(SAVE_PREFIX + i, JSON.stringify(c)); } catch (e) { okSave = false; memSlots[i] = c; } });
+  if (!okSave) toast('Este navegador bloqueou o armazenamento: a conta vale só enquanto a página estiver aberta.', 'bad');
   toast('Conta Full criada: Engenheiro, Lanceiro e Arcanista no nível 100!', 'good');
   renderSelect();
 }
@@ -1145,7 +1169,7 @@ document.addEventListener('click', (e) => {
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
   if (ds.del !== undefined) {
-    if (confirm('Excluir este personagem permanentemente?')) { deleteSlot(+ds.del); renderSelect(); }
+    uiConfirm('Excluir herói', 'Excluir este personagem permanentemente?', 'Excluir').then((y) => { if (y) { deleteSlot(+ds.del); renderSelect(); } });
     return;
   }
   if (ds.new !== undefined) { createState = { slot: +ds.new, faction: 'ferro', cls: null }; $('#char-name').value = ''; return renderCreate(); }
@@ -1207,27 +1231,33 @@ document.addEventListener('click', (e) => {
     case 'reset-pts': {
       const cost = resetCost();
       if (S.gold < cost) { toast('Ouro insuficiente.', 'bad'); break; }
-      if (!confirm(`Redistribuir todos os pontos por ${fmt(cost)} ouro?`)) break;
-      S.gold -= cost;
-      S.attr = { ...CLASSES[S.cls].base };
-      S.pts = (S.lvl - 1) * POINTS_PER_LEVEL;
-      clampVitals();
-      R.dirty.all = true; break;
+      uiConfirm('Redistribuir pontos', `Redistribuir todos os pontos por ${fmt(cost)} ouro?`).then((y) => {
+        if (!y || S.gold < cost) return;
+        S.gold -= cost;
+        S.attr = { ...CLASSES[S.cls].base };
+        S.pts = (S.lvl - 1) * POINTS_PER_LEVEL;
+        clampVitals();
+        R.dirty.all = true;
+      });
+      break;
     }
     case 'export': {
       save();
       const code = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
-      navigator.clipboard?.writeText(code).then(() => toast('Save copiado para a área de transferência!', 'good'), () => prompt('Copie seu save:', code));
+      uiDialog({ title: 'Exportar save', text: 'Copie o código abaixo e guarde em um lugar seguro.', input: 'código', value: code, readonly: true, ok: 'Copiar', cancel: 'Fechar' }).then((r) => {
+        if (r.ok) navigator.clipboard?.writeText(code).then(() => toast('Save copiado!', 'good'), () => toast('Selecione e copie o código manualmente.', 'bad'));
+      });
       break;
     }
     case 'import': {
-      const code = prompt('Cole o código do save:');
-      if (!code) break;
-      try {
-        const obj = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-        if (!obj.cls || !CLASSES[obj.cls]) throw new Error('inválido');
-        S = obj; save(); startGame(slot); toast('Save importado!', 'good');
-      } catch (err) { toast('Código de save inválido.', 'bad'); }
+      uiDialog({ title: 'Importar save', text: 'Cole o código do save:', input: 'cole aqui', ok: 'Importar' }).then((r) => {
+        if (!r.ok || !r.value.trim()) return;
+        try {
+          const obj = JSON.parse(decodeURIComponent(escape(atob(r.value.trim()))));
+          if (!obj.cls || !CLASSES[obj.cls]) throw new Error('inválido');
+          S = obj; save(); startGame(slot); toast('Save importado!', 'good');
+        } catch (err) { toast('Código de save inválido.', 'bad'); }
+      });
       break;
     }
   }
