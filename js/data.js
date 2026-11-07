@@ -8,111 +8,147 @@ const FACTIONS = {
 };
 
 // Atributos: for (Força), int (Intelecto), des (Destreza), agi (Agilidade), vit (Vitalidade)
+// Tipos de habilidade:
+//  dmg     dano em um alvo (hits = golpes, boss = bônus contra chefes, holy = sagrado)
+//  aoe     dano em todos os monstros (targets = limite de alvos), stun/slow em segundos
+//  buff    bônus temporário: stat = atk, def, crit, critdmg, spd, evade, block, absorb, reflect, hpmax, undead, mshield
+//  heal    cura % da vida máxima (aoe opcional com dano)
+//  summon  invoca um aliado: pet = golem | falcao | fera
+//  stealth fica invisível: monstros erram e o próximo golpe é crítico reforçado
+//  passive bônus permanente a partir do nível (stat/val) ou revive (ressurreição automática)
 const CLASSES = {
   gladiador: {
-    name: 'Gladiador', faction: 'ferro', icon: '🪓', weapon: 'machado',
-    desc: 'Guerreiro brutal de machado. Muito dano corpo a corpo e muita vida.',
+    name: 'Gladiador', faction: 'ferro', icon: '🪓', weapon: 'machado', role: 'Corpo a corpo · Caçador de chefes',
+    desc: 'Força bruta com machados. Muita vida, golpes em área e dano devastador contra chefes.',
     base: { for: 28, int: 6, des: 14, agi: 12, vit: 25 }, main: 'for', speed: 1.1,
     skills: [
-      { id: 'g1', name: 'Golpe Duplo',     lvl: 1,  type: 'dmg',  mult: 1.8, cd: 4,  mp: 6 },
-      { id: 'g2', name: 'Fúria Sangrenta', lvl: 10, type: 'buff', stat: 'atk', val: 0.30, dur: 15, cd: 30, mp: 20 },
-      { id: 'g3', name: 'Rodopio de Aço',  lvl: 20, type: 'dmg',  mult: 3.2, cd: 8,  mp: 22 },
-      { id: 'g4', name: 'Pele de Pedra',   lvl: 35, type: 'buff', stat: 'def', val: 0.50, dur: 20, cd: 40, mp: 30 },
-      { id: 'g5', name: 'Executar',        lvl: 50, type: 'dmg',  mult: 6.0, cd: 14, mp: 45 },
-      { id: 'g6', name: 'Grito do Titã',   lvl: 70, type: 'buff', stat: 'atk', val: 0.70, dur: 20, cd: 60, mp: 70 },
+      { id: 'g1', name: 'Golpe Brutal',      lvl: 1,  type: 'dmg',  mult: 1.9, cd: 4,  mp: 6 },
+      { id: 'g2', name: 'Machado Veloz',     lvl: 10, type: 'buff', stat: 'spd', val: 0.45, dur: 20, cd: 32, mp: 18 },
+      { id: 'g3', name: 'Fúria do Titã',     lvl: 20, type: 'aoe',  mult: 2.3, cd: 8,  mp: 24 },
+      { id: 'g4', name: 'Rugido de Guerra',  lvl: 35, type: 'aoe',  mult: 0.8, stun: 2.5, cd: 18, mp: 30 },
+      { id: 'g5', name: 'Destruidor',        lvl: 50, type: 'dmg',  mult: 6.5, boss: 0.5, cd: 13, mp: 45 },
+      { id: 'g6', name: 'Golpe da Vingança', lvl: 70, type: 'dmg',  mult: 10, boss: 0.8, hits: 2, cd: 19, mp: 70 },
     ],
   },
   engenheiro: {
-    name: 'Engenheiro', faction: 'ferro', icon: '⚙️', weapon: 'martelo',
-    desc: 'Combatente blindado com martelo mecânico. Defesa altíssima e golpes elétricos.',
+    name: 'Engenheiro', faction: 'ferro', icon: '⚙️', weapon: 'martelo', anyWeapon: true, role: 'Tanque · Invocador de autômato',
+    desc: 'Mestre da metalurgia. Usa qualquer arma, tem a maior defesa e invoca um autômato que segura os monstros.',
     base: { for: 24, int: 12, des: 12, agi: 10, vit: 26 }, main: 'for', speed: 1.0,
     skills: [
-      { id: 'e1', name: 'Choque Mecânico',  lvl: 1,  type: 'dmg',  mult: 1.7, cd: 4,  mp: 6 },
-      { id: 'e2', name: 'Blindagem Extra',  lvl: 10, type: 'buff', stat: 'def', val: 0.60, dur: 20, cd: 30, mp: 18 },
-      { id: 'e3', name: 'Martelo Trovão',   lvl: 20, type: 'dmg',  mult: 3.0, cd: 8,  mp: 22 },
-      { id: 'e4', name: 'Reparo de Campo',  lvl: 35, type: 'heal', mult: 0.30, cd: 25, mp: 35 },
-      { id: 'e5', name: 'Sobrecarga',       lvl: 50, type: 'buff', stat: 'atk', val: 0.50, dur: 18, cd: 45, mp: 45 },
-      { id: 'e6', name: 'Impacto Sísmico',  lvl: 70, type: 'dmg',  mult: 7.0, cd: 15, mp: 70 },
+      { id: 'e1', name: 'Choque Mecânico',    lvl: 1,  type: 'dmg',    mult: 1.8, cd: 4,  mp: 6 },
+      { id: 'e2', name: 'Armadura Metálica',  lvl: 10, type: 'buff',   stat: 'def', val: 0.8, dur: 25, cd: 32, mp: 18 },
+      { id: 'e3', name: 'Faísca Paralisante', lvl: 20, type: 'aoe',    mult: 1.7, stun: 1.6, cd: 10, mp: 24 },
+      { id: 'e4', name: 'Autômato de Ferro',  lvl: 35, type: 'summon', pet: 'golem', mult: 0.6, dur: 35, cd: 45, mp: 40 },
+      { id: 'e5', name: 'Esferas Giratórias', lvl: 50, type: 'buff',   stat: 'absorb', val: 0.3, dur: 22, cd: 38, mp: 40 },
+      { id: 'e6', name: 'Impacto Sísmico',    lvl: 70, type: 'aoe',    mult: 6, stun: 2, cd: 16, mp: 70 },
     ],
   },
   cacadora: {
-    name: 'Caçadora', faction: 'ferro', icon: '🏹', weapon: 'arco',
-    desc: 'Arqueira veloz e certeira. Ataques rápidos e muitos críticos.',
+    name: 'Caçadora', faction: 'ferro', icon: '🏹', weapon: 'arco', role: 'Dano à distância · Falcão',
+    desc: 'Precisão máxima com o arco. Invoca um falcão espiritual e esquiva de quase tudo.',
     base: { for: 14, int: 8, des: 30, agi: 22, vit: 16 }, main: 'des', speed: 1.35,
     skills: [
-      { id: 'c1', name: 'Flecha Perfurante', lvl: 1,  type: 'dmg',  mult: 1.6, cd: 3,  mp: 5 },
-      { id: 'c2', name: 'Olho de Falcão',    lvl: 10, type: 'buff', stat: 'crit', val: 0.20, dur: 20, cd: 35, mp: 18 },
-      { id: 'c3', name: 'Chuva de Flechas',  lvl: 20, type: 'dmg',  mult: 3.0, cd: 7,  mp: 20 },
-      { id: 'c4', name: 'Passo do Vento',    lvl: 35, type: 'buff', stat: 'spd', val: 0.40, dur: 20, cd: 40, mp: 30 },
-      { id: 'c5', name: 'Flecha Fênix',      lvl: 50, type: 'dmg',  mult: 5.5, cd: 12, mp: 42 },
-      { id: 'c6', name: 'Tempestade Alada',  lvl: 70, type: 'dmg',  mult: 9.0, cd: 18, mp: 75 },
+      { id: 'c1', name: 'Flecha Certeira',    lvl: 1,  type: 'dmg',    mult: 1.7, cd: 3,  mp: 5 },
+      { id: 'c2', name: 'Falcão Espiritual',  lvl: 10, type: 'summon', pet: 'falcao', mult: 0.6, dur: 40, cd: 48, mp: 22 },
+      { id: 'c3', name: 'Chuva de Flechas',   lvl: 20, type: 'aoe',    mult: 2.2, cd: 8,  mp: 20 },
+      { id: 'c4', name: 'Esquiva',            lvl: 35, type: 'buff',   stat: 'evade', val: 0.25, dur: 25, cd: 34, mp: 28 },
+      { id: 'c5', name: 'Mira Perfeita',      lvl: 50, type: 'buff',   stat: 'crit', val: 0.35, dur: 16, cd: 34, mp: 40 },
+      { id: 'c6', name: 'Flechas Explosivas', lvl: 70, type: 'aoe',    mult: 6.5, cd: 16, mp: 72 },
     ],
   },
   lanceiro: {
-    name: 'Lanceiro', faction: 'ferro', icon: '🔱', weapon: 'lanca',
-    desc: 'Mestre da lança de longo alcance. Equilíbrio entre dano e agilidade.',
-    base: { for: 24, int: 6, des: 20, agi: 20, vit: 20 }, main: 'for', speed: 1.2,
+    name: 'Lanceiro', faction: 'ferro', icon: '⚔️', weapon: 'foice', critMult: 2.3, role: 'Corpo a corpo · Crítico explosivo',
+    desc: 'Ceifador com foices de duas mãos. Some nas sombras e tem o maior dano crítico do jogo.',
+    base: { for: 24, int: 6, des: 22, agi: 20, vit: 18 }, main: 'for', speed: 1.2,
     skills: [
-      { id: 'l1', name: 'Estocada',         lvl: 1,  type: 'dmg',  mult: 1.8, cd: 4,  mp: 6 },
-      { id: 'l2', name: 'Postura Firme',    lvl: 10, type: 'buff', stat: 'def', val: 0.40, dur: 20, cd: 30, mp: 16 },
-      { id: 'l3', name: 'Lança Giratória',  lvl: 20, type: 'dmg',  mult: 3.1, cd: 8,  mp: 22 },
-      { id: 'l4', name: 'Sede de Combate',  lvl: 35, type: 'buff', stat: 'atk', val: 0.40, dur: 18, cd: 40, mp: 30 },
-      { id: 'l5', name: 'Investida Mortal', lvl: 50, type: 'dmg',  mult: 6.0, cd: 13, mp: 45 },
-      { id: 'l6', name: 'Lança do Dragão',  lvl: 70, type: 'dmg',  mult: 8.5, cd: 17, mp: 72 },
+      { id: 'l1', name: 'Corte da Foice',      lvl: 1,  type: 'dmg',     mult: 1.9, cd: 4,  mp: 6 },
+      { id: 'l2', name: 'Desvanecer',          lvl: 10, type: 'stealth', dur: 3, cd: 18, mp: 15 },
+      { id: 'l3', name: 'Espetos do Chão',     lvl: 20, type: 'aoe',     mult: 2.4, cd: 9,  mp: 22 },
+      { id: 'l4', name: 'Mestre das Sombras',  lvl: 35, type: 'buff',    stat: 'critdmg', val: 0.6, dur: 20, cd: 36, mp: 30, also: { stat: 'crit', val: 0.2 } },
+      { id: 'l5', name: 'Dança das Sombras',   lvl: 50, type: 'dmg',     mult: 7.2, hits: 4, cd: 13, mp: 45 },
+      { id: 'l6', name: 'Ceifa Final',         lvl: 70, type: 'aoe',     mult: 6.5, cd: 17, mp: 72 },
     ],
   },
   paladino: {
-    name: 'Paladino', faction: 'luz', icon: '🛡️', weapon: 'espada',
-    desc: 'Cavaleiro sagrado de espada. Resistente, com bênçãos e cura.',
+    name: 'Paladino', faction: 'luz', icon: '🛡️', weapon: 'espada', role: 'Tanque sagrado · Caçador de mortos-vivos',
+    desc: 'Espada e escudo abençoados. Bloqueia ataques e destrói mortos-vivos com luz sagrada.',
     base: { for: 24, int: 14, des: 14, agi: 12, vit: 24 }, main: 'for', speed: 1.1,
     skills: [
-      { id: 'p1', name: 'Lâmina Sagrada',   lvl: 1,  type: 'dmg',  mult: 1.7, cd: 4,  mp: 6 },
-      { id: 'p2', name: 'Bênção Divina',    lvl: 10, type: 'buff', stat: 'def', val: 0.45, dur: 20, cd: 30, mp: 18 },
-      { id: 'p3', name: 'Cruz Radiante',    lvl: 20, type: 'dmg',  mult: 3.0, cd: 8,  mp: 22 },
-      { id: 'p4', name: 'Luz Restauradora', lvl: 35, type: 'heal', mult: 0.35, cd: 25, mp: 35 },
-      { id: 'p5', name: 'Julgamento',       lvl: 50, type: 'dmg',  mult: 6.0, cd: 13, mp: 45 },
-      { id: 'p6', name: 'Aura do Paladino', lvl: 70, type: 'buff', stat: 'atk', val: 0.60, dur: 20, cd: 55, mp: 70 },
+      { id: 'p1', name: 'Lâmina Sagrada',       lvl: 1,  type: 'dmg',     mult: 1.8, holy: 1, cd: 4, mp: 6 },
+      { id: 'p2', name: 'Bloqueio Mestre',      lvl: 10, type: 'passive', stat: 'block', val: 0.15 },
+      { id: 'p3', name: 'Espada Sagrada',       lvl: 20, type: 'buff',    stat: 'undead', val: 0.8, dur: 25, cd: 34, mp: 22, also: { stat: 'atk', val: 0.15 } },
+      { id: 'p4', name: 'Escudo Divino',        lvl: 35, type: 'buff',    stat: 'block', val: 0.25, dur: 20, cd: 34, mp: 30, also: { stat: 'def', val: 0.3 } },
+      { id: 'p5', name: 'Grande Cruz',          lvl: 50, type: 'aoe',     mult: 4.5, holy: 1, cd: 12, mp: 45 },
+      { id: 'p6', name: 'Julgamento Celestial', lvl: 70, type: 'aoe',     mult: 8, holy: 1, cd: 18, mp: 72 },
     ],
   },
   valquiria: {
-    name: 'Valquíria', faction: 'luz', icon: '🗡️', weapon: 'dardo',
-    desc: 'Guerreira de dardos arremessados. Ágil, crítica e mortal à distância.',
-    base: { for: 20, int: 10, des: 26, agi: 22, vit: 16 }, main: 'des', speed: 1.3,
+    name: 'Valquíria', faction: 'luz', icon: '🗡️', weapon: 'dardo', role: 'Distância com escudo · Fera alada',
+    desc: 'Arremessa lanças leves e usa escudo. Domina o vento e invoca uma fera alada.',
+    base: { for: 20, int: 10, des: 26, agi: 22, vit: 18 }, main: 'des', speed: 1.3,
     skills: [
-      { id: 'v1', name: 'Dardo Veloz',       lvl: 1,  type: 'dmg',  mult: 1.6, cd: 3,  mp: 5 },
-      { id: 'v2', name: 'Foco de Batalha',   lvl: 10, type: 'buff', stat: 'crit', val: 0.18, dur: 20, cd: 35, mp: 18 },
-      { id: 'v3', name: 'Dardo Triplo',      lvl: 20, type: 'dmg',  mult: 3.0, cd: 7,  mp: 20 },
-      { id: 'v4', name: 'Graça da Deusa',    lvl: 35, type: 'heal', mult: 0.25, cd: 25, mp: 30 },
-      { id: 'v5', name: 'Lança Celeste',     lvl: 50, type: 'dmg',  mult: 5.5, cd: 12, mp: 42 },
-      { id: 'v6', name: 'Tormenta de Dardos',lvl: 70, type: 'dmg',  mult: 9.0, cd: 18, mp: 75 },
+      { id: 'v1', name: 'Dardo Veloz',       lvl: 1,  type: 'dmg',    mult: 1.7, cd: 3,  mp: 5 },
+      { id: 'v2', name: 'Lança Solar',       lvl: 10, type: 'buff',   stat: 'atk', val: 0.3, dur: 25, cd: 34, mp: 18 },
+      { id: 'v3', name: 'Arremesso Triplo',  lvl: 20, type: 'aoe',    mult: 2.4, targets: 3, cd: 8, mp: 20 },
+      { id: 'v4', name: 'Vento Divino',      lvl: 35, type: 'buff',   stat: 'spd', val: 0.35, dur: 25, cd: 34, mp: 30, also: { stat: 'evade', val: 0.1 } },
+      { id: 'v5', name: 'Fera Alada',        lvl: 50, type: 'summon', pet: 'fera', mult: 0.85, dur: 40, cd: 48, mp: 45 },
+      { id: 'v6', name: 'Tormenta de Lanças', lvl: 70, type: 'aoe',   mult: 8, cd: 18, mp: 75 },
     ],
   },
   arcanista: {
-    name: 'Arcanista', faction: 'luz', icon: '🔮', weapon: 'cajado',
-    desc: 'Mago elemental. Pouca vida, mas magias devastadoras.',
-    base: { for: 8, int: 32, des: 14, agi: 12, vit: 16 }, main: 'int', speed: 0.9,
+    name: 'Arcanista', faction: 'luz', icon: '🔮', weapon: 'cajado', role: 'Dano mágico em área · Controle',
+    desc: 'Fogo, gelo e raio. O maior dano em área do jogo, protegido por um escudo de energia.',
+    base: { for: 8, int: 32, des: 14, agi: 12, vit: 16 }, main: 'int', speed: 0.95,
     skills: [
-      { id: 'a1', name: 'Bola de Fogo',      lvl: 1,  type: 'dmg',  mult: 2.0, cd: 3,  mp: 7 },
-      { id: 'a2', name: 'Escudo Arcano',     lvl: 10, type: 'buff', stat: 'def', val: 0.60, dur: 20, cd: 30, mp: 20 },
-      { id: 'a3', name: 'Lança de Gelo',     lvl: 20, type: 'dmg',  mult: 3.6, cd: 7,  mp: 24 },
-      { id: 'a4', name: 'Mente Ampliada',    lvl: 35, type: 'buff', stat: 'atk', val: 0.45, dur: 20, cd: 40, mp: 35 },
-      { id: 'a5', name: 'Meteoro',           lvl: 50, type: 'dmg',  mult: 7.0, cd: 13, mp: 55 },
-      { id: 'a6', name: 'Nova Elemental',    lvl: 70, type: 'dmg',  mult: 11.0, cd: 18, mp: 90 },
+      { id: 'a1', name: 'Bola de Fogo',       lvl: 1,  type: 'dmg',  mult: 2.0, cd: 3,  mp: 7 },
+      { id: 'a2', name: 'Escudo de Energia',  lvl: 10, type: 'buff', stat: 'mshield', val: 0.6, dur: 40, cd: 44, mp: 20 },
+      { id: 'a3', name: 'Onda de Gelo',       lvl: 20, type: 'aoe',  mult: 2.1, slow: 4, cd: 9, mp: 24 },
+      { id: 'a4', name: 'Raio em Cadeia',     lvl: 35, type: 'aoe',  mult: 3.4, cd: 10, mp: 34 },
+      { id: 'a5', name: 'Meteoro',            lvl: 50, type: 'aoe',  mult: 6.2, cd: 14, mp: 55 },
+      { id: 'a6', name: 'Nova Elemental',     lvl: 70, type: 'aoe',  mult: 10.5, cd: 20, mp: 90 },
     ],
   },
   cleriga: {
-    name: 'Clériga', faction: 'luz', icon: '✨', weapon: 'cetro',
-    desc: 'Curandeira de cetro. Sobrevive a tudo e pune mortos-vivos com luz.',
-    base: { for: 8, int: 30, des: 12, agi: 12, vit: 20 }, main: 'int', speed: 1.0,
+    name: 'Clériga', faction: 'luz', icon: '✨', weapon: 'cetro', role: 'Cura · Proteção · Ressurreição',
+    desc: 'Curandeira suprema. Aumenta a própria vida, reflete dano e volta da morte sem perder experiência.',
+    base: { for: 8, int: 30, des: 12, agi: 12, vit: 22 }, main: 'int', speed: 1.0,
     skills: [
-      { id: 'r1', name: 'Raio Sagrado',      lvl: 1,  type: 'dmg',  mult: 1.8, cd: 3,  mp: 6 },
-      { id: 'r2', name: 'Cura',              lvl: 5,  type: 'heal', mult: 0.30, cd: 12, mp: 15 },
-      { id: 'r3', name: 'Escudo da Fé',      lvl: 20, type: 'buff', stat: 'def', val: 0.70, dur: 20, cd: 35, mp: 25 },
-      { id: 'r4', name: 'Esfera de Luz',     lvl: 35, type: 'dmg',  mult: 4.0, cd: 9,  mp: 32 },
-      { id: 'r5', name: 'Renascer',          lvl: 50, type: 'heal', mult: 0.60, cd: 30, mp: 55 },
-      { id: 'r6', name: 'Ira Celestial',     lvl: 70, type: 'dmg',  mult: 9.5, cd: 17, mp: 85 },
+      { id: 'r1', name: 'Raio Sagrado',    lvl: 1,  type: 'dmg',     mult: 1.8, holy: 1, cd: 3, mp: 6 },
+      { id: 'r2', name: 'Cura',            lvl: 5,  type: 'heal',    mult: 0.35, cd: 10, mp: 15 },
+      { id: 'r3', name: 'Vida Virtual',    lvl: 20, type: 'buff',    stat: 'hpmax', val: 0.25, dur: 60, cd: 66, mp: 30 },
+      { id: 'r4', name: 'Espelho Divino',  lvl: 35, type: 'buff',    stat: 'reflect', val: 0.3, dur: 20, cd: 38, mp: 32, also: { stat: 'absorb', val: 0.15 } },
+      { id: 'r5', name: 'Ressurreição',    lvl: 50, type: 'passive', revive: 90 },
+      { id: 'r6', name: 'Onda Divina',     lvl: 70, type: 'aoe',     mult: 6.5, holy: 1, healPct: 0.2, cd: 16, mp: 80 },
     ],
   },
+};
+
+// Tipos de monstro (bônus de classes: sagrado contra mortos-vivos etc.)
+const MON_TYPES = { undead: 'Morto-vivo', beast: 'Fera', demon: 'Demônio', construct: 'Construto', spirit: 'Espírito', plant: 'Planta' };
+const MON_TYPE = {
+  'Coelho Saltador': 'beast', 'Lesma Verde': 'beast', 'Lobo Filhote': 'beast', 'Rei Javali': 'beast',
+  'Ent Jovem': 'plant', 'Aranha da Mata': 'beast', 'Goblin Ladrão': 'demon', 'Matriarca Aracnídea': 'beast',
+  'Sapo Venenoso': 'beast', 'Zumbi do Brejo': 'undead', 'Serpente Lodosa': 'beast', 'Bruxa do Pântano': 'undead',
+  'Morcego Sombrio': 'beast', 'Golem de Rocha': 'construct', 'Minerador Maldito': 'undead', 'Colosso de Ferro': 'construct',
+  'Escorpião Gigante': 'beast', 'Múmia Errante': 'undead', 'Verme da Areia': 'beast', 'Faraó Esquecido': 'undead',
+  'Esqueleto Guerreiro': 'undead', 'Espectro': 'spirit', 'Ghoul': 'undead', 'Lich Ancião': 'undead',
+  'Yeti': 'beast', 'Lobo de Gelo': 'beast', 'Elemental de Gelo': 'spirit', 'Dragão Branco': 'beast',
+  'Diabrete': 'demon', 'Cão Infernal': 'demon', 'Cavaleiro Demônio': 'demon', 'Senhor das Chamas': 'demon',
+  'Ciclope': 'beast', 'Gigante de Pedra': 'construct', 'Grifo': 'beast', 'Titã Primordial': 'construct',
+  'Horror do Vazio': 'demon', 'Anjo Caído': 'undead', 'Devorador': 'demon', 'Deus do Abismo': 'demon',
+};
+
+// Invocações
+const PETS = {
+  golem:  { name: 'Autômato de Ferro', icon: '🤖', taunt: true, hp: 0.9 },
+  falcao: { name: 'Falcão Espiritual', icon: '🦅', spd: 0.15 },
+  fera:   { name: 'Fera Alada', icon: '🐉', taunt: false },
+};
+
+// Cidades iniciais por facção
+const CITIES = {
+  ferro: { name: 'Forja de Ferrovale', icon: '⚒️' },
+  luz:   { name: 'Santuário de Lumínia', icon: '🏛️' },
 };
 
 // Mapas — cada um com faixa de nível, monstros e um chefe
@@ -140,8 +176,8 @@ const RARITIES = [
 const WEAPON_NAMES = {
   machado: ['Machadinha', 'Machado de Guerra', 'Machado Duplo', 'Cutelo Bárbaro', 'Machado Rúnico', 'Machado do Carrasco'],
   martelo: ['Marreta', 'Martelo de Forja', 'Malho Mecânico', 'Martelo a Vapor', 'Martelo Trovejante', 'Malho Titânico'],
-  arco:    ['Arco Curto', 'Arco Longo', 'Arco Composto', 'Arco Élfico', 'Arco Tempestade', 'Arco do Firmamento'],
-  lanca:   ['Lança de Madeira', 'Pique', 'Alabarda', 'Lança Serpente', 'Glaive Rúnica', 'Lança Dracônica'],
+  arco:    ['Arco de Caça', 'Arco Longo', 'Arco Recurvo', 'Arco Rúnico', 'Arco Asa de Dragão', 'Arco Celestial'],
+  foice:   ['Foice de Camponês', 'Foice de Ferro', 'Foice Gêmea', 'Ceifadora Rúnica', 'Foice Dracônica', 'Foice do Eclipse'],
   espada:  ['Espada Curta', 'Espada Longa', 'Montante', 'Espada Bastarda', 'Lâmina Sagrada', 'Espada do Alvorecer'],
   dardo:   ['Dardo Simples', 'Azagaia', 'Dardo Farpado', 'Dardo Alado', 'Dardo Celeste', 'Dardo das Valquírias'],
   cajado:  ['Cajado de Aprendiz', 'Bastão de Carvalho', 'Cajado Rúnico', 'Cajado Estelar', 'Cajado do Arquimago', 'Cajado Primordial'],

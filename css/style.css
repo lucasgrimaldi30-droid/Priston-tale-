@@ -270,3 +270,13 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .arena canvas#scene3d { touch-action: pan-y; cursor: grab; }
 .arena canvas#scene3d.dragging { cursor: grabbing; }
 .arena canvas#scene3d.hover-npc { cursor: pointer; }
+
+.grp { display: inline-block; background: #5a2a2a; border: 1px solid #a04a4a; border-radius: 8px; padding: 0 5px; font-size: 10px; }
+.buff.pet { background: #2a3f5a; border-color: #4a70a0; }
+.buff.stealth { background: #2a2a3a; border-color: #6a6a9a; }
+.tag.aoe { background: #6a3a1a; } .tag.summon { background: #1a4a5a; } .tag.stealth { background: #3a2a4a; } .tag.passive { background: #4a4a2a; }
+.f3d.fx-block { color: #a0c8ff; font-size: 15px; }
+.f3d.fx-pet { color: #a8e0ff; }
+
+.full-acc { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px; background: linear-gradient(#5a3a8a, #3a2460); border-color: #9a70e0; font-size: 15px; }
+.full-acc small { font-weight: 400; color: #d8c8f8; font-size: 12px; }

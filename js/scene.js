@@ -70,9 +70,10 @@ const Scene2D = (() => {
     z8:  { sky: ['#2a0606', '#a03010'], far: '#4a1010', mid: '#380c0c', g: ['#3a1a14', '#1a0806'], deco: 'spike', dc: '#1a0a0a', amb: 'ember' },
     z9:  { sky: ['#b89878', '#f0e0c0'], far: '#9a8070', mid: '#786654', g: ['#8a7860', '#5a4a3a'], deco: 'rock', dc: '#6a5a4a', amb: 'dust' },
     z10: { sky: ['#06020f', '#2a1048'], far: '#1a0a30', mid: '#260e3c', g: ['#1a1028', '#08040f'], deco: 'crystal', dc: '#c060ff', amb: 'star' },
-    town: { sky: ['#f0a878', '#ffe2b8'], far: '#a89088', mid: '#8a7a70', g: ['#a89a88', '#7a6e60'], deco: 'house', dc: '#b05a3a', amb: 'leaf' },
+    town_ferro: { sky: ['#a8502a', '#f2c08a'], far: '#6a5a50', mid: '#4a4240', g: ['#6e665e', '#3e3a36'], deco: 'house', dc: '#3a3a44', amb: 'ember' },
+    town_luz: { sky: ['#5aa8f0', '#eaf6ff'], far: '#c8d8ec', mid: '#e0ecf8', g: ['#d8dce4', '#a8b0bc'], deco: 'house', dc: '#3a6ad0', amb: 'wisp' },
   };
-  const zkey = () => (typeof R !== 'undefined' && R && R.inTown ? 'town' : S.zone);
+  const zkey = () => (typeof R !== 'undefined' && R && R.inTown ? 'town_' + CLASSES[S.cls].faction : S.zone);
 
   // ---------- desenho básico ----------
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
@@ -259,10 +260,10 @@ const Scene2D = (() => {
         ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-2, -4, 4, 9);
         ctx.fillStyle = '#e0b040'; ctx.fillRect(-8, 5, 16, 3);
         ctx.fillStyle = glow ? '#fff8d0' : '#dfe4ee'; ctx.beginPath(); ctx.moveTo(-3, 8); ctx.lineTo(3, 8); ctx.lineTo(2.5, 42); ctx.lineTo(0, 47); ctx.lineTo(-2.5, 42); ctx.fill(); break;
-      case 'lanca':
-        ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-1.8, -18, 3.6, 66);
-        ctx.fillStyle = '#dfe4ee'; ctx.beginPath(); ctx.moveTo(-5, 46); ctx.lineTo(5, 46); ctx.lineTo(0, 62); ctx.fill();
-        ctx.fillStyle = L.hair; ctx.fillRect(-4, 42, 8, 3); break;
+      case 'lanca': case 'foice':
+        ctx.fillStyle = '#3a2c26'; ctx.fillRect(-1.8, -18, 3.6, 70);
+        ctx.fillStyle = glow ? '#e8d0ff' : '#dfe4ee'; ctx.beginPath(); ctx.moveTo(0, 50); ctx.quadraticCurveTo(26, 54, 34, 40); ctx.quadraticCurveTo(22, 48, 0, 44); ctx.fill();
+        ctx.strokeStyle = '#b080ff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, 44); ctx.quadraticCurveTo(22, 48, 34, 40); ctx.stroke(); break;
       case 'dardo':
         ctx.fillStyle = '#8a6a40'; ctx.fillRect(-1.5, -10, 3, 42);
         ctx.fillStyle = '#dfe4ee'; ctx.beginPath(); ctx.moveTo(-4, 30); ctx.lineTo(4, 30); ctx.lineTo(0, 42); ctx.fill(); break;
@@ -280,7 +281,7 @@ const Scene2D = (() => {
   }
 
   function drawHero(t) {
-    const h = st.hero, cls = CLASSES[S.cls], L = LOOK[S.cls], wt = cls.weapon;
+    const h = st.hero, cls = CLASSES[S.cls], L = LOOK[S.cls], wt = (cls.anyWeapon && S.equip.arma) ? S.equip.arma.wtype : cls.weapon;
     const s = clamp(Math.min(W / 520, H / 290), 0.62, 1.35);
     const gy = H * 0.84;
     let x = heroBaseX();
@@ -288,7 +289,7 @@ const Scene2D = (() => {
     if (h.atk && a >= 1) h.atk = null;
     const melee = !RANGED[wt];
     if (h.atk && melee) {
-      const lunge = Math.max(0, monBaseX(st.mon && st.mon.boss) - x - (wt === 'lanca' ? 95 : 70) * s);
+      const lunge = Math.max(0, monBaseX(st.mon && st.mon.boss) - x - (wt === 'lanca' || wt === 'foice' ? 95 : 70) * s);
       x += Math.sin(clamp((a - 0.15) / 0.65, 0, 1) * Math.PI) * lunge;
     }
     const hurt = t - h.hurt < 0.18;
@@ -344,7 +345,7 @@ const Scene2D = (() => {
     const rest = run ? -0.25 + Math.sin(ph) * 0.5 : -0.45 + Math.sin(t * 2.6) * 0.05;
     let fa = rest, glow = false, showW = true;
     if (wt === 'arco') fa = -1.57;
-    else if (wt === 'lanca') {
+    else if (wt === 'lanca' || wt === 'foice') {
       fa = run ? -1.2 : -1.35;
       if (h.atk) fa = -1.57;
     } else if (h.atk) {
