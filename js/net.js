@@ -4,7 +4,7 @@
 //  Sem servidor (ex.: link do claude.ai ou arquivo local), o jogo segue offline.
 // ============================================================
 const Net = (() => {
-  const st = { available: false, token: null, user: null, slots: [null, null, null], ws: null, wantWs: false, others: new Map(), online: 0, timers: {}, party: null, guild: undefined, gOn: 0, share: { xp: 0, gold: 0 } };
+  const st = { available: false, token: null, user: null, slots: [null, null, null, null, null], ws: null, wantWs: false, others: new Map(), online: 0, timers: {}, party: null, guild: undefined, gOn: 0, share: { xp: 0, gold: 0 } };
   try { st.token = localStorage.getItem('valdaria_token'); } catch (e) { /* sem armazenamento */ }
   const store = () => { try { if (st.token) localStorage.setItem('valdaria_token', st.token); else localStorage.removeItem('valdaria_token'); } catch (e) {} };
   const headers = () => ({ 'Content-Type': 'application/json', ...(st.token ? { Authorization: 'Bearer ' + st.token } : {}) });
@@ -21,7 +21,7 @@ const Net = (() => {
     try { const r = await fetch('api/ping', { cache: 'no-store' }); st.available = r.ok && !!(await r.json()).ok; } catch (e) { st.available = false; }
     return st.available;
   }
-  async function pullSlots() { for (let i = 0; i < 3; i++) st.slots[i] = (await api('api/save/' + i)).save || null; }
+  async function pullSlots() { for (let i = 0; i < 5; i++) st.slots[i] = (await api('api/save/' + i)).save || null; }
   async function resume() {
     if (!st.token || !st.available) return false;
     try { const me = await api('api/me'); st.user = me.user; await pullSlots(); return true; } catch (e) { st.token = null; st.user = null; store(); return false; }
@@ -31,7 +31,7 @@ const Net = (() => {
     st.token = r.token; st.user = r.user; store();
     await pullSlots();
   }
-  function logout() { flush(); st.token = null; st.user = null; st.slots = [null, null, null]; store(); disconnect(); }
+  function logout() { flush(); st.token = null; st.user = null; st.slots = [null, null, null, null, null]; store(); disconnect(); }
 
   // salvamento na nuvem (agrupa as gravações para não sobrecarregar o servidor)
   function queueSave(i, s) {

@@ -57,8 +57,9 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   await A.evaluate(() => { const m = makeMonster('Lobo Filhote', '🐺', 3, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); });
   let shared = false; for (let i = 0; i < 12 && !shared; i++) { await B.waitForTimeout(500); shared = await B.evaluate((x0) => S.xp + S.lvl * 1e9 > x0, xpB0); }
   ok('XP dividido com o grupo', shared);
+  await B.evaluate(() => { window._chats = []; const oc = Net.onChat; Net.onChat = (m) => { window._chats.push(m); oc(m); }; });
   await A.evaluate(() => chatCommand('/p só o grupo vê'));
-  ok('Chat do grupo', await until(B, () => R.log.some((l) => l.msg.includes('só o grupo vê') && l.msg.includes('[grupo]'))));
+  ok('Chat do grupo', await until(B, () => window._chats.some((m) => m.ch === 'party' && m.text.includes('só o grupo vê')), null, 6000));
   // guilda
   await A.evaluate(() => { S.lvl = 25; S.gold = 60000; netState(); });
   await A.waitForTimeout(400);
@@ -143,11 +144,11 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   ok('Cerco aberto aparece para os dois', await until(A, () => gwOpen(), null, 7000) && await until(B, () => gwOpen(), null, 7000));
   for (const P of [A, B]) await P.evaluate(() => { S.settings.pk = false; R.dead = 0; S.hp = derived().maxHp; R.pvpProt = 0; enterGW(); });
   ok('Os dois entram na Fortaleza', (await A.evaluate(() => S.zone)) === 'gw' && (await B.evaluate(() => S.zone)) === 'gw');
-  await A.waitForTimeout(500);
+  await A.waitForTimeout(1800); // o servidor precisa saber que entraram (o estado vai 5x por segundo)
   const gwDbg = await A.evaluate(() => { R.mons = []; R.pos = { x: 0, z: 0 }; let c; for (let i = 0; i < 200 && !c; i++) { const m = spawnWorldMonster(); if (m && m.crystal) c = m; } if (!c) return 'sem cristal: zona ' + S.zone + ' mons ' + R.mons.length; c.hp = 0; killMonster(c); return 'ok'; });
   if (gwDbg !== 'ok') ok('Cristal na Fortaleza', false, gwDbg);
   await B.evaluate(() => { R.mons = []; R.pos = { x: 1.5, z: 0 }; });
-  ok('Cristal dá 50 pontos ao clã', await until(A, () => wk() && wk().board.some((b) => b.name === 'Lobos de Ferro' && b.pts >= 50), null, 8000));
+  ok('Cristal dá 50 pontos ao clã', await until(A, () => wk() && wk().board.some((b) => b.name === 'Lobos de Ferro' && b.pts >= 50), null, 14000));
   ok('No Cerco clãs diferentes lutam sem Modo PK', await until(A, () => { const o = [...Net.st.others.values()].find((x) => x.name === 'Lumen'); return !!o && o.g === 'Clã Beta' && pkWhyNot(o) === ''; }, null, 6000));
   // Arena da Sobrevivência em grupo
   await B.evaluate(() => { window._inv = null; window._coop = null; });

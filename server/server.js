@@ -116,7 +116,7 @@ async function api(req, res) {
       const key = user.toLowerCase();
       if (db.users[key]) return send(res, 409, { erro: 'Esse usuário já existe.' });
       const salt = crypto.randomBytes(16).toString('hex');
-      db.users[key] = { user, salt, hash: hash(pass, salt), created: Date.now(), saves: [null, null, null] };
+      db.users[key] = { user, salt, hash: hash(pass, salt), created: Date.now(), saves: [null, null, null, null, null] };
       persist();
       return send(res, 200, { token: newToken(key), user });
     }
@@ -136,11 +136,12 @@ async function api(req, res) {
     const me = auth(req);
     if (!me || !db.users[me]) return send(res, 401, { erro: 'Faça login.' });
     const U = db.users[me];
+    while (U.saves.length < 5) U.saves.push(null); // contas antigas tinham 3 espaços
     if (url === '/api/me') return send(res, 200, { user: U.user, slots: U.saves.map(summary) });
-    const m = url.match(/^\/api\/save\/([0-2])$/);
+    const m = url.match(/^\/api\/save\/([0-4])$/); // 5 espaços de herói
     if (m) {
       const i = +m[1];
-      if (req.method === 'GET') return send(res, 200, { save: U.saves[i] });
+      if (req.method === 'GET') return send(res, 200, { save: U.saves[i] || null });
       if (req.method === 'PUT') {
         if (limited('save:' + me, 30, 60e3)) return send(res, 429, { erro: 'Salvando rápido demais.' });
         const s = await body(req);
@@ -295,7 +296,8 @@ function social(ws, p, U, m) {
   if (m.t === 'crelay') { // masmorra em grupo: o líder simula os monstros e os outros mandam os golpes
     const pt = partyOf(p); if (!pt || !['start', 'sync', 'hit', 'kill', 'end', 'leave'].includes(m.k)) return;
     const raw = JSON.stringify(m.d || {}); if (raw.length > 12000) return;
-    for (const o of pt.members) if (o !== p && (m.k === 'start' || m.k === 'hit' ? true : o.coop)) { if (m.k === 'hit' && o !== pt.leader) continue; sendTo(o.ws, { t: 'coop', k: m.k, d: m.d, from: p.name, fid: p.id }); }
+    // vai para todo o grupo (cada um ignora o que não é para ele): assim quem acabou de entrar não perde nada, nem o fim
+    for (const o of pt.members) if (o !== p) { if (m.k === 'hit' && o !== pt.leader) continue; sendTo(o.ws, { t: 'coop', k: m.k, d: m.d, from: p.name, fid: p.id }); }
     return;
   }
   if (m.t === 'pvphit') { // golpe de um jogador em outro: o servidor confere as regras do PK antes de repassar

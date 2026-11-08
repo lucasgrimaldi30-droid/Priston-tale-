@@ -3,7 +3,7 @@
 // ============================================================
 
 const SAVE_PREFIX = 'valdaria_slot_';
-const MAX_SLOTS = 3;
+const MAX_SLOTS = 5;
 const TICK = 100; // ms
 const OFFLINE_CAP = 8 * 3600; // segundos
 
@@ -1363,7 +1363,7 @@ function renderAccount() {
   if (typeof Net === 'undefined' || !Net.st.available) { el.innerHTML = ''; el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   if (Net.isOnline()) {
-    const hasLocal = [0, 1, 2].some((i) => loadLocal(i));
+    const hasLocal = [...Array(MAX_SLOTS).keys()].some((i) => loadLocal(i));
     el.innerHTML = `<div class="acct-on">🌐 Conectado como <b>${esc(Net.st.user)}</b> · heróis salvos na nuvem
       ${hasLocal ? '<button class="btn small" data-act="acct-import">Enviar heróis deste aparelho</button>' : ''}
       <button class="btn small" data-act="acct-logout">Sair</button></div>`;
@@ -1471,7 +1471,7 @@ function makeFullChar(name, cls, wtype) {
 }
 async function createFullAccount() {
   const used = [0, 1, 2].some((i) => loadSlot(i));
-  if (used && !(await uiConfirm('Conta Full', 'Isso vai substituir os heróis dos 3 espaços pela Conta Full (nível 100, tudo lendário +10). Continuar?', 'Substituir'))) return;
+  if (used && !(await uiConfirm('Conta Full', 'Isso vai substituir os heróis dos 3 primeiros espaços pela Conta Full (nível 100, tudo lendário +10). Os espaços 4 e 5 continuam como estão. Continuar?', 'Substituir'))) return;
   const chars = [makeFullChar('Ferreus', 'engenheiro', 'martelo'), makeFullChar('Ceifador', 'lanceiro', 'foice'), makeFullChar('Arcana', 'arcanista', 'cajado')];
   let okSave = true;
   chars.forEach((c, i) => { if (!writeSlot(i, c)) okSave = false; });
@@ -1493,7 +1493,7 @@ function renderCreate() {
       <p>${c.desc}</p>
       <div class="mini-stats">${['for', 'int', 'des', 'agi', 'vit'].map((s) => `<span>${s.toUpperCase()} ${c.base[s]}</span>`).join('')}</div>
     </button>`).join('');
-  $('#create-btn').disabled = !createState.cls;
+  $('#create-btn').disabled = !createState.cls; { const fb = $('#create-full'); if (fb) fb.disabled = !createState.cls; }
 }
 
 // ---------- jogo ----------
@@ -1566,7 +1566,7 @@ function coopLeaderTick(dt) {
 function coopApplySync(d) {
   if (!isMember() || !R.dungeon) return;
   R.coop.seen = Date.now(); if (d.at != null) R.dungeon.t = d.at;
-  if (d.f !== R.dungeon.floor) { R.dungeon.floor = d.f; R.pos = { x: 1.5, z: 11 }; R.mon = null; R.dirty.all = true; log(`🕳️ Andar ${d.f}/3.`, 'boss'); }
+  if (d.f !== R.dungeon.floor) { R.dungeon.floor = d.f; R.pos = { x: 1.5, z: 11 }; R.mon = null; R.dirty.all = true; log(R.dungeon.arena ? `🏟️ Rodada ${d.f}.` : `🕳️ Andar ${d.f}/3.`, 'boss'); }
   const old = new Map(R.mons.map((m) => [m.sid, m])), out = [];
   for (const x of d.m || []) {
     const m = old.get(x.sid) || { sid: x.sid, name: x.name, icon: x.icon, lvl: x.lvl, type: x.type, timer: 1 + Math.random(), stun: 0, slow: 0, dun: true, xp: 0, gold: 0 };
@@ -3603,7 +3603,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3615,13 +3615,14 @@ document.addEventListener('click', (e) => {
   if (ds.faction) { createState.faction = ds.faction; createState.cls = null; return renderCreate(); }
   if (ds.cls) { createState.cls = ds.cls; return renderCreate(); }
   if (t.id === 'create-back') return renderSelect();
-  if (t.id === 'create-btn') {
+  if (t.id === 'create-btn' || t.id === 'create-full') {
     const name = $('#char-name').value.trim().slice(0, 16);
     if (!name) { toast('Digite um nome para o herói.', 'bad'); return; }
     if (!createState.cls) return;
     slot = createState.slot;
-    S = newCharacter(name, createState.cls);
-    S.settings.auto = false;
+    // "Criar no nível 100 (teste)": herói no máximo, como os da Conta Full, para testar qualquer classe
+    S = t.id === 'create-full' ? makeFullChar(name, createState.cls, CLASSES[createState.cls].weapon) : newCharacter(name, createState.cls);
+    S.settings.auto = t.id === 'create-full';
     writeSlot(slot, S);
     return startGame(slot);
   }

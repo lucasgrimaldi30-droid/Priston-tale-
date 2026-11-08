@@ -18,6 +18,11 @@ isométrica (tipo Eldevin), com mecânicas de MMORPGs clássicos — mas sempre 
 - Quer tudo **equilibrado por personagem**: sistemas de bônus (Alma, artefatos) devem reforçar o ponto fraco de cada classe —
   quem bate muito busca defesa, quem é mago com vitalidade busca ataque (`CLASS_BUILD` em `references/conteudo.md`).
 - Às vezes traz ideias de outros jogos (vídeos, prints). Pergunte como funciona, proponha a versão própria e só faça depois do "pode fazer".
+  Dê opinião sincera (prós e contras) e, quando houver risco de inflar o poder do herói, ofereça uma **versão enxuta** — foi o que ele escolheu
+  no Rosário. Não exagere na dificuldade: ele corrigiu quando o pós-80 ficou punitivo demais.
+- Pergunta com frequência "você jogaria?": responda com honestidade (o que prende, o que falta). Até agora o que falta é visual dos
+  personagens, segurança do servidor (cliente confia em si) e teste com pessoas reais.
+- Testa as classes pela **Conta Full** (3 primeiros espaços) e pelo botão **"⭐ Criar no nível 100 (teste)"** na criação (5 espaços).
 
 ## Regras de conteúdo
 Pode reproduzir *mecânicas* de outros jogos (funções de classe, área, invocação, furtividade, bloqueio, missões, renascimento...), mas nunca nomes,
@@ -47,19 +52,34 @@ versão original com as mesmas mecânicas (ex.: guerra de castelo virou "Cerco d
 - No ambiente de nuvem do Claude, `docker build` falha no `npm install` por causa do certificado do proxy (não é erro do Dockerfile);
   para testar, use uma cópia do Dockerfile que copie `/root/.ccr/ca-bundle.crt` e rode `npm config set cafile` antes.
 
+## Mapa rápido dos sistemas (detalhes em `references/arquitetura.md`)
+- **Progresso:** história até o 80 (Vaelor), XP do 80 ao 100 mais lento sozinho, Despertar, renascimento, especialização no 50.
+- **Poder do herói:** equipamento + refino + gemas + conjuntos, artefatos (cruz), Alma (grade 5×5), Rosário (no lugar do amuleto, efeito da
+  classe), Capa de Guerra (1–13, visível), títulos com bônus, bestiário, mascote. Cuidado com inflação ao somar mais um.
+- **Classes:** cada uma tem mecânica própria (`MECH`/almas) — ver `references/conteudo.md` "Mecânica própria da classe".
+- **Mundo:** mapas ligados a pé + 5 mapas escondidos (Fenda Primordial é a área perigosa), torre, masmorras, eventos e chefe mundial,
+  dia/noite/chuva, coleta e artesanato.
+- **Social (precisa do servidor):** grupo com funções, masmorra e Arena em grupo, guilda, troca, PK opcional, Cerco da Coroa (domingo 17h).
+- **Semanal/diário:** diárias, semanal, login, Ordem (Selos de Devoção), insígnias e pergaminhos da capa, Arena (3 entradas/semana).
+- **5 espaços de herói** (`MAX_SLOTS`; servidor aceita `/api/save/0..4` e completa contas antigas).
+
 ## Rodar e testar
 ```bash
 python3 -m http.server 8000          # jogar: http://localhost:8000 (modelos 3D precisam de HTTP)
-node tools/test/features.cjs         # sistemas (tutorial, habilidades, loja, forja, gemas, chefe, masmorra, diárias, login, conjuntos, renascimento, PWA, duplicatas) ~20 s
+node tools/test/features.cjs         # todos os sistemas offline (~150 verificações: classes, mecânicas, história, Alma, Rosário, capa, Arena...) ~40 s
 node tools/test/smoke.cjs            # navegador: 8 classes, cidade, NPC, janelas, Conta Full em iframe, celular (~3 min); --rapido para ~1 min
 node tools/test/balance.cjs 24       # simulação de 24 h por classe (ou: node tools/test/balance.cjs 12 lanceiro,arcanista)
 node tools/test/danger.cjs           # Fenda Primordial: médio solo × médio em equipe × muito forte (5 min cada)
 node tools/test/cerco.cjs            # fim do Cerco da Coroa: Rei da Semana e bônus (sobe o servidor duas vezes)
-node tools/test/multiplayer.cjs      # sobe o servidor e testa 2 jogadores: presença, chat, save na nuvem, ranking, segurança (cd server && npm install antes)
+node tools/test/multiplayer.cjs      # sobe o servidor (Cerco forçado aberto) e testa 2 jogadores: presença, chat, grupo, guilda, masmorra e Arena em grupo, troca, PK, Cerco, nuvem, ranking (cd server && npm install antes)
 cd server && npm install && node server.js   # jogar online localmente em http://localhost:8080
 node --check js/*.js                 # sintaxe
 ```
 Os testes saem com código 1 se algo falhar. O smoke salva capturas em `build/test/` — **olhe as capturas** antes de dizer que ficou bom.
+Nos testes de multiplayer, **nunca use espera fixa**: use `until(página, condição)` (o estado vai ao servidor 5×/s e o placar a cada 5 s;
+esperas fixas deram falhas que iam e voltavam). Se uma falha se repetir sempre, é bug de verdade — já pegou o limite de mensagens da
+masmorra em grupo e o "fim da Arena" que não chegava ao colega.
+Capturas de efeitos: o navegador de teste roda a ~8 quadros/s; escolha o alvo meio segundo antes de soltar o golpe e use monstros baixos.
 Depurar à mão (console da página): `localStorage.clear(); slot=0; S=newCharacter('X','lanceiro'); S.lvl=50; S.tut=99; save(); startGame(0)`.
 `tick()` avança 0,1 s (36000 = 1 h). Equipamento de perto: `window.__camFocusHero = true` + roda do mouse.
 
