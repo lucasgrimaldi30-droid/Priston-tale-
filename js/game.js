@@ -1463,6 +1463,10 @@ function makeFullChar(name, cls, wtype) {
   S.arts = []; S.artCross = {};
   ['luvas', 'luvas', 'arma', 'armadura', 'luvas'].forEach((sl, k) => { const a = { uid: uid(), name: (sl === 'arma' ? 'Relíquia' : ARMOR_SLOTS[sl].names[5]) + ' Consagrada', slot: sl, rarity: 'lendario', ilvl: 100, set: null, wtype: null }; S.arts.push(a); S.artCross[ART_SPOTS[k]] = a.uid; });
   { const ts = Object.keys(SOUL); S.soul = { grid: Array.from({ length: 25 }, (_, i) => ({ t: ts[(Math.floor(i / 5) + i % 5) % 5], l: 5 })), bag: {} }; soulState(); for (const t of ts) S.soul.bag[t] = [6, 3, 1, 0, 0]; }
+  // capa de guerra no máximo, Rosário da classe no nível 9 e moedas para testar evolução/refino
+  S.cape = { lvl: CAPE_MAX, ref: CAPE_REF, vis: true }; S.insig = 300; S.perg = 60; S.fios = 20;
+  S.rep = { pts: 4000, seals: 30 };
+  if (S.equip.amuleto) { const am = S.equip.amuleto; am.rosary = { lvl: ROSARY_MAX, elem: cls }; am.name = `Rosário de ${CLASS_ELEM[cls].el}`; }
   S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
   S.zoneKills = { z10: 25 };

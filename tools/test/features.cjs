@@ -217,6 +217,7 @@ const startServer = require('./server.cjs');
     document.querySelector('[data-new="4"]').click(); document.querySelector('[data-faction="luz"]').click(); document.querySelector('[data-cls="cleriga"]').click();
     $('#char-name').value = 'Testadora'; document.getElementById('create-full').click(); stopLoop();
     ok('Criar no nível 100 (teste) no 5º espaço', slot === 4 && S.lvl === 100 && S.cls === 'cleriga' && !!loadSlot(4) && loadSlot(4).lvl === 100);
+    ok('Herói de teste já vem com capa 13 e Rosário 9', S.cape.lvl === 13 && rosaryF() === 1 && S.insig > 0);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });
