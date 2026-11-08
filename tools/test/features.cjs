@@ -201,6 +201,16 @@ const startServer = require('./server.cjs');
     R.sel = ros.uid; equipItem(ros.uid); R.res = 0; { const d = derived(); mechOnTaken(d.maxHp * 0.2, d, false); } const withR = R.res;
     S.equip.amuleto = null; R.res = 0; { const d = derived(); mechOnTaken(d.maxHp * 0.2, d, false); } ok('Rosário de Fogo enche a Fúria mais rápido', withR > R.res, `${withR.toFixed(1)} > ${R.res.toFixed(1)}`);
     ok('Janela da Ordem abre', tabOrdem().includes('Rosário') && !!NPCS.ordem);
+    // capa de guerra
+    novo('lanceiro', 60, { tut: 99 }); S.settings.auto = false; capeState();
+    const D1 = dailyState(); D1.list[1].done = true; D1.list[1].prog = D1.list[1].need; claimDaily(1); ok('Diária dá Pergaminho de Juramento', S.perg === 1);
+    S.insig = 2000; S.perg = 200; S.gold = 1e8; const hpC0 = derived().maxHp; capeEvolve();
+    ok('Conquistar a Capa de Guerra', S.cape.lvl === 1 && derived().maxHp > hpC0);
+    for (let i = 0; i < 12; i++) capeEvolve(); ok('Evoluir até o nível 13', S.cape.lvl === 13 && Math.abs(capeStats().atkp - 7.8) < 0.01);
+    S.fios = 100; for (let i = 0; i < 40 && S.cape.ref < 10; i++) capeRefine(); ok('Refinar a capa até +10', S.cape.ref === 10 && capeStats().defp > 13);
+    ok('Capa igual para todas as classes', (() => { const a = capeStats(5, 0); return a.atkp === 3 && a.defp === 4; })());
+    S.cape.vis = false; ok('Esconder a capa', tabCape().includes('Mostrar a capa') && !tabCape().includes('data-capevis checked'));
+    const i0 = S.insig; onPvpKill({ name: 'X', honor: 1 }); ok('Vitória no PK dá insígnias', S.insig === i0 + 5);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

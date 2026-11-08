@@ -353,6 +353,7 @@ function derived() {
   const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
   for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
   const TB = titleBonus(); for (const k of ['atkp', 'defp', 'hpp', 'crit', 'spd', 'absorb']) if (TB[k]) SO[k] = (SO[k] || 0) + TB[k];
+  if (S.cape && S.cape.lvl) { const CS = capeStats(); for (const k in CS) SO[k] = (SO[k] || 0) + CS[k]; }
   bonus.xpb += (TB.xpb || 0) + wkBonus() + (rosaryEq() ? rosaryEq().rosary.lvl : 0); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
@@ -725,7 +726,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id); if (S.lvl >= 20) addSeals(1, 'masmorra');
+  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id); if (S.lvl >= 20) addSeals(1, 'masmorra'); if (S.lvl >= CAPE_LVL) addInsig(1, 'masmorra');
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -788,7 +789,7 @@ function towerClear() {
   let msg = `✅ Andar ${f} vencido! +${fmt(gold)} ouro`;
   if (first) {
     S.towerBest = f;
-    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
+    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; if (S.lvl >= CAPE_LVL) addInsig(1, 'guardião da Torre'); dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
     msg += ' (novo recorde!)';
   }
   log(msg + '. Subindo...', 'lvl');
@@ -946,7 +947,7 @@ function killMonster(m) {
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
   if (!m.tower) S.zoneKills[S.zone] = (S.zoneKills[S.zone] || 0) + 1;
-  if (S.zone === 'gw' && online() && !m.dun) Net.soc('gwscore', { k: m.crystal ? 'c' : 'm' });
+  if (S.zone === 'gw' && online() && !m.dun) { Net.soc('gwscore', { k: m.crystal ? 'c' : 'm' }); if (m.crystal) addInsig(1, 'Cerco'); else if ((R.gwKills = (R.gwKills || 0) + 1) % 20 === 0) addInsig(1, 'Cerco'); }
   titleState(); S.streak.kills++; (R.killTimes = R.killTimes || []).push(Date.now()); if (R.killTimes.length > 80) R.killTimes.splice(0, R.killTimes.length - 80);
   if (!m.tower && !m.dun) storyProgress('kill', S.zone);
   if (m.sboss) { storyProgress('sboss', S.zone); S.stats.vaelor = 1; }
@@ -955,6 +956,7 @@ function killMonster(m) {
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
   if (m.boss) {
     if (m.wboss) { worldBossReward(m); R.wbJust = true; }
+    if (S.lvl >= CAPE_LVL) addInsig(m.wboss ? 5 : 1, m.wboss ? 'Chefe Mundial' : 'chefe');
     if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
     S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
@@ -1526,6 +1528,7 @@ function netState() {
   if (!online() || !Net.connected() || !R.pos && !R.inTown) return;
   const look = {};
   for (const sl of SLOT_ORDER) { const it = S.equip[sl]; if (it) look[sl] = { slot: sl, wtype: it.wtype, ilvl: it.ilvl, rarity: it.rarity, refine: it.refine || 0, set: it.set || null, req: 1 }; }
+  if (S.cape && S.cape.lvl) look._capa = { lvl: S.cape.lvl, vis: S.cape.vis !== false };
   Net.sendState({ name: S.name, cls: S.cls, lvl: S.lvl, rb: S.rebirths || 0, title: S.title || '', zone: S.zone, town: !!R.inTown, dun: !!R.dungeon,
     x: R.inTown ? 0 : R.pos.x, z: R.inTown ? 1.4 : R.pos.z, face: R.face || 0, moving: !!R.moving, atk: !!(R.mon && !R.moving), look, hp: Math.max(0, S.hp) / derived().maxHp, coop: !!R.coop, pk: pkActive(), prot: pkProtected(), pd: derived().def, pe: derived().evade });
   renderPartyHud();
@@ -1913,7 +1916,7 @@ function onPvpHit(m) {
   }
 }
 function onPvpKill(m) {
-  S.stats.pvpKills = (S.stats.pvpKills || 0) + 1; R.pvp = null;
+  S.stats.pvpKills = (S.stats.pvpKills || 0) + 1; R.pvp = null; addInsig(5, 'vitória no PK');
   log(`🏆 Você derrotou <b>${esc(m.name)}</b>! Honra: ${fmt(m.honor)}.`, 'boss'); toast(`⚔️ Vitória sobre ${m.name}!`, 'good'); Sfx.play('levelup');
 }
 function pkBox() {
@@ -2005,6 +2008,7 @@ function arenaFinish() { // chamado ao sair da Arena (tempo acabou, morte ou sa�
   W.best = Math.max(W.best || 0, rounds); S.stats.arenaBest = Math.max(S.stats.arenaBest || 0, rounds);
   const st = Math.floor(rounds / 4); if (st) dropSoul(1, S.lvl + rounds, st);
   if (rounds >= 5) addSeals(Math.min(5, Math.floor(rounds / 5)), 'Arena');
+  addInsig(Math.floor(rounds / (D.group ? 2 : 4)), 'Arena');
   log(`🏟️ Fim da Arena: <b>${rounds} rodada(s)</b>.${st ? ` +${st} pedra(s) da Alma.` : ''}`, 'boss');
   if (D.group && R.coop && R.coop.lead && online()) Net.soc('sodscore', { rounds });
 }
@@ -2249,7 +2253,7 @@ function renderChar() {
     ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
     ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
     ${specOf() ? `<p class="set-mini" style="--sc:#ffd060">${specOf().icon} Especialização: ${specOf().name}</p>` : (S.lvl >= SPEC_LVL ? '<p class="good">✨ Escolha sua especialização na janela Skills!</p>' : '')}
-    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button></div>
+    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button><button class="btn small" data-win="capa">🧥 Capa</button></div>
     <h3>Status</h3>
     <div class="stat-grid">
       <span>Ataque</span><b>${fmt(d.atkMin)} - ${fmt(d.atkMax)}</b>
@@ -2649,7 +2653,7 @@ function weeklyState() { if (!S.weekly || S.weekly.week !== weekId()) S.weekly =
 function weeklyProgress(k, n = 1) { const W = weeklyState(); WEEKLY.forEach((w, i) => { if (w.k === k && W.prog[i] < w.need) { W.prog[i] = Math.min(w.need, W.prog[i] + n); if (W.prog[i] >= w.need) log(`🗓️ Missão semanal pronta: ${w.t}! Pegue o prêmio em Missões.`, 'lvl'); } }); }
 function claimWeekly(i) {
   const W = weeklyState(); if (W.claimed[i] || W.prog[i] < WEEKLY[i].need) return;
-  W.claimed[i] = true; dropSoul(1, S.lvl + 30, 3); S.stones += 5; addSeals(3, 'missão semanal');
+  W.claimed[i] = true; dropSoul(1, S.lvl + 30, 3); S.stones += 5; addSeals(3, 'missão semanal'); addPerg(3, 'missão semanal');
   if (W.claimed.every(Boolean)) { dropSoul(1, S.lvl + 90, 3); log('🗓️ Todas as semanais feitas: +3 pedras da Alma de nível alto!', 'lvl'); }
   toast('Prêmio semanal recebido!', 'good'); renderTab();
 }
@@ -2853,6 +2857,46 @@ function tabOrdem() {
   return html + '</div>';
 }
 
+// ============================================================
+//  🧥 CAPA DE GUERRA: igual para todas as classes; os atributos crescem com a evolução (1–13) e o refino (+10).
+//  Aparece no herói (cor e brilho por nível) e o jogador escolhe se mostra ou não.
+// ============================================================
+const CAPE_MAX = 13, CAPE_LVL = 30, CAPE_REF = 10, FIO_COST = 6;
+const CAPE_TIERS = [{ at: 1, name: 'Capa de Couro', color: '#7a5a3a' }, { at: 4, name: 'Capa do Estandarte', color: '#3a6ad0' }, { at: 7, name: 'Capa Carmesim', color: '#b02a2a' }, { at: 10, name: 'Capa Dourada', color: '#e0b040' }, { at: 13, name: 'Manto Radiante', color: '#a050ff' }];
+function capeState() { S.cape = S.cape || { lvl: 0, ref: 0, vis: true }; S.insig = S.insig || 0; S.perg = S.perg || 0; S.fios = S.fios || 0; return S.cape; }
+function capeTier(l) { let t = CAPE_TIERS[0]; for (const x of CAPE_TIERS) if (l >= x.at) t = x; return t; }
+function capeStats(l = capeState().lvl, r = capeState().ref) { const k = 1 + r * 0.04; return { atkp: +(l * 0.6 * k).toFixed(1), defp: +(l * 0.8 * k).toFixed(1), hpp: +(l * 0.8 * k).toFixed(1) }; }
+function addInsig(n, why) { if (n < 1) return; capeState(); S.insig += n; if (!R.insigLogT || Date.now() - R.insigLogT > 5000) { R.insigLogT = Date.now(); log(`🎗️ +${n} Insígnia${n > 1 ? 's' : ''} de Batalha${why ? ' (' + why + ')' : ''}.`, 'loot'); } }
+function addPerg(n, why) { capeState(); S.perg += n; log(`📜 +${n} Pergaminho${n > 1 ? 's' : ''} de Juramento${why ? ' (' + why + ')' : ''}.`, 'loot'); }
+function capeEvoCost(l) { return l === 0 ? { insig: 40, perg: 20, gold: 0 } : { insig: 8 * l, perg: l, gold: Math.round(12000 * Math.pow(l, 1.4)) }; }
+function capeEvolve() {
+  const c = capeState(); if (c.lvl >= CAPE_MAX) return;
+  if (S.lvl < CAPE_LVL) return toast(`A Capa de Guerra libera no nível ${CAPE_LVL}.`, 'bad');
+  const k = capeEvoCost(c.lvl); if (S.insig < k.insig || S.perg < k.perg || S.gold < k.gold) return toast('Faltam insígnias, pergaminhos ou ouro.', 'bad');
+  S.insig -= k.insig; S.perg -= k.perg; S.gold -= k.gold; c.lvl++;
+  log(c.lvl === 1 ? '🧥 Você conquistou a <b>Capa de Guerra</b>!' : `🧥 Capa de Guerra subiu para o nível <b>${c.lvl}</b>${capeTier(c.lvl).at === c.lvl ? ` — virou ${capeTier(c.lvl).name}!` : ''}.`, 'lvl');
+  toast(`🧥 Capa nível ${c.lvl}!`, 'good'); Sfx.play('levelup'); R.dirty.all = true; renderTab();
+}
+function capeRefine() {
+  const c = capeState(); if (!c.lvl || c.ref >= CAPE_REF) return;
+  const need = c.ref + 1; if (S.fios < need) return toast(`Precisa de ${need} Fio(s) Dourado(s).`, 'bad');
+  S.fios -= need; const ch = c.ref < 5 ? 100 : 100 - (c.ref - 4) * 12;
+  if (Math.random() * 100 < ch) { c.ref++; log(`✨ Capa refinada para <b>+${c.ref}</b>!`, 'lvl'); Sfx.play('refineOk'); }
+  else { log('💨 O refino da capa falhou (a capa não perde nível).', 'muted'); Sfx.play('refineFail'); }
+  R.dirty.all = true; renderTab();
+}
+function tabCape() {
+  const c = capeState(), t = capeTier(Math.max(1, c.lvl)), st = capeStats(), nx = c.lvl < CAPE_MAX ? capeStats(c.lvl + 1, c.ref) : null, k = capeEvoCost(c.lvl);
+  const stTxt = (x) => `+${x.atkp}% ataque · +${x.defp}% defesa · +${x.hpp}% vida`;
+  return `<div class="ordem-box"><b>🧥 ${c.lvl ? `${t.name} — nível ${c.lvl}/${CAPE_MAX}${c.ref ? ` +${c.ref}` : ''}` : 'Capa de Guerra'}</b>
+    <small>Igual para todas as classes. Os atributos crescem com a evolução e o refino. Muda de visual nos níveis 4, 7, 10 e 13.</small>
+    ${c.lvl ? `<small>Agora: <b>${stTxt(st)}</b>${nx ? ` · próximo nível: ${stTxt(nx)}` : ''}</small>
+    <label class="check"><input type="checkbox" data-capevis ${c.vis ? 'checked' : ''}> Mostrar a capa no herói</label>` : `<small>Libera no nível ${CAPE_LVL} com ${k.insig} insígnias e ${k.perg} pergaminhos.</small>`}
+    <small>🎗️ Insígnias de Batalha: <b>${S.insig}</b> (PK, Cerco, Arena, chefes, masmorras e guardiões da Torre) · 📜 Pergaminhos de Juramento: <b>${S.perg}</b> (missões diárias e semanal) · 🧵 Fios Dourados: <b>${S.fios}</b></small>
+    <div class="row-btns">${c.lvl < CAPE_MAX ? `<button class="btn small primary" data-cape="evo" ${S.lvl >= CAPE_LVL && S.insig >= k.insig && S.perg >= k.perg && S.gold >= k.gold ? '' : 'disabled'}>${c.lvl ? `Evoluir para o nível ${c.lvl + 1}` : 'Conquistar a capa'} (${k.insig} 🎗️ · ${k.perg} 📜${k.gold ? ` · ${fmt(k.gold)} ouro` : ''})</button>` : '<small class="good">Capa no nível máximo!</small>'}</div>
+    ${c.lvl ? `<div class="row-btns"><button class="btn small" data-cape="fio" ${S.insig >= FIO_COST ? '' : 'disabled'}>Comprar 1 Fio Dourado (${FIO_COST} 🎗️)</button>${c.ref < CAPE_REF ? `<button class="btn small" data-cape="ref" ${S.fios >= c.ref + 1 ? '' : 'disabled'}>Refinar para +${c.ref + 1} (${c.ref + 1} 🧵 · ${c.ref < 5 ? 100 : 100 - (c.ref - 4) * 12}% de chance)</button>` : '<small class="good">Refino máximo!</small>'}</div>` : ''}</div>`;
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -2885,7 +2929,7 @@ function dailyReward() { return { gold: Math.round(300 * Math.pow(S.lvl, 1.3)), 
 function claimDaily(i) {
   const D = dailyState(), m = D.list[i]; if (!m || !m.done || m.claimed) return;
   m.claimed = true; const r = dailyReward();
-  S.gold += r.gold; S.stones += r.stones; Sfx.play('coin'); addSeals(1, 'missão diária');
+  S.gold += r.gold; S.stones += r.stones; Sfx.play('coin'); addSeals(1, 'missão diária'); addPerg(1, 'missão diária');
   log(`📅 Prêmio diário: +${fmt(r.gold)} ouro, +${r.stones} 💎.`, 'lvl');
   if (D.list.every((x) => x.claimed) && !D.bonusTaken) { D.bonusTaken = true; dropGem(1, S.lvl + 20); S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + 30 * 60000; log('🎉 Todas as diárias feitas! Bônus: uma gema e +50% de XP por 30 min.', 'lvl'); toast('Bônus diário completo!', 'good'); }
   renderTab();
@@ -3010,6 +3054,7 @@ const TITLES = [
   // provisórios: perdem ao morrer ou com o tempo
   { id: 'rei_semana', name: 'Coroa do Cerco', icon: '👑', desc: 'Seu clã ser Rei da Semana no Cerco da Coroa', prog: () => (wk() && wk().gwRank === 1 ? 1 : 0), need: 1, b: { atkp: 4, defp: 4 } },
   { id: 'sobrevivente', name: 'Sobrevivente', icon: '🏟️', desc: 'Chegue à rodada 30 da Arena da Sobrevivência', prog: () => S.stats.arenaBest || 0, need: 30, b: { hpp: 5, defp: 3 } },
+  { id: 'manto', name: 'Portador do Manto', icon: '🧥', desc: 'Leve a Capa de Guerra ao nível 13', prog: () => (S.cape ? S.cape.lvl : 0), need: 13, b: { defp: 3, hpp: 3 } },
   { id: 'imortal', name: 'IMORTAL', icon: '💠', temp: 'death', desc: 'Fique 2 horas jogando sem morrer (perde ao morrer)', prog: () => Math.floor((S.streak ? S.streak.alive : 0) / 60), need: 120, unit: 'min', b: { evadep: 8 } },
   { id: 'invicto', name: 'Invicto', icon: '🛡️', temp: 'death', desc: 'Derrote 1.000 monstros seguidos sem morrer (perde ao morrer)', prog: () => (S.streak ? S.streak.kills : 0), need: 1000, b: { atkp: 5, defp: 3 } },
   { id: 'furia', name: 'Fúria Sangrenta', icon: '🩸', temp: 600, desc: 'Derrote 40 monstros em 1 minuto (vale 10 min)', prog: () => (R.killTimes || []).filter((t) => Date.now() - t < 60000).length, need: 40, b: { spd: 0.12 } },
@@ -3251,7 +3296,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { ordem: 'Ordem e Rosário', conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { capa: 'Capa de Guerra', ordem: 'Ordem e Rosário', conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   if (winLocked(name)) { toast(`Libera no nível ${UNLOCK[name]}.`); return; }
@@ -3272,7 +3317,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma, ordem: tabOrdem }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma, ordem: tabOrdem, capa: tabCape }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -3558,7 +3603,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3603,6 +3648,8 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.cape) { ({ evo: capeEvolve, ref: capeRefine, fio: () => { if (S.insig >= FIO_COST) { S.insig -= FIO_COST; S.fios++; renderTab(); } } })[ds.cape](); return; }
+  if (ds.capevis !== undefined && e.target.tagName === 'INPUT') { capeState().vis = e.target.checked; R.dirty.all = true; return; }
   if (ds.ord) { ({ equip: () => { const r = findRosary(); if (r && S.inv.includes(r)) { R.sel = r.uid; equipItem(r.uid); } renderTab(); renderNpc(); }, use: useSeals, buy: buyRosary, reform: reformRosary, evolve: evolveRosary, trade: () => { const m = S.mats; m.erva -= 8; m.minerio -= 6; m.essencia -= 2; addSeals(1, 'troca'); renderTab(); renderNpc(); } })[ds.ord](); return; }
   if (ds.gw) { enterGW(); return; }
   if (ds.arena) { enterArena(ds.arena === 'grupo'); return; }

@@ -165,6 +165,13 @@ Atalhos no `keydown` do fim de `game.js`.
   (`CLASS_ELEM`); `evolveRosary` sobe 1→9 (`evoCost`). O valor é o **efeito da classe** (`rosaryF()` = nível/9, só se o elemento for da
   sua classe): Fogo Fúria mais rápida, Terra torretas mais longas e fortes, Vento Foco em dobro, Sombra almas mais rápidas, Luz Fé mais
   rápida, Trovão Investida mais forte, Arcano reações mais fortes, Água escudo maior; e +1% de XP por nível.
+- **Capa de Guerra:** progresso em `S.cape {lvl 0–13, ref 0–10, vis}` (não é item; não troca). Igual para todas as classes:
+  `capeStats()` = ataque 0,6%·nível, defesa e vida 0,8%·nível, ×(1 + 4% por refino), somado no `derived()`. Moedas: 🎗️ `S.insig`
+  (Insígnias de Batalha: PK +5, Cerco cristal +1 e a cada 20 monstros +1, Arena rodadas/2 em grupo ou /4 sozinho, chefe +1, Chefe
+  Mundial +5, masmorra +1, guardião da Torre +1; nível 30+) e 📜 `S.perg` (Pergaminhos de Juramento: diária +1, semanal +3).
+  Conquistar = 40 🎗️ + 20 📜; evoluir `capeEvoCost`; refino com 🧵 `S.fios` (6 🎗️ cada, chance cai depois do +5, falha não perde).
+  Visual: usa a capa do modelo da classe (`cfg.cape`), cor por faixa (`capeColor`: 1 couro, 4 azul, 7 carmesim, 10 dourada com brilho,
+  13 roxa radiante com partículas); `vis` falso esconde até a capa padrão. Vai no `look._capa` para os outros jogadores verem. Janela `capa`.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

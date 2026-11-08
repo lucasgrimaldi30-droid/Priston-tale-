@@ -345,7 +345,7 @@ const Scene3D = (() => {
     for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto']) if (S.equip[k] && (k !== 'arma' || S.equip[k].wtype === CLASSES[cls].weapon)) eq[k] = S.equip[k];
     return buildCharacter(LOOK[cls], CLASSES[cls].weapon, eq);
   }
-  const equipSig = () => S.cls + '|' + ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel'].map((k) => S.equip[k] ? S.equip[k].uid + ':' + S.equip[k].refine : '-').join(',');
+  const equipSig = () => S.cls + '|' + (S.cape && S.cape.lvl ? 'c' + S.cape.lvl + (S.cape.vis !== false ? 'v' : 'h') : '') + '|' + ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel'].map((k) => S.equip[k] ? S.equip[k].uid + ':' + S.equip[k].refine : '-').join(',');
 
   function updateWeaponLook() {
     const h = st.hero; if (!h || !S.equip.arma || h.model || !h.weapon.userData.glowMats) return;
@@ -1070,6 +1070,8 @@ const Scene3D = (() => {
     const mixer = new THREE.AnimationMixer(obj);
     return { obj, mats, bones, mixer, scale: sc };
   }
+  function model0Cape(md, name) { return showPart(md, name); }
+  function capeColor(l) { return l >= 13 ? '#b060ff' : l >= 10 ? '#ffd84a' : l >= 7 ? '#c02a2a' : l >= 4 ? '#4a80ff' : '#c8a070'; }
   function showPart(model, name, on = true) {
     const o = model.obj.getObjectByName(name);
     if (o) { o.visible = on; return o; }
@@ -1128,6 +1130,7 @@ const Scene3D = (() => {
     const eq = {};
     const src = eqIn || S.equip;
     for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel']) if (src[k] && (k !== 'arma' || CLASSES[cls].anyWeapon || src[k].wtype === CLASSES[cls].weapon)) eq[k] = src[k];
+    const capa = eqIn ? eqIn._capa : (S.cape && S.cape.lvl ? { lvl: S.cape.lvl, vis: S.cape.vis !== false } : null); // Capa de Guerra
     const wt = eq.arma ? eq.arma.wtype : CLASSES[cls].weapon;
     const aT = eq.armadura ? tierOf(eq.armadura) : -1;
     let tint = cfg.tint || '#ffffff';
@@ -1157,7 +1160,10 @@ const Scene3D = (() => {
       buildHelmetModel(hg, eq.elmo, M);
     } else if (cfg.hat && cfg.hatDefault) showPart(md, cfg.hat);
     // capa a partir do tier 2 da armadura (ou padrão da classe)
-    if (cfg.cape && (aT >= 2 || cfg.capeDefault)) {
+    if (capa && cfg.cape) { // Capa de Guerra: cor por faixa de nível, brilho a partir do 10; o jogador pode esconder
+      const cp = model0Cape(md, cfg.cape);
+      if (cp) { cp.visible = !!capa.vis; if (capa.vis) { const col = capeColor(capa.lvl); cp.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(col); if (capa.lvl >= 10 && o.material.emissive) { o.material.emissive = new THREE.Color(col); o.material.emissiveIntensity = capa.lvl >= 13 ? 0.6 : 0.3; } } }); } }
+    } else if (cfg.cape && (aT >= 2 || cfg.capeDefault)) {
       const cp = showPart(md, cfg.cape);
       if (cp && eq.armadura) cp.traverse((o) => { if (o.isMesh) o.material.color = new THREE.Color(eq.armadura.set ? SETS[eq.armadura.set].color : rarIdx(eq.armadura) > 0 ? rarOf(eq.armadura).color : TIER_COL[aT]).lerp(new THREE.Color('#ffffff'), 0.2); });
     }
@@ -2320,6 +2326,7 @@ const Scene3D = (() => {
   }
   function updateBuffVisuals(h, t) {
     updateSouls(h, t);
+    if (!R.inTown && S.cape && S.cape.lvl >= 10 && S.cape.vis !== false && Math.random() < (S.cape.lvl >= 13 ? 0.5 : 0.15)) { const hp = h.root.position, c = S.cape.lvl >= 13 ? [0.75, 0.4, 1] : [1, 0.82, 0.3]; spawnP({ x: hp.x + rand(-0.3, 0.3), y: rand(0.5, 1.4), z: hp.z + rand(-0.3, 0.3), vx: 0, vy: -0.2, vz: 0, life: 0.8, r: c[0], gg: c[1], b: c[2], size: 0.09 }); }
     h.bv = h.bv || {};
     const on = new Set((R.inTown ? [] : R.buffs || []).map((b) => b.id));
     // aura do conjunto (2 peças: brilho; 4 peças: anel no chão também)
