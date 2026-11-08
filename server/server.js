@@ -230,7 +230,7 @@ wss.on('connection', (ws, req) => {
       if (ch === 'guild' && !U.guild) return sendTo(ws, { t: 'sys', text: 'Você não está em uma guilda.' });
       broadcast({ t: 'chat', ch, from: p.name, cls: p.cls, text }, (o) => ch === 'global' || (ch === 'zone' && roomOf(o) === room) || (ch === 'party' && pt && pt.members.has(o)) || (ch === 'guild' && db.users[o.key] && db.users[o.key].guild === U.guild));
     } else if (typeof m.t === 'string' && /^(pinvite|paccept|pleave|pshare|gcreate|ginvite|gaccept|gleave|gkick|crelay|tinvite|taccept|toffer|tlock|tconfirm|tcancel|pvphit|pvpdead|gwscore|sodscore)$/.test(m.t)) {
-      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? ['co:', 150] : m.t[0] === 't' ? ['tr:', 60] : m.t.startsWith('pvp') ? ['pv:', 60] : m.t === 'gwscore' ? ['gw:', 80] : ['soc:', 20];
+      const lk = m.t === 'pshare' ? ['sh:', 30] : m.t === 'crelay' ? (['start', 'end', 'leave'].includes(m.k) ? ['coe:', 30] : ['co:', 450]) : m.t[0] === 't' ? ['tr:', 60] : m.t.startsWith('pvp') ? ['pv:', 60] : m.t === 'gwscore' ? ['gw:', 80] : ['soc:', 20];
       if (!p.ready || limited(lk[0] + p.key, lk[1], 10e3)) return;
       social(ws, p, U, m);
     }

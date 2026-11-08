@@ -205,7 +205,8 @@ Atalhos no `keydown` do fim de `game.js`.
 - **Arena da Sobrevivência:** inspirada em arena de sobrevivência, com nome próprio. `enterArena(grupo)`, `R.dungeon.arena`, rodadas
   (`arenaFloor`: monstros no nível do herói, mais fortes a cada rodada, chefe a cada 5, tempo `D.t`), `arenaClear` (ouro; item e pedra da
   Alma), `arenaFinish` ao sair (pedras pelo total; o líder do grupo manda `sodscore`). 3 entradas por semana (`S.arenaWk`). Em grupo usa a
-  infra da masmorra em grupo (`crelay start` com `arena: true`). O servidor guarda o recorde semanal de grupo (`db.sod.best`, só grupos de
+  infra da masmorra em grupo (`crelay start` com `arena: true`). Limite do servidor: 450 `crelay` por 10 s (início/fim/saída têm limite
+  próprio e nunca se perdem) — antes, numa luta com muitos abates, o fim da Arena era descartado e o colega ficava preso. O servidor guarda o recorde semanal de grupo (`db.sod.best`, só grupos de
   2+); os campeões da semana passada (`db.sod.prev`) ganham +2% de XP e drop.
 - **Bônus da semana:** mensagem `wk` a cada 5 s (aberto/placar/rei/recordes e `gwB` + `sod`); `wkBonus()` soma no XP (`derived`) e
   `dropMult()` multiplica as chances de item, gema e pedra da Alma. Caixas `gwBox()` e `arenaBox()` na janela de Mapas.

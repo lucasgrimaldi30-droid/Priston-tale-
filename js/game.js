@@ -17,6 +17,7 @@ const $ = (sel) => document.querySelector(sel);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const rint = (a, b) => Math.floor(rnd(a, b + 1));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
 const fmt = (n) => {
   n = Math.floor(n);
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
@@ -367,6 +368,7 @@ function derived() {
   for (const sk of classSkills()) if (sk.type === 'passive' && sk.stat && S.lvl >= sk.lvl) B[sk.stat] = (B[sk.stat] || 0) + sk.val;
   const buff = (k) => B[k] || 0;
   if (R.pet && PETS[R.pet.kind].spd) B.spd = (B.spd || 0) + PETS[R.pet.kind].spd;
+  if (CLASSES[S.cls].mech === 'rage' && R.res > 0 && !R.inTown) B.atk = (B.atk || 0) + R.res * 0.002; // Fúria: cada 10 = +2% de ataque
   for (const k of ['critdmg', 'spd', 'block']) if (SB[k]) B[k] = (B[k] || 0) + SB[k];
   const atkMul = 1 + buff('atk') + bonus.atkp / 100;
   const baseHp = 40 + A.vit * 8 + S.lvl * 10 + bonus.hp;
@@ -541,7 +543,7 @@ function spawnBoss() {
   return m;
 }
 function initWorld() {
-  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null; R.travel = null;
+  R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null; R.travel = null; R.turrets = [];
   R.nodes = zoneNodes(S.zone).map((n, i) => ({ ...n, id: i, cd: 0 }));
   R.pos = R.arrive ? { ...R.arrive } : { ...WORLD.entry }; R.arrive = null;
   for (let i = 0; i < WORLD.cap; i++) spawnWorldMonster(true);
@@ -860,7 +862,7 @@ function hitMonster(m, mult, sk, d, forceCrit, src) {
   dmg = Math.max(1, Math.round(dmg * 100 / (100 + m.def) * teamBond().dmg));
   m.hp -= dmg; m.aggro = true;
   if (isMember()) R.coop.hits.set(m.sid, (R.coop.hits.get(m.sid) || 0) + dmg);
-  if (!(R.pet && src === R.pet.name)) soulGain(dmg, sk, d);
+  if (!(R.pet && src === R.pet.name)) { soulGain(dmg, sk, d); if (src !== 'Explosão da Torreta') mechOnHit(dmg, sk, m, d); }
   meterHit(dmg, src || (sk ? sk.name : 'Ataque básico'));
   if (sk && sk.stun) m.stun = Math.max(m.stun, sk.stun * (m.boss ? 0.4 : 1));
   if (sk && sk.slow) m.slow = Math.max(m.slow, sk.slow);
@@ -878,18 +880,25 @@ function playerHit(mult = 1, sk = null) {
   if (stealth) { R.stealth = 0; if (hasSouls()) { addSoul(1); log('👻 Golpe saindo das sombras: +1 alma!', 'skill'); } }
   const sp = soulSpend(sk);
   if (sp) { mult *= sp.mult; sk = { ...sk, hits: (sk.hits || 0) + sp.hits, stun: sp.stun || sk.stun }; }
+  const mb = mechBeforeHit(sk, m.sid, d);
+  if (mb.exec && m.hp / m.maxHp < 0.3) { mb.mult *= 1 + mb.exec; mb.label += ' · EXECUÇÃO'; }
+  mult *= mb.mult;
+  if (sk && (mb.stun || mb.slow || mb.aoeAll)) sk = { ...sk, stun: Math.max(sk.stun || 0, mb.stun), slow: Math.max(sk.slow || 0, mb.slow), targets: mb.aoeAll ? 99 : sk.targets };
+  if (mb.label) { log(`${esc(mb.label)}!`, 'skill'); if (!mb.shown && mb.label.length < 26) floatText('player', mb.label, 'lvl'); }
+  if (mb.boom) turretsBoom(d);
   const targets = sk && sk.type === 'aoe' ? [m, ...nearMons(m, 4.2).filter((x) => x !== m)].slice(0, sk.targets || 9) : [m];
   const hits = [];
   let total = 0, anyCrit = false;
   for (const t of targets) {
-    const r = hitMonster(t, mult, sk, d, stealth && t === m);
+    const r = hitMonster(t, mult, sk, d, (stealth || mb.crit) && t === m);
     total += r.dmg; anyCrit = anyCrit || r.crit;
     hits.push({ sid: t.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : (sk ? 'skill' : 'dmg'), stun: t.stun > 0, slow: t.slow > 0 });
   }
   attackSound(skillName, anyCrit, false);
   Scene.playerAttack({ text: hits[0].text, cls: hits[0].cls, crit: anyCrit, skill: !!sk, skillName, aoe: targets.length > 1 || (sk && sk.type === 'aoe'), hits, stealth, multi: sk && sk.hits, skillId: sk && sk.id, skillLv: sk && sk.lv });
   if (sk) log(`Você usou <b>${esc(skillName)}</b>${targets.length > 1 ? ` em ${targets.length} monstros` : ''} causando ${fmt(total)} de dano${sk.stun ? ' e atordoando' : ''}${sk.slow ? ' e congelando' : ''}.`, 'skill');
-  if (sk && sk.healPct) { const h = Math.round(d.maxHp * sk.healPct); S.hp = Math.min(d.maxHp, S.hp + h); floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); }
+  if (sk && sk.healPct) { const h = Math.round(d.maxHp * sk.healPct); healHero(h, d); floatText('player', '+' + fmt(h), 'heal'); Scene.heal(); }
+  if (sk && sk.lifesteal && total > 0) { const h = Math.round(total * sk.lifesteal); healHero(h, d); if (Math.random() < 0.5) floatText('player', '+' + fmt(h), 'heal'); }
   for (const t of targets) if (t.hp <= 0) killMonster(t);
 }
 
@@ -905,8 +914,9 @@ function monsterHit(m) {
     return;
   }
   if (Math.random() < d.evade) { Sfx.play('whiff'); Scene.monsterAttack({ sid: m.sid, text: 'Esquiva', cls: 'miss' }); return; }
-  if (Math.random() < d.block) { Sfx.play('hit', { gap: 60 }); Scene.monsterAttack({ sid: m.sid, text: 'Bloqueio', cls: 'block' }); return; }
+  if (Math.random() < d.block) { Sfx.play('hit', { gap: 60 }); Scene.monsterAttack({ sid: m.sid, text: 'Bloqueio', cls: 'block' }); mechOnTaken(0, d, true); return; }
   dmg = Math.max(1, Math.round(dmg * (1 - d.absorb) * teamBond().taken));
+  mechOnTaken(dmg, d, false); dmg = Math.max(0, mechAbsorb(dmg));
   if (d.mshield > 0 && S.mp > 0) { const toMp = Math.min(S.mp, Math.round(dmg * d.mshield)); S.mp -= toMp; dmg -= toMp; }
   S.hp -= dmg;
   if (d.reflect > 0) { const rf = Math.round(dmg * d.reflect); m.hp -= rf; }
@@ -1058,7 +1068,7 @@ function trySkills(d) {
     const fs = c.skills.find((x) => x.id === R.forceSkill); R.forceSkill = null;
     if (fs && ready(fs) && (fs.type === 'dmg' || fs.type === 'aoe')) return fs;
   }
-  const avail = c.skills.filter((s) => ready(s) && !(S.skillOff || {})[s.id] && !soulWait(s));
+  const avail = c.skills.filter((s) => ready(s) && !(S.skillOff || {})[s.id] && !soulWait(s) && !mechWait(s));
   for (const s of avail.filter((s) => s.type !== 'dmg' && s.type !== 'aoe')) {
     if (useUtility(s, d, false)) { S.mp -= s.mp; R.cds[s.id] = s.cd; return null; }
   }
@@ -1130,7 +1140,8 @@ function tick() {
   S.hp = Math.min(S.hp, d.maxHp);
   R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); checkTitles(); }
   if (!R.dead) { titleState(); S.streak.alive += dt; }
-  soulTick(dt);
+  soulTick(dt); mechTick(dt, d);
+  if (!R.inTown && !R.dead) turretTick(dt, d);
 
   if (!R.inTown && !R.dead && S.hp > 0) { const tb = teamBond(); if (tb.regen) S.hp = Math.min(d.maxHp, S.hp + d.maxHp * tb.regen * dt); }
   if (R.inTown) { // cidade: zona segura, recuperação rápida
@@ -1667,6 +1678,137 @@ function awkPanel() {
     <p class="muted small-note">Depois do 80 dá para upar sozinho, só que mais devagar: o XP rende ${Math.round(SOLO_80 * 100)}% sozinho, ${Math.round(DUO_80 * 100)}% em dupla e ${Math.round(TEAM_80 * 100)}% com 3 ou mais no mesmo mapa.</p>`;
 }
 
+// ============================================================
+//  MECÂNICAS PRÓPRIAS DAS CLASSES (o Lanceiro usa as almas, acima)
+//  rage: Fúria do Gladiador · cells: Células do Engenheiro · focus: Foco da Caçadora · faith: Fé do Paladino
+//  combo: Ritmo celeste da Valquíria · elements: Elementos da Arcanista · shield: Escudo Sagrado da Clériga
+// ============================================================
+const MECH = {
+  rage:     { name: 'Fúria', icon: '🔥', color: '#ff5030', max: 100, bar: true, tip: 'Enche com o dano que você leva e causa. Cada 10 de Fúria = +2% de ataque. A Execução gasta tudo.' },
+  cells:    { name: 'Células', icon: '⚡', color: '#60d8ff', max: 5, tip: 'O dano causado (seu e das torretas) carrega células. A Sobrecarga Sísmica gasta; com 5, as torretas explodem.' },
+  focus:    { name: 'Foco', icon: '🎯', color: '#90ff70', max: 5, tip: 'Acertar o mesmo alvo seguidas vezes acumula Foco; trocar de alvo zera. O Disparo Perfurante gasta.' },
+  faith:    { name: 'Fé', icon: '✨', color: '#ffe070', max: 100, bar: true, tip: 'Bloquear e levar golpes enchem a Fé. O Martelo da Justiça e o Julgamento Celestial gastam.' },
+  combo:    { name: 'Ritmo celeste', icon: '🪽', color: '#ffe8a0', max: 4, tip: 'A cada 4 ataques sai uma Investida Celeste com asas de luz (+80% de dano).' },
+  elements: { name: 'Elementos', icon: '🌀', color: '#c0a0ff', max: 3, tip: 'Fogo, gelo e raio se combinam: fogo+gelo = Vapor Explosivo, gelo+raio = Prisão Elétrica, fogo+raio = Plasma. A Nova Elemental gasta todos.' },
+  shield:   { name: 'Escudo Sagrado', icon: '🛡️', color: '#ffe8a0', bar: true, tip: 'A cura que passa da vida máxima vira escudo (até 40% da vida). O escudo absorve dano e a Onda Divina o transforma em dano.' },
+};
+const ELEM = { fogo: { icon: '🔥', color: '#ff6020' }, gelo: { icon: '❄️', color: '#80d8ff' }, raio: { icon: '⚡', color: '#c8a0ff' } };
+const REACT = { // dois elementos diferentes = reação
+  'fogo+gelo': { name: 'Vapor Explosivo', color: '#ffd0a0', mult: 1.5, slow: 3 },
+  'gelo+raio': { name: 'Prisão Elétrica', color: '#a0e0ff', mult: 1.25, stun: 2 },
+  'fogo+raio': { name: 'Plasma', color: '#ff90ff', mult: 1.3, crit: true },
+};
+const mechId = () => CLASSES[S.cls].mech;
+const curMech = () => MECH[mechId()] || null;
+function resMax(d) { const m = mechId(); return m === 'shield' ? Math.round((d || derived()).maxHp * 0.4) : (MECH[m] ? MECH[m].max : 0); }
+function resAdd(n, d) { const m = curMech(); if (!m || R.inTown) return; R.res = clamp((R.res || 0) + n, 0, resMax(d)); if (n > 0) R.resIdle = 0; }
+// golpe acertou: ganhos que vêm do dano causado
+function mechOnHit(dmg, sk, m, d) {
+  const id = mechId(); if (!id || R.inTown) return; R.resIdle = 0;
+  if (id === 'rage') resAdd(2.5, d);
+  else if (id === 'cells') { R.resDmg = (R.resDmg || 0) + dmg * (sk && sk.res && sk.res.gain ? sk.res.gain : 1); const need = ((d.atkMin + d.atkMax) / 2) * 5; while (R.resDmg >= need && (R.res || 0) < 5) { R.resDmg -= need; resAdd(1, d); } if ((R.res || 0) >= 5) R.resDmg = 0; }
+  else if (id === 'faith' && m && m.type === 'undead' && sk && sk.holy) resAdd(4, d);
+}
+// dano recebido: Fúria e Fé
+function mechOnTaken(dmg, d, blocked) {
+  const id = mechId(); if (!id) return;
+  if (id === 'rage') resAdd(dmg / d.maxHp * 140, d);
+  if (id === 'faith') resAdd(blocked ? 12 : dmg / d.maxHp * 70, d);
+}
+// o Escudo Sagrado absorve antes da vida; devolve o dano que sobra
+function mechAbsorb(dmg) { if (mechId() !== 'shield' || !(R.res > 0)) return dmg; const a = Math.min(R.res, dmg); R.res -= a; if (a > 0 && Math.random() < 0.3) floatText('player', '🛡️' + fmt(a), 'block'); return dmg - a; }
+// cura com sobra virando escudo (Clériga)
+function healHero(h, d) { d = d || derived(); const over = S.hp + h - d.maxHp; S.hp = Math.min(d.maxHp, S.hp + h); if (over > 0 && mechId() === 'shield') resAdd(over, d); return h; }
+// antes do golpe: Foco, Ritmo, Elementos e gastos de recurso; devolve o que muda no golpe
+function mechBeforeHit(sk, targetKey, d) {
+  const id = mechId(), out = { mult: 1, hits: 0, stun: 0, slow: 0, crit: false, aoeAll: false, boom: false, exec: 0, label: '' };
+  if (!id) return out;
+  if (id === 'focus') { if (R.focusOn !== targetKey) { R.focusOn = targetKey; R.res = 0; } else resAdd(sk && sk.res && sk.res.gain ? sk.res.gain : 1, d); }
+  if (id === 'combo') { R.res = (R.res || 0) + 1; if (R.res >= 4) { R.res = 0; out.mult *= 1.8; out.label = 'Investida Celeste'; out.shown = false; Scene.mechFx && Scene.mechFx('dive'); } }
+  if (id === 'elements' && sk) {
+    R.elems = R.elems || [];
+    if (sk.res && sk.res.nova) { const n = R.elems.length; if (n) { out.mult *= 1 + sk.res.nova * n * (n >= 3 ? 1.5 : 1); out.label = n >= 3 ? 'Nova Tríplice' : 'Nova ' + n + 'x'; Scene.mechFx && Scene.mechFx('nova', n); } R.elems = []; }
+    else if (sk.elem) {
+      const other = R.elems.find((e) => e !== sk.elem);
+      if (other) { const key = [sk.elem, other].sort().join('+'), rx = REACT[key]; out.mult *= rx.mult; out.stun = rx.stun || 0; out.slow = rx.slow || 0; out.crit = !!rx.crit; out.label = rx.name; out.shown = true; R.elems = []; Scene.mechFx && Scene.mechFx('react', rx.color, rx.name); }
+      else if (!R.elems.includes(sk.elem)) R.elems.push(sk.elem);
+    }
+    R.res = (R.elems || []).length;
+  }
+  // gastar o recurso
+  const r = sk && sk.res; if (!r) return out;
+  if (r.max && (id === 'rage' || id === 'cells' || id === 'focus' || id === 'faith')) {
+    const n = Math.min(R.res || 0, r.max); if (n <= 0) return out;
+    R.res -= n; out.mult *= 1 + r.per * n;
+    if (r.stunPer) out.stun = n * r.stunPer;
+    if (r.boom && n >= 5) out.boom = true;
+    if (r.pierce && n >= 5) out.aoeAll = true;
+    if (r.exec) out.exec = r.exec;
+    out.label = out.label || `${curMech().icon} ${Math.round(n)} de ${curMech().name}`;
+    Scene.mechFx && Scene.mechFx('spend', curMech().color, n / r.max);
+  }
+  if (r.shield && id === 'shield' && R.res > 0) { const f = Math.min(0.9, R.res / derived().maxHp * r.shield); out.mult *= 1 + f; out.label = `🛡️ escudo virou +${Math.round(f * 100)}% de dano`; R.res = 0; Scene.mechFx && Scene.mechFx('spend', '#ffe8a0', 1); }
+  return out;
+}
+function mechTick(dt, d) { // recursos se apagam fora de combate (menos Ritmo e Elementos)
+  const id = mechId(); if (!id || !(R.res > 0)) return;
+  const fighting = R.mon || R.pvp || aliveMons().some((m) => m.aggro && !m.returning);
+  R.resIdle = fighting ? 0 : (R.resIdle || 0) + dt;
+  if (R.resIdle < 10) return;
+  if (id === 'rage' || id === 'faith') R.res = Math.max(0, R.res - 6 * dt);
+  else if (id === 'shield') R.res = Math.max(0, R.res - resMax(d) * 0.03 * dt);
+  else if ((id === 'cells' || id === 'focus') && R.resIdle > 15) { R.resIdle = 11; R.res = Math.max(0, R.res - 1); }
+}
+function mechWait(s) { // no Auto, guarda o recurso para o golpe que gasta
+  const id = mechId(), r = s.res; if (!id || !r) return false;
+  const m = R.mon, big = m && (m.boss || m.elite), n = m ? nearMons(m, 4.2).length : 0;
+  if (id === 'elements') return !!r.nova && (R.elems || []).length < 2 && !big;
+  if (id === 'shield') return !!r.shield && (R.res || 0) < resMax() * 0.3 && !big;
+  if (!r.max) return false;
+  return (R.res || 0) < r.max * 0.6 && !big && !(s.type === 'aoe' && n >= 5);
+}
+function mechHud() {
+  const m = curMech(); if (!m || R.inTown) return '';
+  const id = mechId();
+  if (id === 'elements') { const el = R.elems || []; return `<span class="buff mech-pips" title="${esc(m.tip)}">${m.icon} ${el.map((e) => ELEM[e].icon).join('') || '<small>sem elementos</small>'}</span>`; }
+  if (m.bar) { const mx = resMax(), v = R.res || 0; return `<span class="buff mech-bar" title="${esc(m.tip)}" style="--mc:${m.color}">${m.icon} <i><b style="width:${mx ? Math.round(v / mx * 100) : 0}%"></b></i>${id === 'shield' ? fmt(Math.round(v)) : Math.round(v)}</span>`; }
+  return `<span class="buff mech-pips" title="${esc(m.tip)}" style="--mc:${m.color}">${m.icon} ${'<i class="on"></i>'.repeat(Math.floor(R.res || 0))}${'<i></i>'.repeat(m.max - Math.floor(R.res || 0))}</span>`;
+}
+function mechOrbs() { // cores das bolinhas que giram em volta do herói (na cena)
+  const id = mechId(); if (R.inTown) return [];
+  if (id === 'elements') return (R.elems || []).map((e) => ELEM[e].color);
+  if (id === 'cells' || id === 'focus' || id === 'combo') return Array(Math.floor(R.res || 0)).fill(MECH[id].color);
+  return [];
+}
+// ---------- Torreta Tesla (Engenheiro) ----------
+function placeTurret(s, d) {
+  if (!R.mon && !R.pvp) return false;
+  R.turrets = (R.turrets || []).filter((t) => t.t > 0);
+  if (R.turrets.length >= 2) R.turrets.shift();
+  const tg = R.mon || R.pos, x = lerp(R.pos.x, tg.x, 0.45) + rnd(-0.8, 0.8), z = lerp(R.pos.z, tg.z, 0.45) + rnd(-0.8, 0.8);
+  R.turrets.push({ id: uid(), x, z, t: s.dur * (1 + d.buffDur), timer: 0.6, mult: s.mult * (1 + d.petMult) });
+  log(`⚡ <b>${esc(s.name)}</b> montada!`, 'skill'); Sfx.play('magic');
+  return true;
+}
+function turretTick(dt, d) {
+  if (!R.turrets || !R.turrets.length) return;
+  for (const t of R.turrets) {
+    t.t -= dt; t.timer -= dt; if (t.t <= 0 || t.timer > 0) continue;
+    t.timer = 0.9;
+    const targets = aliveMons().filter((m) => !m.static || true).map((m) => [m, dist2(m, t)]).filter(([, dd]) => dd < 7.5).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([m]) => m);
+    if (!targets.length) continue;
+    const hits = [];
+    targets.forEach((m, i) => { const r = hitMonster(m, t.mult * (i ? 0.6 : 1), null, d, false, 'Torreta Tesla'); hits.push({ sid: m.sid, text: fmt(r.dmg) + (r.crit ? '!' : ''), cls: r.crit ? 'crit' : 'pet' }); });
+    Scene.turretZap && Scene.turretZap(t.id, hits);
+    for (const m of targets) if (m.hp <= 0) killMonster(m);
+  }
+  R.turrets = R.turrets.filter((t) => t.t > 0);
+}
+function turretsBoom(d) { // Sobrecarga com 5 células: as torretas explodem
+  for (const t of R.turrets || []) { const hits = nearMons(t, 3.2); for (const m of hits) { hitMonster(m, 2.2, null, d, false, 'Explosão da Torreta'); if (m.hp <= 0) killMonster(m); } Scene.mechFx && Scene.mechFx('boom', t.x, t.z); }
+  R.turrets = [];
+}
+
 // ---------- 👻 Colheita de Almas (Lanceiro): o dano causado enche a foice; os golpes grandes gastam as almas ----------
 const SOUL_MAX = 5, SOUL_HITS = 5; // ~5 golpes normais = 1 alma (vale igual contra monstro e jogador)
 const hasSouls = () => CLASSES[S.cls].mech === 'souls';
@@ -1740,12 +1882,14 @@ function pvpStep(dt, d, speed) {
   // usa o golpe de dano mais forte que estiver pronto; senão, ataque básico
   const sk = classSkills().filter((x) => (x.type === 'dmg' || x.type === 'aoe') && S.lvl >= x.lvl && !(R.cds[x.id] > 0) && S.mp >= x.mp && !(S.skillOff && S.skillOff[x.id])).sort((a, b) => b.mult - a.mult)[0];
   let mult = 1; if (sk) { mult = sk.mult; S.mp -= sk.mp; R.cds[sk.id] = sk.cd; const sp = soulSpend(sk); if (sp) mult *= sp.mult * (1 + sp.hits * 0.25); }
+  const mb = mechBeforeHit(sk, 'p' + R.pvp.id, d); mult *= mb.mult; if (mb.exec && (o.hp || 1) < 0.3) mult *= 1 + mb.exec;
   if (Math.random() < (o.pe || 0)) { Scene.playerAttack({ text: 'Errou', cls: 'miss', miss: true, hits: [] }); Scene.otherHit(R.pvp.id, 'Esquiva', 'miss'); return true; }
-  const crit = Math.random() * 100 < d.crit;
+  const crit = mb.crit || Math.random() * 100 < d.crit;
   // no PK a defesa pesa menos que contra monstros, para a luta durar segundos e não minutos
   const dmg = Math.max(1, Math.round(rnd(d.atkMin, d.atkMax) * mult * (crit ? d.critMult : 1) * 100 / (100 + (o.pd || 0) * 0.25) * PVP_SCALE * teamBond().dmg));
   Net.soc('pvphit', { id: R.pvp.id, dmg, crit });
-  soulGain(dmg / (PVP_SCALE * 100 / (100 + (o.pd || 0) * 0.25)) * 100 / (100 + (o.pd || 0)), sk, d); // no PK conta o dano cheio, como contra monstro
+  { const full = dmg / (PVP_SCALE * 100 / (100 + (o.pd || 0) * 0.25)) * 100 / (100 + (o.pd || 0)); soulGain(full, sk, d); mechOnHit(full, sk, null, d); } // no PK conta o dano cheio, como contra monstro
+  if (sk && sk.lifesteal) healHero(Math.round(dmg * sk.lifesteal), d);
   Scene.playerAttack({ text: fmt(dmg), cls: crit ? 'crit' : 'dmg', skill: !!sk, skillName: sk && sk.name, hits: [] });
   Scene.otherHit(R.pvp.id, fmt(dmg) + (crit ? '!' : ''), crit ? 'crit' : 'dmg');
   attackSound(sk && sk.name, crit, false);
@@ -1754,8 +1898,9 @@ function pvpStep(dt, d, speed) {
 function onPvpHit(m) {
   if (!pkActive() || R.dead > 0 || S.hp <= 0) return;
   const d = derived();
-  if (Math.random() < d.block) { floatText('player', 'Bloqueio', 'block'); return; }
+  if (Math.random() < d.block) { floatText('player', 'Bloqueio', 'block'); mechOnTaken(0, d, true); return; }
   let dmg = Math.round(m.dmg * (1 - d.absorb) * teamBond().taken);
+  mechOnTaken(dmg, d, false); dmg = mechAbsorb(dmg);
   if (d.mshield > 0 && S.mp > 0) { const toMp = Math.min(S.mp, Math.round(dmg * d.mshield)); S.mp -= toMp; dmg -= toMp; }
   S.hp -= dmg; floatText('player', '-' + fmt(dmg), 'hurt'); Sfx.play('hurt', { gap: 80 });
   if (!R.pvpLogT || Date.now() - R.pvpLogT > 4000) { R.pvpLogT = Date.now(); log(`⚔️ <b>${esc(m.from)}</b> está atacando você!`, 'death'); }
@@ -2030,7 +2175,7 @@ function renderLive() {
   $('#xp-bar').innerHTML = bar(S.lvl >= MAX_LEVEL ? 1 : S.xp, S.lvl >= MAX_LEVEL ? 1 : need, 'xp', S.lvl >= MAX_LEVEL ? 'NÍVEL MÁXIMO' : `XP ${fmt(S.xp)} / ${fmt(need)} (${(S.xp / need * 100).toFixed(2)}%)`);
   // jogador
   $('#p-bars').innerHTML = bar(S.hp, d.maxHp, 'hp', `${fmt(Math.max(0, S.hp))} / ${fmt(d.maxHp)}`) + bar(S.mp, d.maxMp, 'mp', `${fmt(S.mp)} / ${fmt(d.maxMp)}`);
-  $('#p-buffs').innerHTML = (hasSouls() && !R.inTown ? `<span class="buff soul-pips" title="Almas: o dano que você causa enche a foice; os golpes grandes gastam">👻 ${'<i class="on"></i>'.repeat(R.souls || 0)}${'<i></i>'.repeat(SOUL_MAX - (R.souls || 0))}</span>` : '') + (R.pet ? `<span class="buff pet">${R.pet.icon} ${esc(R.pet.name)} ${Math.ceil(R.pet.t)}s</span>` : '') + (R.stealth > 0 ? '<span class="buff stealth">🌑 Furtivo</span>' : '') + R.buffs.filter((b) => !b.hidden).map((b) => `<span class="buff">${esc(b.name)} ${Math.ceil(b.t)}s</span>`).join('');
+  $('#p-buffs').innerHTML = mechHud() + (hasSouls() && !R.inTown ? `<span class="buff soul-pips" title="Almas: o dano que você causa enche a foice; os golpes grandes gastam">👻 ${'<i class="on"></i>'.repeat(R.souls || 0)}${'<i></i>'.repeat(SOUL_MAX - (R.souls || 0))}</span>` : '') + (R.pet ? `<span class="buff pet">${R.pet.icon} ${esc(R.pet.name)} ${Math.ceil(R.pet.t)}s</span>` : '') + (R.stealth > 0 ? '<span class="buff stealth">🌑 Furtivo</span>' : '') + R.buffs.filter((b) => !b.hidden).map((b) => `<span class="buff">${esc(b.name)} ${Math.ceil(b.t)}s</span>`).join('');
   // monstro
   const m = R.mon;
   Sfx.music(R.inTown ? 'town' : (m && m.boss ? 'boss' : S.zone));
@@ -2192,9 +2337,9 @@ function castSkill(id) {
 // aplica cura, invocação, furtividade ou bônus; retorna true se usou
 function useUtility(s, d, forced) {
   if (s.type === 'heal') {
-    if (!forced && S.hp / d.maxHp >= 0.6) return false;
+    if (!forced && S.hp / d.maxHp >= (mechId() === 'shield' && (R.res || 0) < resMax(d) * 0.5 && (R.mon || aliveMons().some((m) => m.aggro)) ? 0.92 : 0.6)) return false;
     const h = Math.round(d.maxHp * s.mult * (1 + d.healMult));
-    S.hp = Math.min(d.maxHp, S.hp + h);
+    healHero(h, d);
     floatText('player', '+' + fmt(h), 'heal'); Scene.heal(s.id); Sfx.play('heal');
     log(`💚 ${esc(s.name)} restaurou ${fmt(h)} de vida.`, 'heal');
     return true;
@@ -2206,6 +2351,7 @@ function useUtility(s, d, forced) {
     log(`${P.icon} Você invocou <b>${P.name}</b>!`, 'skill'); Scene.buff(s.id); Sfx.play('portal');
     return true;
   }
+  if (s.type === 'turret') return placeTurret(s, d);
   if (s.type === 'stealth') {
     if (R.stealth > 0 || (!forced && !R.mon)) return false;
     R.stealth = s.dur;
@@ -2216,13 +2362,25 @@ function useUtility(s, d, forced) {
     if (R.buffs.some((b) => b.id === s.id)) { if (!forced) return false; R.buffs = R.buffs.filter((b) => b.id !== s.id && b.id !== s.id + '+'); }
     R.buffs.push({ id: s.id, name: s.name, stat: s.stat, val: s.val, t: s.dur * (1 + d.buffDur) });
     if (s.also) R.buffs.push({ id: s.id + '+', name: '', stat: s.also.stat, val: s.also.val, t: s.dur, hidden: true });
+    if (s.id === 'c4' && R.mon && R.pos) { const dx = R.pos.x - R.mon.x, dz = R.pos.z - R.mon.z, L = Math.hypot(dx, dz) || 1; R.pos.x = clamp(R.pos.x + dx / L * 3, -WORLD.size, WORLD.size); R.pos.z = clamp(R.pos.z + dz / L * 3, -WORLD.size, WORLD.size); for (const m of nearMons(R.pos, 6)) m.slow = Math.max(m.slow, 1.5); } // mortal para trás
     log(`✨ ${esc(s.name)} ativado.`, 'skill'); Scene.buff(s.id); Sfx.play('buff');
     return true;
   }
   return false;
 }
 
-function skillDesc(s) { return skillDescBase(s) + soulDesc(s); }
+function skillDesc(s) { return skillDescBase(s) + soulDesc(s) + mechDesc(s); }
+function mechDesc(s) {
+  const m = curMech(), r = s.res; let t = '';
+  if (s.elem) t += ` ${ELEM[s.elem].icon} Elemento ${s.elem}: combina com outro elemento diferente.`;
+  if (s.lifesteal) t += ` Cura você em ${Math.round(s.lifesteal * 100)}% do dano causado${mechId() === 'shield' ? ' (a sobra vira Escudo Sagrado)' : ''}.`;
+  if (!r || !m) return t;
+  if (r.gain) return t + ` ${m.icon} Enche ${m.name} mais rápido.`;
+  if (r.nova) return t + ` 🌀 Gasta todos os elementos guardados: +${Math.round(r.nova * 100)}% de dano por elemento (com os 3: ainda mais).`;
+  if (r.shield) return t + ` 🛡️ Transforma o Escudo Sagrado em dano extra (até +90%).`;
+  if (r.max) return t + ` ${m.icon} Gasta até ${r.max} de ${m.name}: +${+(r.per * 100).toFixed(1)}% de dano por ponto${r.stunPer ? ', atordoa mais' : ''}${r.boom ? '; com 5 células as torretas explodem' : ''}${r.pierce ? '; com 5 de Foco atravessa todos os monstros' : ''}${r.exec ? `; +${Math.round(r.exec * 100)}% em quem está com menos de 30% de vida` : ''}.`;
+  return t;
+}
 function soulDesc(s) {
   if (!s.soul) return '';
   if (s.soul.gain) return ` 👻 Enche as almas ${Math.round((s.soul.gain - 1) * 100)}% mais rápido.`;
@@ -2237,6 +2395,7 @@ function skillDescBase(s) {
     case 'aoe': return `${s.mult < 1 ? 'Atinge' : `Causa ${Math.round(s.mult * 100)}% de dano em`} ${s.targets ? `até ${s.targets} monstros` : 'todos os monstros'}${s.holy ? ' (sagrado)' : ''}${s.stun ? `, atordoando por ${s.stun}s` : ''}${s.slow ? `, deixando lentos por ${s.slow}s` : ''}${s.healPct ? ` e cura ${Math.round(s.healPct * 100)}% da vida` : ''}.` + cost;
     case 'heal': return `Cura ${Math.round(s.mult * 100)}% da vida máxima.` + cost;
     case 'summon': return `Invoca ${PETS[s.pet].icon} ${PETS[s.pet].name} por ${s.dur}s${PETS[s.pet].taunt ? ', que atrai os ataques dos monstros' : ''}${PETS[s.pet].spd ? ' e aumenta sua velocidade' : ''}.` + cost;
+    case 'turret': return `Monta uma torreta no chão por ${s.dur}s que dá choques em até 2 monstros (${Math.round(s.mult * 100)}% do seu dano). Até 2 torretas ao mesmo tempo.` + cost;
     case 'stealth': return `Fica invisível por ${s.dur}s: os monstros erram e o próximo golpe é um crítico reforçado${CLASSES[S.cls].mech === 'souls' ? ' que rende +1 alma' : ''}.` + cost;
     case 'passive': return s.revive ? `Passiva: ao morrer, volta com 60% da vida sem perder XP (a cada ${s.revive}s).` : `Passiva: +${Math.round(s.val * 100)}% de ${lbl[s.stat]} permanente.`;
     default: return `+${Math.round(s.val * 100)}% de ${lbl[s.stat]}${extra} por ${s.dur}s.` + cost;

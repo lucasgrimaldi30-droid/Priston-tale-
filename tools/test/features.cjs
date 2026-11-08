@@ -170,6 +170,27 @@ const startServer = require('./server.cjs');
     ok('Auto guarda as almas para os golpes grandes', soulWait(l6) === true && soulWait(classSkills().find((x) => x.id === 'l3')) === false);
     R.souls = 2; R.soulIdle = 0; R.mon = null; for (let i = 0; i < 200; i++) soulTick(0.1); ok('Fora de combate as almas somem', R.souls < 2);
     ok('Descrição mostra as almas', skillDesc(l6).includes('alma'));
+    // mecânicas das classes
+    const mob = (lvl = 30, hp = 1e7) => { const m = makeMonster('Ent Jovem', '🌳', lvl, false, 2); Object.assign(m, { x: R.pos.x, z: R.pos.z - 1, home: { x: 0, z: 0 } }); m.maxHp = m.hp = hp; m.atk = 0; R.mons.push(m); return m; };
+    novo('gladiador', 75, { tut: 99 }); S.settings.auto = false; R.mons = []; R.res = 0;
+    { const d = derived(); mechOnTaken(d.maxHp * 0.5, d, false); } const at1 = derived().atkMin;
+    ok('Gladiador: Fúria enche com dano levado e dá ataque', R.res >= 60 && at1 > (R.res = 0, derived().atkMin));
+    R.res = 100; { const tg = mob(); R.mon = tg; tg.hp = tg.maxHp * 0.2; const g6 = classSkills().find((x) => x.id === 'g6'); const mb = mechBeforeHit(g6, tg.sid, derived()); ok('Execução gasta toda a Fúria (+150%)', R.res === 0 && Math.abs(mb.mult - 2.5) < 1e-9 && mb.exec === 0.5); }
+    novo('engenheiro', 75, { tut: 99 }); S.settings.auto = false; R.mons = []; const tgE = mob(); R.mon = tgE;
+    castSkill('e3'); ok('Engenheiro: Torreta Tesla montada', (R.turrets || []).length === 1);
+    const hpE = tgE.hp; for (let i = 0; i < 30; i++) turretTick(0.1, derived()); ok('Torreta dá choques', tgE.hp < hpE);
+    R.res = 5; { const e6 = classSkills().find((x) => x.id === 'e6'); const mb = mechBeforeHit(e6, tgE.sid, derived()); ok('Sobrecarga com 5 células explode as torretas', mb.boom && mb.stun >= 1); }
+    novo('cacadora', 75, { tut: 99 }); S.settings.auto = false; R.mons = []; const ta = mob(), tb = mob(); R.res = 0;
+    for (let i = 0; i < 3; i++) mechBeforeHit(null, ta.sid, derived()); const fa = R.res; mechBeforeHit(null, tb.sid, derived());
+    ok('Caçadora: Foco no mesmo alvo e zera ao trocar', fa >= 2 && R.res === 0);
+    R.res = 5; { const c6 = classSkills().find((x) => x.id === 'c6'); const mb = mechBeforeHit(c6, tb.sid, derived()); ok('Disparo Perfurante com 5 de Foco atravessa todos', mb.aoeAll); }
+    R.mon = ta; const px = R.pos.x, pz = R.pos.z; castSkill('c4'); ok('Salto Evasivo pula para trás', Math.hypot(R.pos.x - px, R.pos.z - pz) > 2);
+    novo('paladino', 75, { tut: 99 }); R.res = 0; { const d = derived(); for (let i = 0; i < 5; i++) mechOnTaken(0, d, true); } ok('Paladino: bloquear enche a Fé', R.res >= 50);
+    novo('valquiria', 75, { tut: 99 }); R.res = 0; let dive = 0; for (let i = 0; i < 8; i++) { if (mechBeforeHit(null, 'x', derived()).label === 'Investida Celeste') dive++; } ok('Valquíria: Investida Celeste a cada 4 ataques', dive === 2);
+    novo('arcanista', 75, { tut: 99 }); R.elems = []; { const sk = classSkills(); const a1 = sk.find((x) => x.id === 'a1'), a3 = sk.find((x) => x.id === 'a3'); mechBeforeHit(a1, 'x', derived()); const mb = mechBeforeHit(a3, 'x', derived()); ok('Arcanista: fogo + gelo = Vapor Explosivo', mb.label === 'Vapor Explosivo' && mb.slow > 0 && R.elems.length === 0); }
+    { const sk = classSkills(); R.elems = ['fogo', 'gelo', 'raio']; const mb = mechBeforeHit(sk.find((x) => x.id === 'a6'), 'x', derived()); ok('Nova Elemental gasta os 3 elementos', mb.mult > 2 && R.elems.length === 0); }
+    novo('cleriga', 75, { tut: 99 }); R.res = 0; { const d = derived(); S.hp = d.maxHp; healHero(d.maxHp * 0.2, d); ok('Clériga: cura que sobra vira Escudo Sagrado', R.res > 0 && R.res <= resMax(d)); const sh = R.res; const left = mechAbsorb(sh / 2); ok('Escudo absorve dano', left === 0 && R.res < sh); }
+    ok('Descrições mostram as mecânicas', skillDesc(classSkills().find((x) => x.id === 'r6')).includes('Escudo') && mechHud().includes('mech-bar'));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

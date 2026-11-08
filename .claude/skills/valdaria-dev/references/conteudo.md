@@ -16,8 +16,28 @@ Cada classe deve ter um jeito próprio de jogar (`CLASSES[x].mech`). Revisão co
   Visual: bolinhas no painel (`soul-pips`) e almas girando (`updateSouls`, `soulBurst`). Balanceado igual ao Gladiador em 24 h.
   Golpes pedidos pelo dono: **Rodopio da Foice** (gira no lugar, área), **Salto Ceifador** (movimento `spinleap`: salta girando e cai no alvo),
   **Ceifa Final** (foice fantasma gigante `fxGhostScythe` varrendo em volta).
-- Ideias para as próximas (a combinar): Gladiador fúria que cresce com dano levado; Engenheiro torres/máquinas no chão;
-  Arcanista combina elementos (fogo + gelo = explosão); Clériga cura que sobra vira escudo nos aliados.
+- **As outras 7 (feitas, motor genérico `MECH` em `js/game.js`, `R.res`):** ganhos em `mechOnHit` (dano causado), `mechOnTaken`
+  (dano levado/bloqueio), gasto e efeitos em `mechBeforeHit` (chamado em `playerHit` e `pvpStep`; campo `res` do golpe: `max`/`per`
+  gastam; `gain` acelera; `stunPer`, `boom`, `pierce`, `exec`, `nova`, `shield`), `mechTick` (some fora de combate), `mechWait` (Auto
+  guarda para o golpe grande), `mechHud` (painel) e `mechOrbs` (bolinhas na cena).
+  - **Gladiador — Fúria (0–100, `rage`):** dano levado (muito) e causado (pouco) enchem; cada 10 = +2% de ataque (aura de fogo).
+    **Execução** (g6) gasta tudo (+1,5%/ponto, +50% em alvo com <30% de vida) com machado fantasma gigante (`fxGhostAxe`). g3 Furacão de Aço, g5 Queda do Titã.
+  - **Engenheiro — Células (0–5, `cells`):** dano causado (dele e das torretas) carrega. **Torreta Tesla** (e3, tipo `turret`, `R.turrets`,
+    até 2, choques em cadeia, `turretTick`, `buildTurret`/`turretZap`). **Sobrecarga Sísmica** (e6) gasta células (+25%/célula, mais
+    atordoar); com 5 as torretas explodem (`turretsBoom`).
+  - **Caçadora — Foco (0–5, `focus`):** acertar o mesmo alvo seguidas vezes acumula (`R.focusOn`); trocar zera. **Disparo Perfurante**
+    (c6) gasta (+30%/ponto), com 5 atravessa todos (`fxPierce`). **Salto Evasivo** (c4): mortal para trás (movimento `backflip`), recua 3 m e deixa lentos.
+  - **Paladino — Fé (0–100, `faith`):** bloquear (+12), levar golpes e acertar mortos-vivos com sagrado enchem. **Martelo da Justiça**
+    (p5, até 50, martelo caindo `fxHammer`) e **Julgamento Celestial** (p6, até 100, colunas de luz) gastam (+1,2%/ponto).
+  - **Valquíria — Ritmo celeste (`combo`):** a cada 4 ataques sai uma **Investida Celeste** (+80%, asas de luz e salto: `mechFx('dive')`).
+    **Tormenta de Lanças** (v6) virou chuva de lanças douradas.
+  - **Arcanista — Elementos (`elements`, `R.elems`, `ELEM`, `REACT`):** golpes com `elem` (fogo a1/a5, gelo a3, raio a4); dois diferentes =
+    reação: fogo+gelo **Vapor Explosivo** (+50%, lento), gelo+raio **Prisão Elétrica** (+25%, atordoa), fogo+raio **Plasma** (+30%, crítico
+    garantido). **Nova Elemental** (a6) gasta os guardados (+30% cada; com os 3, mais).
+  - **Clériga — Escudo Sagrado (`shield`):** cura que passa da vida vira escudo até 40% da vida (`healHero`), absorve dano antes da vida
+    (`mechAbsorb`, bolha dourada na cena). **Raio Sagrado** (r1) cura 15% do dano (`lifesteal`). **Onda Divina** (r6) transforma o escudo em dano (até +90%).
+  - Balanceamento depois disso (24 h): 51–61; Paladino e Clériga um pouco mais lentos (compensam aguentando e no grupo).
+  - Efeitos sólidos (que precisam aparecer sobre chão claro) usam `solidMat`, não `fxMat` (que soma luz e some no gramado).
 
 ## Habilidade (6 por classe, níveis 1/10/20/35/50/70 em geral)
 | tipo | campos |

@@ -2078,6 +2078,40 @@ const Scene3D = (() => {
     }
   }
   const rgb = (c) => { const cc = col(c); return { r: cc.r, gg: cc.g, b: cc.b }; };
+  // material sólido e brilhante (aparece até sobre chão claro, ao contrário do que soma luz)
+  const solidMat = (color, op = 1) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide });
+  // machado fantasma gigante que cai do céu (Execução do Gladiador)
+  function fxGhostAxe(c, color) {
+    const g = new THREE.Group(), s0 = 1.15 * FXS;
+    const handle = new THREE.Mesh(G.box(0.18 * s0, 3.2 * s0, 0.18 * s0), solidMat('#5a2010', 0.9)); handle.position.y = 1.5 * s0; g.add(handle); // o cabo fica acima: quem bate é a lâmina
+    const blade = new THREE.Mesh(new THREE.CircleGeometry(1.25 * s0, 24, -Math.PI / 2, Math.PI), solidMat(color, 0.92)); blade.position.set(0.12 * s0, 0, 0); g.add(blade); // meia-lua de frente para a câmera
+    const edge = new THREE.Mesh(new THREE.RingGeometry(1.15 * s0, 1.32 * s0, 24, 1, -Math.PI / 2, Math.PI), solidMat('#ffe0c0', 0.95)); edge.position.copy(blade.position); g.add(edge);
+    const gl = glowSprite(color, 4.5 * s0, 0.7); gl.position.set(0.5 * s0, 0, 0); g.add(gl);
+    g.position.set(c.x, 5, c.z); g.rotation.z = -1.2;
+    addFx({ obj: g, life: 0.85, upd: (f, p) => { const k = Math.min(1, p / 0.55), e2 = k * k; g.position.y = 5 - e2 * 4.2; g.rotation.z = -1.2 + e2 * 1.2; const op = p < 0.6 ? 0.92 : 0.92 * (1 - (p - 0.6) / 0.4); handle.material.opacity = op; blade.material.opacity = op; edge.material.opacity = op; gl.material.opacity = op * 0.7; }, dispose: true });
+  }
+  // martelo dourado gigante que cai do céu (Martelo da Justiça)
+  function fxHammer(c, color, onHit) {
+    const g = new THREE.Group(), s0 = FXS;
+    const head = new THREE.Mesh(G.box(1.8 * s0, 0.9 * s0, 0.9 * s0), solidMat(color, 0.95)); g.add(head);
+    const band = new THREE.Mesh(G.box(1.86 * s0, 0.2 * s0, 0.96 * s0), solidMat('#fffbe8', 0.95)); g.add(band);
+    const handle = new THREE.Mesh(G.box(0.2, 2.4 * s0, 0.2), solidMat('#8a6020', 0.95)); handle.position.y = 1.5 * s0; g.add(handle);
+    const gl = glowSprite('#fff0a0', 4 * s0, 0.8); g.add(gl);
+    g.position.set(c.x, 7, c.z); g.rotation.z = 0.6; let hit = false;
+    addFx({ obj: g, life: 0.9, upd: (f, p) => { const k = Math.min(1, p / 0.5); g.position.y = 7 - k * 6.4; g.rotation.z = 0.6 * (1 - k); if (k >= 1 && !hit) { hit = true; onHit && onHit(); } const op = p < 0.6 ? 0.95 : 0.95 * (1 - (p - 0.6) / 0.4); head.material.opacity = op; band.material.opacity = op; handle.material.opacity = op; gl.material.opacity = op * 0.8; }, dispose: true });
+    for (let i = 0; i < 20; i++) later(i * 0.02, () => spawnP({ x: c.x + rand(-0.3, 0.3), y: 7 - i * 0.3, z: c.z + rand(-0.3, 0.3), vx: 0, vy: 0, vz: 0, life: 0.4, r: 1, gg: 0.9, b: 0.5, size: 0.16 }));
+  }
+  // flecha de luz que atravessa a fila de monstros (Disparo Perfurante)
+  function fxPierce(from, to, color) {
+    const dir = V3(to.x - from.x, 0, to.z - from.z).normalize(), len = 14, mid = V3(from.x + dir.x * len / 2, 1, from.z + dir.z * len / 2);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * FXS, 0.14 * FXS, len, 8, 1, true), solidMat('#f4ffe0', 0.95));
+    const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * FXS, 0.32 * FXS, len, 10, 1, true), solidMat(color, 0.45));
+    for (const o of [m, halo]) { o.position.copy(mid); o.rotation.z = Math.PI / 2; o.rotation.y = -Math.atan2(dir.z, dir.x); }
+    addFx({ obj: halo, life: 0.5, upd: (f, p) => { halo.material.opacity = 0.45 * (1 - p); halo.scale.set(1 + p * 2, 1, 1 + p * 2); }, dispose: true });
+    addFx({ obj: m, life: 0.45, upd: (f, p) => { m.material.opacity = 0.95 * (1 - p); m.scale.set(1 + p, 1, 1 + p); }, dispose: true });
+    for (let i = 0; i < 30; i++) { const k = Math.random() * len; spawnP({ x: from.x + dir.x * k, y: 1 + rand(-0.15, 0.15), z: from.z + dir.z * k, vx: rand(-0.5, 0.5), vy: rand(0, 1), vz: rand(-0.5, 0.5), life: 0.5, ...rgb(color), size: 0.12 }); }
+    projectile('arrow', from, to, '#f0ffd0', true, 0.12);
+  }
   // foice fantasma gigante que varre em volta do herói (Ceifa Final)
   function fxGhostScythe(c, color) {
     const R0 = 3.4 * FXS, g = new THREE.Group(); g.position.set(c.x, 0.9, c.z);
@@ -2175,11 +2209,10 @@ const Scene3D = (() => {
     g3: { anim: '2H_Melee_Attack_Spin', motion: { type: 'spin', turns: 2 }, fx: (c) => { fxWhirl(c.hp, '#ff5030', c.dur, 1.7); later(c.dur * 0.5, c.hitAll); } },
     g4: { anim: 'Taunt', fx: (c) => { fxShock(c.hp, '#ffd060', 3, 5); st.shake = 0.22; later(0.25, c.hitAll); } },
     g5: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.7 }, fx: (c) => later(c.dur * 0.62, () => { fxCracks(c.tc, '#ff7030', 9, 2.6); fxShock(c.tc, '#ffa040', 2, 3.5); st.shake = 0.32; c.hitAll(); }) },
-    g6: { anim: '2H_Melee_Attack_Chop', fx: (c) => later(c.dur * 0.5, () => { const p = V3(c.tc.x, 1, c.tc.z); slash(p, '#ff2020', true); later(0.08, () => { const m = p.clone(); slash(m, '#ff6040', true); }); burst(p, '#ff3020', 40, 6, 0.18); st.shake = 0.3; c.hitAll(); }) },
+    g6: { anim: '2H_Melee_Attack_Chop', fx: (c) => { fxGhostAxe(c.tc, '#ff3020'); later(c.dur * 0.55, () => { fxCracks(c.tc, '#ff4020', 12, 3.2); fxShock(c.tc, '#ff7040', 3, 4.5); burst(V3(c.tc.x, 1, c.tc.z), '#ff3020', 50, 6, 0.2); st.shake = 0.45; c.hitAll(); }); } },
     // Engenheiro
     e1: { anim: '1H_Melee_Attack_Stab', fx: (c) => later(c.dur * 0.45, () => { fxBolt(heroHand(), V3(c.tc.x, 1, c.tc.z), '#80e0ff'); c.hitAll(); }) },
-    e3: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.45, () => { fxShock(c.tc, '#80e0ff', 2, 3); for (const e of c.ents) fxBolt(V3(c.tc.x, 3, c.tc.z), monCenter(e), '#a0f0ff'); c.hitAll(); }) },
-    e6: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.9 }, fx: (c) => later(c.dur * 0.62, () => { for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; fxSpikes(V3(c.tc.x + Math.cos(a) * 2.2, 0, c.tc.z + Math.sin(a) * 2.2), '#9a8a70', 2, 0.3, 1.6); } fxShock(c.tc, '#c0a070', 3, 5); st.shake = 0.38; c.hitAll(); }) },
+    e6: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.9 }, fx: (c) => later(c.dur * 0.62, () => { fxShock(c.tc, '#80e0ff', 3, 5); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; fxBolt(V3(c.tc.x, 3.2, c.tc.z), V3(c.tc.x + Math.cos(a) * 3, 0.1, c.tc.z + Math.sin(a) * 3), '#a0f0ff', 0.4); } fxCracks(c.tc, '#60c8ff', 10, 3); st.shake = 0.4; c.hitAll(); }) },
     // Lanceiro (foice)
     l1: { anim: '2H_Melee_Attack_Slice', fx: (c) => later(c.dur * 0.5, () => { slash(V3(c.tc.x, 1, c.tc.z), '#c080ff', true); c.hitAll(); }) },
     // Rodopio da Foice: gira no lugar com a foice aberta e corta tudo em volta
@@ -2193,14 +2226,17 @@ const Scene3D = (() => {
     l6: { anim: '2H_Melee_Attack_Slice', fx: (c) => { fxVortex(c.hp, '#5a1a9a', c.dur + 0.4); later(c.dur * 0.45, () => { fxGhostScythe(c.hp, '#b070ff'); fxShock(c.hp, '#8040ff', 3, 5); st.shake = 0.4; c.hitAll(); }); } },
     // Caçadora
     c3: { anim: '2H_Ranged_Shoot', fx: (c) => { fxRain(c.tc, 'arrow', '#fff0c0', 16, 2.6); later(0.75, c.hitAll); } },
-    c6: { anim: '2H_Ranged_Shoot', fx: (c) => c.hits.forEach((h, i) => later(c.dur * 0.4 + i * 0.07, () => { const e = entOf(h.sid); if (!e) return; const to = monCenter(e); projectile('arrow', heroHand(), to, '#ff9030', true, 0.3, () => { burst(to, '#ff6010', 34, 5, 0.2); ring(to, '#ff8030', 2.4, 0.4); c.impact(h); }); })) },
+    c6: { anim: '2H_Ranged_Shoot', fx: (c) => later(c.dur * 0.45, () => { fxPierce(heroHand(), c.tc, '#a0ff70'); c.hitAll(); }) },
     // Paladino
     p1: { anim: '1H_Melee_Attack_Slice_Diagonal', fx: (c) => later(c.dur * 0.5, () => { slash(V3(c.tc.x, 1, c.tc.z), '#ffe070', true); fxCross(c.tc, '#fff0a0', 0.25); c.hitAll(); }) },
-    p5: { anim: '1H_Melee_Attack_Jump_Chop', motion: { type: 'leap', h: 1.1 }, fx: (c) => later(c.dur * 0.6, () => { fxCross(c.tc, '#ffe070', 1); st.shake = 0.25; c.hitAll(); }) },
-    p6: { anim: 'Spellcast_Long', fx: (c) => c.hits.forEach((h, i) => later(0.2 + i * 0.12, () => { const e = entOf(h.sid); if (e) fxBeam(monCenter(e), '#fff4b0', 0.6); c.impact(h); })) },
+    // Martelo da Justiça: um martelo dourado gigante cai do céu
+    p5: { anim: 'Spellcast_Raise', fx: (c) => fxHammer(c.tc, '#ffe070', () => { fxCross(c.tc, '#ffe070', 1); fxShock(c.tc, '#fff0a0', 2, 4); st.shake = 0.35; c.hitAll(); }) },
+    // Julgamento Celestial: colunas de luz caem sobre cada inimigo e uma cruz enorme no chão
+    p6: { anim: 'Spellcast_Long', fx: (c) => { fxCross(c.hp, '#fff4b0', 1.4); c.hits.forEach((h, i) => later(0.2 + i * 0.1, () => { const e = entOf(h.sid); if (e) { const q = monCenter(e); fxBeam(q, '#fff4b0', 0.7); pillar(q.x, q.z); } c.impact(h); })); } },
     // Valquíria
     v3: { anim: 'Throw', fx: (c) => c.hits.forEach((h, i) => later(c.dur * 0.4 + i * 0.05, () => { const e = entOf(h.sid); if (!e) return c.impact(h); const to = monCenter(e); projectile('dart', heroHand(), to, '#c0e0ff', true, 0.25, () => c.impact(h)); })) },
-    v6: { anim: 'Spellcast_Long', fx: (c) => { fxWhirl(c.tc, '#c0e8ff', 0.9, 2); fxRain(c.tc, 'dart', '#d0e8ff', 16, 2.6); later(0.75, c.hitAll); } },
+    // Tormenta de Lanças: lanças douradas chovem do céu sobre a área
+    v6: { anim: 'Spellcast_Long', fx: (c) => { fxWhirl(c.tc, '#ffe8a0', 1, 2.4); fxRain(c.tc, 'dart', '#ffe070', 26, 3); for (let i = 0; i < 6; i++) later(0.15 + i * 0.1, () => fxBeam(V3(c.tc.x + rand(-2.5, 2.5), 0, c.tc.z + rand(-2.5, 2.5)), '#fff0b0', 0.18)); later(0.75, () => { st.shake = 0.3; c.hitAll(); }); } },
     // Arcanista
     a1: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.4, () => { const to = V3(c.tc.x, c.tc.y, c.tc.z); projectile('orb', heroHand(), to, '#ff6a20', true, 0.3, () => { burst(to, '#ff6010', 30, 4.5, 0.18); ring(to, '#ff8030', 1.8, 0.35); c.hitAll(); }); }) },
     a3: { anim: 'Spellcast_Shoot', fx: (c) => { ring(c.hp, '#a0e8ff', 7, 0.6); c.hits.forEach((h, i) => later(0.25 + i * 0.06, () => { const e = entOf(h.sid); if (e) fxShards(monCenter(e), '#a8ecff'); c.impact(h); })); } },
@@ -2209,7 +2245,7 @@ const Scene3D = (() => {
     a6: { anim: 'Spellcast_Long', fx: (c) => { fxNova(c.hp); later(0.35, c.hitAll); } },
     // Clériga
     r1: { anim: 'Spellcast_Shoot', fx: (c) => later(c.dur * 0.4, () => { fxBeam(c.tc, '#fff0a0', 0.35); c.hitAll(); }) },
-    r6: { anim: 'Spellcast_Long', fx: (c) => { ring(c.hp, '#ffe890', 8, 0.8); heal(); c.hits.forEach((h, i) => later(0.3 + i * 0.07, () => { const e = entOf(h.sid); if (e) fxBeam(monCenter(e), '#fff8c0', 0.4); c.impact(h); })); } },
+    r6: { anim: 'Spellcast_Long', fx: (c) => { ring(c.hp, '#ffe890', 8, 0.8); ring(c.hp, '#ffffff', 5, 0.5); fxCross(c.hp, '#fff8c0', 1); heal(); c.hits.forEach((h, i) => later(0.3 + i * 0.07, () => { const e = entOf(h.sid); if (e) fxBeam(monCenter(e), '#fff8c0', 0.4); c.impact(h); })); } },
   };
 
   // bônus visíveis enquanto estiverem ativos
@@ -2221,11 +2257,62 @@ const Scene3D = (() => {
   // almas do Lanceiro girando em volta do herói
   const soulSpr = [];
   function updateSouls(h, t) {
-    const n = !R.inTown && typeof hasSouls === 'function' && hasSouls() ? (R.souls || 0) : 0;
-    while (soulSpr.length < n) { const sp = glowSprite('#c090ff', 0.55, 0.95); scene.add(sp); soulSpr.push(sp); }
+    const cols = !R.inTown && typeof hasSouls === 'function' && hasSouls() ? Array(R.souls || 0).fill('#c090ff') : (typeof mechOrbs === 'function' ? mechOrbs() : []), n = cols.length;
+    while (soulSpr.length < n) { const sp = glowSprite('#ffffff', 0.55, 0.95); scene.add(sp); soulSpr.push(sp); }
     while (soulSpr.length > n) { const sp = soulSpr.pop(); scene.remove(sp); }
+    soulSpr.forEach((sp, i) => { if (sp.userData.c !== cols[i]) { sp.userData.c = cols[i]; sp.material.color.set(cols[i]); } });
+    updateMechAura(h, t);
     const hp = h.root.position;
     soulSpr.forEach((sp, i) => { const a = t * 2.2 + (i / Math.max(1, n)) * Math.PI * 2; sp.position.set(hp.x + Math.cos(a) * 0.85, 1.25 + Math.sin(t * 3 + i) * 0.15, hp.z + Math.sin(a) * 0.85); sp.material.opacity = 0.75 + Math.sin(t * 5 + i) * 0.2; });
+  }
+  // aura da Fúria, brilho da Fé e bolha do Escudo Sagrado
+  let shieldBub = null;
+  function updateMechAura(h, t) {
+    const id = typeof mechId === 'function' ? mechId() : null, hp = h.root.position, v = R.res || 0;
+    if (id === 'rage' && v > 30 && !R.inTown && Math.random() < v / 120) spawnP({ x: hp.x + rand(-0.4, 0.4), y: rand(0.2, 1.6), z: hp.z + rand(-0.4, 0.4), vx: 0, vy: rand(1, 2.2), vz: 0, life: 0.6, r: 1, gg: 0.3 + Math.random() * 0.2, b: 0.1, size: 0.14 + v / 900 });
+    if (id === 'faith' && v > 40 && !R.inTown && Math.random() < v / 160) spawnP({ x: hp.x + rand(-0.6, 0.6), y: rand(0.4, 2), z: hp.z + rand(-0.6, 0.6), vx: 0, vy: 0.4, vz: 0, life: 0.9, r: 1, gg: 0.92, b: 0.5, size: 0.1 });
+    const sf = id === 'shield' && !R.inTown && typeof resMax === 'function' ? v / Math.max(1, resMax()) : 0;
+    if (sf > 0.02) {
+      if (!shieldBub) { shieldBub = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: '#ffe8a0', transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })); scene.add(shieldBub); }
+      shieldBub.visible = true; shieldBub.position.set(hp.x, 0.95, hp.z); shieldBub.scale.set(0.95, 1.15, 0.95); shieldBub.material.opacity = 0.08 + sf * 0.22 + Math.sin(t * 4) * 0.03;
+    } else if (shieldBub) shieldBub.visible = false;
+  }
+  // efeitos das mecânicas: investida, reação de elementos, nova, gasto de recurso e explosão de torreta
+  function mechFx(type, a, b) {
+    if (!running || document.hidden || !st.hero) return; const p = st.hero.root.position;
+    if (type === 'dive') { // Investida Celeste: asas de luz e um salto curto
+      for (const sgn of [-1, 1]) { const w = new THREE.Mesh(G.cone(0.5, 1.8, 3), fxMat('#fff0b0', 0.85)); w.position.set(p.x, 1.4, p.z); w.rotation.z = sgn * 1.1; addFx({ obj: w, life: 0.5, upd: (f, q) => { w.material.opacity = 0.85 * (1 - q); w.scale.setScalar(1 + q); w.rotation.z = sgn * (1.1 + q * 0.5); }, dispose: true }); }
+      burst(V3(p.x, 1.4, p.z), '#ffe8a0', 22, 3.5, 0.14, 1.5); if (!st.hero.motion) st.hero.motion = { type: 'leap', h: 0.9, start: now(), dur: 0.45 };
+    } else if (type === 'react') { ring(V3(p.x, 0, p.z), a, 4.5, 0.6); burst(V3(p.x, 1.3, p.z), a, 40, 5, 0.18, 1); floatAt(V3(p.x, 3.1, p.z), b + '!', 'lvl'); st.shake = Math.max(st.shake, 0.18); }
+    else if (type === 'nova') { for (let i = 0; i < a; i++) later(i * 0.08, () => ring(V3(p.x, 0, p.z), ['#ff6020', '#80d8ff', '#c8a0ff'][i % 3], 5 + i * 1.5, 0.7)); }
+    else if (type === 'spend') { burst(V3(p.x, 1.2, p.z), a, 10 + Math.round(b * 30), 3 + b * 3, 0.15, 1.5); if (b >= 1) { ring(V3(p.x, 0, p.z), a, 4.5, 0.6); st.shake = Math.max(st.shake, 0.2); } }
+    else if (type === 'boom') { const c = V3(a, 0.6, b); burst(c, '#80e0ff', 50, 6, 0.2, 2); fxShock(c, '#a0f0ff', 2, 3.4); for (let i = 0; i < 5; i++) fxBolt(V3(a, 2.4, b), V3(a + rand(-2.5, 2.5), 0.1, b + rand(-2.5, 2.5)), '#c0f4ff', 0.35); st.shake = Math.max(st.shake, 0.3); }
+  }
+  // ---------- torretas Tesla ----------
+  const turrets = new Map();
+  function buildTurret() {
+    const g = new THREE.Group(), M = matFactory(null);
+    mk(G.cyl(0.42, 0.55, 0.3, 8), M('#5a5e68'), g, 0, 0.15, 0);
+    mk(G.cyl(0.16, 0.22, 1.1, 8), M('#8a8e98', { m: 0.2 }), g, 0, 0.85, 0);
+    for (let i = 0; i < 3; i++) mk(new THREE.TorusGeometry(0.28 - i * 0.05, 0.04, 6, 16), M('#c08a40', { m: 0.2 }), g, 0, 0.75 + i * 0.22, 0).rotation.x = Math.PI / 2;
+    const orb = mk(G.sph(0.2, 10), M('#80e8ff', { e: '#40c8ff', ei: 1.4 }), g, 0, 1.55, 0); g.userData.orb = orb;
+    const gl = glowSprite('#80e0ff', 1.6, 0.6); gl.position.y = 1.55; g.add(gl);
+    return g;
+  }
+  function updateTurrets(t) {
+    const list = (!R.inTown && R.turrets) || [], ids = new Set(list.map((x) => x.id));
+    for (const [id, o] of turrets) if (!ids.has(id)) { burst(V3(o.position.x, 0.8, o.position.z), '#80e0ff', 14, 2, 0.12); scene.remove(o); disposeObj(o); turrets.delete(id); }
+    for (const tr of list) {
+      let o = turrets.get(tr.id);
+      if (!o) { o = buildTurret(); o.position.set(tr.x, 0, tr.z); scene.add(o); turrets.set(tr.id, o); fxBeam(V3(tr.x, 0, tr.z), '#80e0ff', 0.35); }
+      o.userData.orb.position.y = 1.55 + Math.sin(t * 4) * 0.06; o.rotation.y += 0.01;
+      if (Math.random() < 0.08) spawnP({ x: tr.x + rand(-0.2, 0.2), y: 1.55, z: tr.z + rand(-0.2, 0.2), vx: rand(-1, 1), vy: rand(0, 1), vz: rand(-1, 1), life: 0.3, r: 0.6, gg: 0.9, b: 1, size: 0.07 });
+    }
+  }
+  function turretZap(id, hits) {
+    if (!running || document.hidden) return; const o = turrets.get(id); if (!o) return;
+    let from = V3(o.position.x, 1.55, o.position.z);
+    for (const h of hits) { const e = entOf(h.sid); if (!e) continue; const to = monCenter(e); fxBolt(from, to, '#a0f0ff', 0.25); floatAt(V3(to.x, to.y + 0.6, to.z), h.text, h.cls); from = to; }
   }
   function soulBurst(n) {
     if (!running || document.hidden || !st.hero) return; const p = st.hero.root.position;
@@ -2400,6 +2487,7 @@ const Scene3D = (() => {
     const x = st.hero.root.position.x, hp0 = heroPos(0);
     const summon = id === 'e4' || id === 'c2' || id === 'v5', bv = BUFF_VIS[id];
     if (id === 'l2') { burst(V3(hp0.x, 0.8, hp0.z), '#2a1a3a', 40, 3, 0.3, 1); fxVortex(hp0, '#3a1a5a', 0.6); return; }
+    if (id === 'c4') { st.hero.motion = { type: 'backflip', start: now(), dur: 0.6 }; burst(V3(hp0.x, 0.3, hp0.z), '#d0ffb0', 24, 3, 0.14, 1); ring(hp0, '#a0ff80', 2.2, 0.5); return; }
     if (summon) { ring(hp0, '#80c0ff', 3, 0.8); fxBeam(V3(hp0.x + 0.9, 0, hp0.z - 0.9), '#a0d0ff', 0.5); }
     else if (bv) { const cc = bv[1]; ring(hp0, cc, 2.4, 0.6); if (bv[0] === 'shield') fxShock(hp0, cc, 2, 2); }
     else ring(st.hero.root.position, '#ffd860', 2, 0.6);
@@ -2519,6 +2607,10 @@ const Scene3D = (() => {
       if (k >= 1) { h.motion = null; h.root.position.y = 0; h.inner.rotation.x = 0; }
       else if (mo.type === 'spin') h.inner.rotation.y = want + ease(k) * mo.turns * Math.PI * 2;
       else if (mo.type === 'leap') { h.root.position.y = Math.sin(Math.min(1, k / 0.62) * Math.PI) * mo.h * (k < 0.62 ? 1 : 0); if (mo.target) { const j = Math.sin(Math.min(1, k / 0.62) * Math.PI) * 0.5; h.root.position.x = lerp(h.root.position.x, lerp(p.x, mo.target.x, j * 0.6), 0.5); h.root.position.z = lerp(h.root.position.z, lerp(p.z, mo.target.z, j * 0.6), 0.5); } }
+      else if (mo.type === 'backflip') { // mortal para trás (Salto Evasivo)
+        h.root.position.y = Math.sin(k * Math.PI) * 1.4; h.inner.rotation.x = -k * Math.PI * 2;
+        if (Math.random() < 0.6) spawnP({ x: h.root.position.x, y: h.root.position.y + 0.8, z: h.root.position.z, vx: 0, vy: 0, vz: 0, life: 0.35, r: 0.7, gg: 1, b: 0.6, size: 0.15 });
+      }
       else if (mo.type === 'spinleap') { // salta alto girando e cai no alvo
         const up = Math.min(1, k / 0.74);
         h.root.position.y = k < 0.74 ? Math.sin(up * Math.PI) * mo.h : 0;
@@ -2709,7 +2801,7 @@ const Scene3D = (() => {
     updateTelegraphs();
     updateCompanions(t, dt);
     updateOthers(t, dt);
-    ambient(dt); skyCycle(dt); rainFx(dt); updateNodes(t, dt); updateExits(t, dt);
+    ambient(dt); skyCycle(dt); rainFx(dt); updateNodes(t, dt); updateExits(t, dt); updateTurrets(t);
     updateParticles(dt);
     if (env && env.stars) env.stars.material.opacity = 0.7 + Math.sin(t * 2) * 0.2;
     updateCamera(t, dt);
@@ -2770,7 +2862,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2790,7 +2882,7 @@ const Scene = (() => {
     },
     stop() { Scene2D.stop(); Scene3D.stop(); },
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
-    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
+    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), mechFx: fwd('mechFx'), turretZap: fwd('turretZap'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };

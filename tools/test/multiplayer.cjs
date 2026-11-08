@@ -58,8 +58,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   let shared = false; for (let i = 0; i < 12 && !shared; i++) { await B.waitForTimeout(500); shared = await B.evaluate((x0) => S.xp + S.lvl * 1e9 > x0, xpB0); }
   ok('XP dividido com o grupo', shared);
   await A.evaluate(() => chatCommand('/p só o grupo vê'));
-  await B.waitForTimeout(700);
-  ok('Chat do grupo', await B.evaluate(() => R.log.some((l) => l.msg.includes('só o grupo vê') && l.msg.includes('[grupo]'))));
+  ok('Chat do grupo', await until(B, () => R.log.some((l) => l.msg.includes('só o grupo vê') && l.msg.includes('[grupo]'))));
   // guilda
   await A.evaluate(() => { S.lvl = 25; S.gold = 60000; netState(); });
   await A.waitForTimeout(400);
@@ -76,8 +75,7 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   const gm = await A.evaluate(() => Net.st.guild.members.map((m) => m.name + (m.online ? '+' : '')).join(','));
   ok('Convidar e entrar na guilda', ginv === 'Lobos de Ferro' && gm.includes('Lumen+') && gm.includes('Brutus+'), gm);
   await B.evaluate(() => chatCommand('/g olá guilda'));
-  await A.waitForTimeout(700);
-  ok('Chat da guilda', await A.evaluate(() => R.log.some((l) => l.msg.includes('olá guilda') && l.msg.includes('[guilda]'))));
+  ok('Chat da guilda', await until(A, () => R.log.some((l) => l.msg.includes('olá guilda') && l.msg.includes('[guilda]'))));
   await A.screenshot({ path: path.join(OUT, 'social.png') });
   const rk = await A.evaluate(async () => (await Net.ranking()).find((r) => r.name === 'Lumen'));
   ok('Guilda aparece no ranking', !!rk && rk.guild === 'Lobos de Ferro');
@@ -162,7 +160,8 @@ const ROOT = path.resolve(__dirname, '../..'), OUT = path.join(ROOT, 'build/test
   await B.evaluate(() => { S.arenaWk = null; joinCoop(window._coop.d.zone, window._coop.from); R.dungeon.arena = true; R.dungeon.floors = Infinity; });
   await A.evaluate(() => { for (let r = 0; r < 3; r++) { for (const m of aliveMons()) { m.hp = 0; killMonster(m); } for (let i = 0; i < 30; i++) tick(); } R.dungeon.t = 0.05; tick(); tick(); });
   ok('Recorde da Arena em grupo vai para o ranking da semana', await until(A, () => wk() && wk().sodBest && wk().sodBest.rounds === 3, null, 8000));
-  ok('Colega sai junto com o resultado', await until(B, () => !R.dungeon && (S.arenaWk && S.arenaWk.best === 3), null, 6000));
+  const colega = await until(B, () => !R.dungeon && (S.arenaWk && S.arenaWk.best === 3), null, 10000);
+  ok('Colega sai junto com o resultado', colega, colega ? '' : await B.evaluate(() => JSON.stringify({ dun: R.dungeon && { arena: R.dungeon.arena, floor: R.dungeon.floor, cleared: R.dungeon.cleared }, coop: R.coop && { lead: R.coop.lead }, wk: S.arenaWk, log: R.log.slice(-25).map((l) => l.msg.slice(0, 60)) })));
   await B.evaluate(() => { S.gold = 777; save(); Net.flush(); });
   await B.waitForTimeout(800);
   await B.reload(); await B.waitForSelector('.acct-on', { timeout: 10000 });
