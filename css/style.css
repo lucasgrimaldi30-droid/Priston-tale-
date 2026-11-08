@@ -620,3 +620,12 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .soul-pips { display: inline-flex; align-items: center; gap: 3px; background: rgba(120, 60, 200, .25) !important; border-color: rgba(190, 140, 255, .5) !important; }
 .soul-pips i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .15); display: inline-block; }
 .soul-pips i.on { background: #c090ff; box-shadow: 0 0 6px #c090ff; }
+
+/* recursos das classes no painel do herói */
+.mech-pips { display: inline-flex; align-items: center; gap: 3px; background: rgba(0, 0, 0, .35) !important; border-color: color-mix(in srgb, var(--mc, #fff) 55%, transparent) !important; }
+.mech-pips i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .15); display: inline-block; }
+.mech-pips i.on { background: var(--mc, #fff); box-shadow: 0 0 6px var(--mc, #fff); }
+.mech-pips small { font-size: 9px; color: #aab; }
+.mech-bar { display: inline-flex; align-items: center; gap: 4px; background: rgba(0, 0, 0, .35) !important; border-color: color-mix(in srgb, var(--mc, #fff) 55%, transparent) !important; }
+.mech-bar i { display: inline-block; width: 54px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.mech-bar i b { display: block; height: 100%; background: var(--mc, #fff); box-shadow: 0 0 6px var(--mc, #fff); }
