@@ -157,6 +157,14 @@ Atalhos no `keydown` do fim de `game.js`.
   `S.titles`, `S.streak` (`alive`, `kills`), `checkTitles()` 1×/s, `titleBonus()` no `derived()` (título equipado = `S.title` pelo nome + coleção:
   +0,5% XP e ouro por permanente). Janela de Conquistas com abas (`R.achTab`: Casa de Títulos e Conquistas). Títulos antigos das conquistas
   continuam cosméticos (sem bônus); não repita nomes entre `ACH` e `TITLES`.
+- **Ordem e Rosário (versão enxuta, escolhida pelo dono):** reputação `S.rep {pts, seals}` com a Ordem da cidade (`REP_TIERS`: Neutro,
+  Cordial, Amigo, Honrado, Devoto em 4.000). **Selos de Devoção** (`addSeals`): 1 por diária pega, 3 por semanal, 1 por masmorra (nv 20+),
+  até 5 pela Arena (a cada 5 rodadas); troca 8 erva + 6 minério + 2 essência = 1 selo; `useSeals` (+60 cada). NPC `ordem` (Irmão Aldric,
+  botão 📿 na cidade, sem modelo 3D; também pela janela do herói). Em Devoto e nível 40, `buyRosary` cria um amuleto épico com `it.rosary
+  {lvl, elem}` — **fica no lugar do amuleto, sem espaço novo**. `reformRosary` (5 selos + 20 essências) põe o elemento da classe
+  (`CLASS_ELEM`); `evolveRosary` sobe 1→9 (`evoCost`). O valor é o **efeito da classe** (`rosaryF()` = nível/9, só se o elemento for da
+  sua classe): Fogo Fúria mais rápida, Terra torretas mais longas e fortes, Vento Foco em dobro, Sombra almas mais rápidas, Luz Fé mais
+  rápida, Trovão Investida mais forte, Arcano reações mais fortes, Água escudo maior; e +1% de XP por nível.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

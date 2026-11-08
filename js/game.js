@@ -353,7 +353,7 @@ function derived() {
   const SO = soulBonus(), AT = artTotal(); if (AT) SO[AT.k] = (SO[AT.k] || 0) + AT.v;
   for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
   const TB = titleBonus(); for (const k of ['atkp', 'defp', 'hpp', 'crit', 'spd', 'absorb']) if (TB[k]) SO[k] = (SO[k] || 0) + TB[k];
-  bonus.xpb += (TB.xpb || 0) + wkBonus(); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
+  bonus.xpb += (TB.xpb || 0) + wkBonus() + (rosaryEq() ? rosaryEq().rosary.lvl : 0); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
@@ -725,7 +725,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id);
+  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id); if (S.lvl >= 20) addSeals(1, 'masmorra');
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -1700,20 +1700,20 @@ const REACT = { // dois elementos diferentes = reação
 };
 const mechId = () => CLASSES[S.cls].mech;
 const curMech = () => MECH[mechId()] || null;
-function resMax(d) { const m = mechId(); return m === 'shield' ? Math.round((d || derived()).maxHp * 0.4) : (MECH[m] ? MECH[m].max : 0); }
+function resMax(d) { const m = mechId(); return m === 'shield' ? Math.round((d || derived()).maxHp * (0.4 + rosaryF() * 0.25)) : (MECH[m] ? MECH[m].max : 0); }
 function resAdd(n, d) { const m = curMech(); if (!m || R.inTown) return; R.res = clamp((R.res || 0) + n, 0, resMax(d)); if (n > 0) R.resIdle = 0; }
 // golpe acertou: ganhos que vêm do dano causado
 function mechOnHit(dmg, sk, m, d) {
   const id = mechId(); if (!id || R.inTown) return; R.resIdle = 0;
-  if (id === 'rage') resAdd(2.5, d);
+  if (id === 'rage') resAdd(2.5 * (1 + rosaryF() * 0.6), d);
   else if (id === 'cells') { R.resDmg = (R.resDmg || 0) + dmg * (sk && sk.res && sk.res.gain ? sk.res.gain : 1); const need = ((d.atkMin + d.atkMax) / 2) * 5; while (R.resDmg >= need && (R.res || 0) < 5) { R.resDmg -= need; resAdd(1, d); } if ((R.res || 0) >= 5) R.resDmg = 0; }
   else if (id === 'faith' && m && m.type === 'undead' && sk && sk.holy) resAdd(4, d);
 }
 // dano recebido: Fúria e Fé
 function mechOnTaken(dmg, d, blocked) {
-  const id = mechId(); if (!id) return;
-  if (id === 'rage') resAdd(dmg / d.maxHp * 140, d);
-  if (id === 'faith') resAdd(blocked ? 12 : dmg / d.maxHp * 70, d);
+  const id = mechId(); if (!id) return; const rf = 1 + rosaryF() * 0.6; // Rosário de Fogo / Luz
+  if (id === 'rage') resAdd(dmg / d.maxHp * 140 * rf, d);
+  if (id === 'faith') resAdd((blocked ? 12 : dmg / d.maxHp * 70) * rf, d);
 }
 // o Escudo Sagrado absorve antes da vida; devolve o dano que sobra
 function mechAbsorb(dmg) { if (mechId() !== 'shield' || !(R.res > 0)) return dmg; const a = Math.min(R.res, dmg); R.res -= a; if (a > 0 && Math.random() < 0.3) floatText('player', '🛡️' + fmt(a), 'block'); return dmg - a; }
@@ -1723,14 +1723,14 @@ function healHero(h, d) { d = d || derived(); const over = S.hp + h - d.maxHp; S
 function mechBeforeHit(sk, targetKey, d) {
   const id = mechId(), out = { mult: 1, hits: 0, stun: 0, slow: 0, crit: false, aoeAll: false, boom: false, exec: 0, label: '' };
   if (!id) return out;
-  if (id === 'focus') { if (R.focusOn !== targetKey) { R.focusOn = targetKey; R.res = 0; } else resAdd(sk && sk.res && sk.res.gain ? sk.res.gain : 1, d); }
-  if (id === 'combo') { R.res = (R.res || 0) + 1; if (R.res >= 4) { R.res = 0; out.mult *= 1.8; out.label = 'Investida Celeste'; out.shown = false; Scene.mechFx && Scene.mechFx('dive'); } }
+  if (id === 'focus') { if (R.focusOn !== targetKey) { R.focusOn = targetKey; R.res = 0; } else resAdd((sk && sk.res && sk.res.gain ? sk.res.gain : 1) * (Math.random() < rosaryF() * 0.5 ? 2 : 1), d); }
+  if (id === 'combo') { R.res = (R.res || 0) + 1; if (R.res >= 4) { R.res = 0; out.mult *= 1.8 + rosaryF() * 0.6; out.label = 'Investida Celeste'; out.shown = false; Scene.mechFx && Scene.mechFx('dive'); } }
   if (id === 'elements' && sk) {
     R.elems = R.elems || [];
     if (sk.res && sk.res.nova) { const n = R.elems.length; if (n) { out.mult *= 1 + sk.res.nova * n * (n >= 3 ? 1.5 : 1); out.label = n >= 3 ? 'Nova Tríplice' : 'Nova ' + n + 'x'; Scene.mechFx && Scene.mechFx('nova', n); } R.elems = []; }
     else if (sk.elem) {
       const other = R.elems.find((e) => e !== sk.elem);
-      if (other) { const key = [sk.elem, other].sort().join('+'), rx = REACT[key]; out.mult *= rx.mult; out.stun = rx.stun || 0; out.slow = rx.slow || 0; out.crit = !!rx.crit; out.label = rx.name; out.shown = true; R.elems = []; Scene.mechFx && Scene.mechFx('react', rx.color, rx.name); }
+      if (other) { const key = [sk.elem, other].sort().join('+'), rx = REACT[key]; out.mult *= 1 + (rx.mult - 1) * (1 + rosaryF() * 0.35) + rosaryF() * 0.1; out.stun = rx.stun || 0; out.slow = rx.slow || 0; out.crit = !!rx.crit; out.label = rx.name; out.shown = true; R.elems = []; Scene.mechFx && Scene.mechFx('react', rx.color, rx.name); }
       else if (!R.elems.includes(sk.elem)) R.elems.push(sk.elem);
     }
     R.res = (R.elems || []).length;
@@ -1786,7 +1786,7 @@ function placeTurret(s, d) {
   R.turrets = (R.turrets || []).filter((t) => t.t > 0);
   if (R.turrets.length >= 2) R.turrets.shift();
   const tg = R.mon || R.pos, x = lerp(R.pos.x, tg.x, 0.45) + rnd(-0.8, 0.8), z = lerp(R.pos.z, tg.z, 0.45) + rnd(-0.8, 0.8);
-  R.turrets.push({ id: uid(), x, z, t: s.dur * (1 + d.buffDur), timer: 0.6, mult: s.mult * (1 + d.petMult) });
+  const rt = rosaryF(); R.turrets.push({ id: uid(), x, z, t: s.dur * (1 + d.buffDur) * (1 + rt * 0.6), timer: 0.6, mult: s.mult * (1 + d.petMult) * (1 + rt * 0.3) });
   log(`⚡ <b>${esc(s.name)}</b> montada!`, 'skill'); Sfx.play('magic');
   return true;
 }
@@ -1812,7 +1812,7 @@ function turretsBoom(d) { // Sobrecarga com 5 células: as torretas explodem
 // ---------- 👻 Colheita de Almas (Lanceiro): o dano causado enche a foice; os golpes grandes gastam as almas ----------
 const SOUL_MAX = 5, SOUL_HITS = 5; // ~5 golpes normais = 1 alma (vale igual contra monstro e jogador)
 const hasSouls = () => CLASSES[S.cls].mech === 'souls';
-function soulNeed(d) { return ((d.atkMin + d.atkMax) / 2) * SOUL_HITS; }
+function soulNeed(d) { return ((d.atkMin + d.atkMax) / 2) * SOUL_HITS * (1 - rosaryF() * 0.26); } // Rosário de Sombra: ~35% mais rápido
 function soulGain(dmg, sk, d) {
   if (!hasSouls() || R.inTown) return;
   R.soulIdle = 0; if ((R.souls || 0) >= SOUL_MAX) return;
@@ -2004,6 +2004,7 @@ function arenaFinish() { // chamado ao sair da Arena (tempo acabou, morte ou sa�
   const D = R.dungeon, rounds = D.cleared || 0, W = arenaWeek();
   W.best = Math.max(W.best || 0, rounds); S.stats.arenaBest = Math.max(S.stats.arenaBest || 0, rounds);
   const st = Math.floor(rounds / 4); if (st) dropSoul(1, S.lvl + rounds, st);
+  if (rounds >= 5) addSeals(Math.min(5, Math.floor(rounds / 5)), 'Arena');
   log(`🏟️ Fim da Arena: <b>${rounds} rodada(s)</b>.${st ? ` +${st} pedra(s) da Alma.` : ''}`, 'boss');
   if (D.group && R.coop && R.coop.lead && online()) Net.soc('sodscore', { rounds });
 }
@@ -2248,7 +2249,7 @@ function renderChar() {
     ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
     ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
     ${specOf() ? `<p class="set-mini" style="--sc:#ffd060">${specOf().icon} Especialização: ${specOf().name}</p>` : (S.lvl >= SPEC_LVL ? '<p class="good">✨ Escolha sua especialização na janela Skills!</p>' : '')}
-    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button></div>
+    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button></div>
     <h3>Status</h3>
     <div class="stat-grid">
       <span>Ataque</span><b>${fmt(d.atkMin)} - ${fmt(d.atkMax)}</b>
@@ -2297,6 +2298,7 @@ function itemDetail(it, compare = true) {
   if (it.set) { const st = SETS[it.set], n = setCounts()[it.set] || 0; h += `<div class="set-info" style="--sc:${st.color}"><b>Conjunto ${st.name}</b> (${n}/4 equipadas)<br><span class="${n >= 2 ? 'on' : ''}">2 peças: ${st.d2}</span><br><span class="${n >= 4 ? 'on' : ''}">4 peças: ${st.d4}</span></div>`; }
   if (S.lvl < it.req) h += `<div class="bad">Inativo até o nível ${it.req}</div>`;
   if (sockets(it)) h += `<div class="affix">Encaixes: ${(it.gems || []).map((g) => `${GEMS[g.t].icon}+${GEMS[g.t].per * g.l}${GEMS[g.t].label}`).join(' ') || ''} ${'◇'.repeat(sockets(it) - (it.gems || []).length)}</div>`;
+  if (it.rosary) { const ce = it.rosary.elem && CLASS_ELEM[it.rosary.elem]; h += `<div class="set-info" style="--sc:#ffe08a"><b>📿 Rosário nível ${it.rosary.lvl}/${ROSARY_MAX}</b> · +${it.rosary.lvl}% de XP<br>${ce ? `${ce.icon} ${ce.el} (${CLASSES[it.rosary.elem].name}): ${ce.txt(it.rosary.lvl / ROSARY_MAX)}` : 'Sem elemento: reformule no Irmão Aldric (📿 Ordem).'}</div>`; }
   h += `<div class="muted">Valor: ${fmt(itemValue(it))} ouro</div></div>`;
   return h;
 }
@@ -2647,7 +2649,7 @@ function weeklyState() { if (!S.weekly || S.weekly.week !== weekId()) S.weekly =
 function weeklyProgress(k, n = 1) { const W = weeklyState(); WEEKLY.forEach((w, i) => { if (w.k === k && W.prog[i] < w.need) { W.prog[i] = Math.min(w.need, W.prog[i] + n); if (W.prog[i] >= w.need) log(`🗓️ Missão semanal pronta: ${w.t}! Pegue o prêmio em Missões.`, 'lvl'); } }); }
 function claimWeekly(i) {
   const W = weeklyState(); if (W.claimed[i] || W.prog[i] < WEEKLY[i].need) return;
-  W.claimed[i] = true; dropSoul(1, S.lvl + 30, 3); S.stones += 5;
+  W.claimed[i] = true; dropSoul(1, S.lvl + 30, 3); S.stones += 5; addSeals(3, 'missão semanal');
   if (W.claimed.every(Boolean)) { dropSoul(1, S.lvl + 90, 3); log('🗓️ Todas as semanais feitas: +3 pedras da Alma de nível alto!', 'lvl'); }
   toast('Prêmio semanal recebido!', 'good'); renderTab();
 }
@@ -2772,6 +2774,85 @@ function tabStory() {
   return `<div class="q-sec">📖 História: a Marca do Vazio</div>${cur}${done}`;
 }
 
+// ============================================================
+//  📿 ORDEM E ROSÁRIO (versão enxuta): reputação com a Ordem da sua cidade → Rosário no lugar do amuleto,
+//  reformulado no elemento da classe (efeito especial ligado à mecânica) e evoluído do 1 ao 9
+// ============================================================
+const REP_TIERS = [{ name: 'Neutro', at: 0 }, { name: 'Cordial', at: 300 }, { name: 'Amigo', at: 900 }, { name: 'Honrado', at: 2000 }, { name: 'Devoto', at: 4000 }];
+const SEAL_REP = 60, ROSARY_LVL = 40, ROSARY_MAX = 9;
+const CLASS_ELEM = {
+  gladiador:  { el: 'Fogo',   icon: '🔥', txt: (f) => `Fúria enche ${Math.round(f * 60)}% mais rápido` },
+  engenheiro: { el: 'Terra',  icon: '⛰️', txt: (f) => `torretas duram ${Math.round(f * 60)}% mais e batem ${Math.round(f * 30)}% mais forte` },
+  cacadora:   { el: 'Vento',  icon: '🌪️', txt: (f) => `${Math.round(f * 50)}% de chance de ganhar Foco em dobro` },
+  lanceiro:   { el: 'Sombra', icon: '🌑', txt: (f) => `almas enchem ${Math.round(f * 35)}% mais rápido` },
+  paladino:   { el: 'Luz',    icon: '☀️', txt: (f) => `Fé enche ${Math.round(f * 60)}% mais rápido` },
+  valquiria:  { el: 'Trovão', icon: '⚡', txt: (f) => `Investida Celeste +${Math.round(f * 60)}% de dano` },
+  arcanista:  { el: 'Arcano', icon: '🌀', txt: (f) => `reações de elementos ${Math.round(f * 35)}% mais fortes` },
+  cleriga:    { el: 'Água',   icon: '💧', txt: (f) => `Escudo Sagrado até ${40 + Math.round(f * 25)}% da vida` },
+};
+function repState() { S.rep = S.rep || { pts: 0, seals: 0 }; return S.rep; }
+function repTier() { const p = repState().pts; let t = 0; REP_TIERS.forEach((x, i) => { if (p >= x.at) t = i; }); return t; }
+function addSeals(n, why) { if (!n) return; repState().seals += n; log(`🎖️ +${n} Selo${n > 1 ? 's' : ''} de Devoção${why ? ' (' + why + ')' : ''}.`, 'loot'); }
+function useSeals() {
+  const r = repState(); if (!r.seals) return;
+  const t0 = repTier(), n = r.seals; r.pts += n * SEAL_REP; r.seals = 0;
+  log(`🙏 ${n} selo(s) usados: +${fmt(n * SEAL_REP)} de reputação com a Ordem.`, 'lvl'); Sfx.play('buff');
+  if (repTier() > t0) { toast(`🙏 Reputação: ${REP_TIERS[repTier()].name}!`, 'good'); log(`🙏 Agora você é <b>${REP_TIERS[repTier()].name}</b> na Ordem${repTier() === 4 ? ': o Rosário está à venda!' : '.'}`, 'lvl'); }
+  renderTab(); renderNpc();
+}
+// o Rosário equipado (no lugar do amuleto) e a força do efeito da classe (0 a 1)
+function rosaryEq() { const a = S.equip && S.equip.amuleto; return a && a.rosary ? a : null; }
+function rosaryF() { const r = rosaryEq(); return r && r.rosary.elem === S.cls && S.lvl >= r.req ? r.rosary.lvl / ROSARY_MAX : 0; }
+function rosaryCost() { return Math.round(60000 * Math.pow(S.lvl / 40, 1.5)); }
+function evoCost(l) { return { seals: l * 2, essencia: l * 4, minerio: l * 8, gold: Math.round(25000 * Math.pow(l, 1.5)) }; }
+function buyRosary() {
+  if (repTier() < 4) return toast('Precisa ser Devoto na Ordem.', 'bad');
+  if (S.lvl < ROSARY_LVL) return toast(`Nível ${ROSARY_LVL} necessário.`, 'bad');
+  const c = rosaryCost(); if (S.gold < c) return toast('Ouro insuficiente.', 'bad');
+  if (S.inv.length >= 40) return toast('Mochila cheia.', 'bad');
+  S.gold -= c;
+  let it = null; for (let i = 0; i < 60; i++) { it = genItem(S.lvl, 6, 'amuleto'); if (it.rarity === 'epico' || it.rarity === 'lendario') break; }
+  it.rarity = it.rarity === 'lendario' ? 'lendario' : 'epico'; it.name = 'Rosário da Ordem'; it.rosary = { lvl: 1, elem: null }; it.req = Math.min(it.req, S.lvl);
+  S.inv.push(it); log('📿 Você comprou o <b>Rosário da Ordem</b>! Reformule no elemento da sua classe para liberar o efeito especial.', 'lvl'); toast('📿 Rosário comprado!', 'good'); Sfx.play('levelup');
+  R.dirty.inv = true; renderTab(); renderNpc();
+}
+function findRosary() { return [S.equip.amuleto, ...S.inv].find((i) => i && i.rosary) || null; }
+function reformRosary() {
+  const it = findRosary(); if (!it) return; const m = S.mats || {};
+  if (repState().seals < 5 || (m.essencia || 0) < 20) return toast('Precisa de 5 selos e 20 essências.', 'bad');
+  repState().seals -= 5; m.essencia -= 20; const ce = CLASS_ELEM[S.cls];
+  it.rosary.elem = S.cls; it.name = `Rosário de ${ce.el}`;
+  log(`${ce.icon} Rosário reformulado: <b>${it.name}</b>. Efeito: ${ce.txt(it.rosary.lvl / ROSARY_MAX)}.`, 'lvl'); Sfx.play('refineOk');
+  R.dirty.all = true; renderTab(); renderNpc();
+}
+function evolveRosary() {
+  const it = findRosary(); if (!it || it.rosary.lvl >= ROSARY_MAX) return;
+  const c = evoCost(it.rosary.lvl), m = S.mats || {};
+  if (repState().seals < c.seals || (m.essencia || 0) < c.essencia || (m.minerio || 0) < c.minerio || S.gold < c.gold) return toast('Materiais insuficientes.', 'bad');
+  repState().seals -= c.seals; m.essencia -= c.essencia; m.minerio -= c.minerio; S.gold -= c.gold;
+  it.rosary.lvl++; for (const a of it.affixes) a.val = +(a.val * 1.06).toFixed(2);
+  log(`📿 <b>${esc(it.name)}</b> evoluiu para o nível ${it.rosary.lvl}!`, 'lvl'); toast(`📿 Rosário nível ${it.rosary.lvl}!`, 'good'); Sfx.play('levelup');
+  R.dirty.all = true; renderTab(); renderNpc();
+}
+function tabOrdem() {
+  const r = repState(), t = repTier(), nx = REP_TIERS[t + 1], ro = findRosary(), ce = CLASS_ELEM[S.cls], m = S.mats || {};
+  const bar = nx ? Math.round((r.pts - REP_TIERS[t].at) / (nx.at - REP_TIERS[t].at) * 100) : 100;
+  let html = `<div class="ordem-box"><b>🙏 Reputação com a Ordem de ${esc(cityName())}: ${REP_TIERS[t].name}</b>
+    <div class="q-prog"><i style="width:${bar}%"></i></div><small>${fmt(r.pts)}${nx ? ` / ${fmt(nx.at)} para ${nx.name}` : ' (máximo)'}</small>
+    <small>🎖️ Selos de Devoção: <b>${r.seals}</b> (cada um = +${SEAL_REP} de reputação). Vêm das missões diárias, da semanal, das masmorras e da Arena.</small>
+    <div class="row-btns"><button class="btn small primary" data-ord="use" ${r.seals ? '' : 'disabled'}>Usar todos os selos</button><button class="btn small" data-ord="trade" ${(m.erva || 0) >= 8 && (m.minerio || 0) >= 6 && (m.essencia || 0) >= 2 ? '' : 'disabled'}>Trocar 8 🌿 + 6 ⛏️ + 2 ✨ por 1 selo</button></div></div>`;
+  html += `<div class="ordem-box"><b>📿 Rosário</b><small>Fica no lugar do amuleto. O valor dele é o efeito da sua classe: <b>${ce.icon} ${ce.el}</b> — ${ce.txt(1)} (no nível 9). Cada nível também dá +1% de XP.</small>`;
+  if (!ro) html += `<small>${t < 4 ? 'À venda quando você for <b>Devoto</b>.' : S.lvl < ROSARY_LVL ? `Precisa de nível ${ROSARY_LVL}.` : ''}</small><button class="btn small primary" data-ord="buy" ${t >= 4 && S.lvl >= ROSARY_LVL && S.gold >= rosaryCost() ? '' : 'disabled'}>Comprar Rosário (${fmt(rosaryCost())} ouro)</button>`;
+  else {
+    const f = ro.rosary.lvl / ROSARY_MAX, mine = ro.rosary.elem === S.cls;
+    html += `<small>Seu rosário: <b style="color:${rarityOf(ro).color}">${esc(ro.name)}</b> · nível ${ro.rosary.lvl}/${ROSARY_MAX}${ro === S.equip.amuleto ? ' · equipado' : ' · <b>não equipado</b>'}</small>${ro === S.equip.amuleto ? '' : '<button class="btn small primary" data-ord="equip">Equipar no lugar do amuleto</button>'}`;
+    html += mine ? `<small>Efeito agora: <b>${ce.txt(f)}</b> · +${ro.rosary.lvl}% de XP</small>` : `<small>${ro.rosary.elem ? 'Elemento de outra classe: sem efeito para você.' : 'Ainda sem elemento.'}</small><button class="btn small primary" data-ord="reform" ${r.seals >= 5 && (m.essencia || 0) >= 20 ? '' : 'disabled'}>Reformular em ${ce.icon} ${ce.el} (5 🎖️ + 20 ✨)</button>`;
+    if (ro.rosary.lvl < ROSARY_MAX) { const c = evoCost(ro.rosary.lvl); html += `<button class="btn small" data-ord="evolve" ${r.seals >= c.seals && (m.essencia || 0) >= c.essencia && (m.minerio || 0) >= c.minerio && S.gold >= c.gold ? '' : 'disabled'}>Evoluir para o nível ${ro.rosary.lvl + 1} (${c.seals} 🎖️ · ${c.essencia} ✨ · ${c.minerio} ⛏️ · ${fmt(c.gold)} ouro)</button>`; }
+    else html += '<small class="good">Rosário no nível máximo!</small>';
+  }
+  return html + '</div>';
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -2804,7 +2885,7 @@ function dailyReward() { return { gold: Math.round(300 * Math.pow(S.lvl, 1.3)), 
 function claimDaily(i) {
   const D = dailyState(), m = D.list[i]; if (!m || !m.done || m.claimed) return;
   m.claimed = true; const r = dailyReward();
-  S.gold += r.gold; S.stones += r.stones; Sfx.play('coin');
+  S.gold += r.gold; S.stones += r.stones; Sfx.play('coin'); addSeals(1, 'missão diária');
   log(`📅 Prêmio diário: +${fmt(r.gold)} ouro, +${r.stones} 💎.`, 'lvl');
   if (D.list.every((x) => x.claimed) && !D.bonusTaken) { D.bonusTaken = true; dropGem(1, S.lvl + 20); S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + 30 * 60000; log('🎉 Todas as diárias feitas! Bônus: uma gema e +50% de XP por 30 min.', 'lvl'); toast('Bônus diário completo!', 'good'); }
   renderTab();
@@ -3134,6 +3215,7 @@ const NPCS = {
   ferreiro: { name: 'Torvak, o Ferreiro', icon: '🔨', tab: 'refino', line: 'Traga suas armas e armaduras. Com pedras e ouro, deixo tudo mais forte... quase sempre.' },
   portal:   { name: 'Elyon, Mestre dos Portais', icon: '🌀', tab: 'mapas', line: 'Para onde deseja viajar, aventureiro? Meus portais levam a todos os cantos de Valdária.' },
   mestra:   { name: 'Sábia Mirela', icon: '📜', tab: 'habilidades', line: 'Domine suas técnicas. Se quiser recomeçar seu treino, posso redistribuir seus pontos.' },
+  ordem:    { name: 'Irmão Aldric, Guardião das Relíquias', icon: '📿', tab: 'ordem', line: 'A Ordem recompensa a devoção. Traga Selos de Devoção e, quando for digno, o Rosário será seu.' },
   bau:      { name: 'Baú do Aventureiro', icon: '🧰', tab: 'inventario', line: 'Seus equipamentos e espólios guardados com segurança.' },
 };
 
@@ -3149,7 +3231,7 @@ window.openNpc = openNpc;
 function renderNpc() {
   if (!R.npc) return;
   const n = NPCS[R.npc];
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, missoes: tabQuests }[n.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, missoes: tabQuests, ordem: tabOrdem }[n.tab];
   $('#modal-body').innerHTML = `<div class="npc-head"><span class="npc-ico">${n.icon}</span><div><b>${n.name}</b><p>“${n.line}”</p></div></div>
     ${R.npc === 'mestra' ? `<button class="btn small" data-act="reset-pts">Redistribuir pontos (${fmt(resetCost())} ouro)</button>` : ''}
     <div class="npc-body">${fn()}</div>
@@ -3169,7 +3251,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { ordem: 'Ordem e Rosário', conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   if (winLocked(name)) { toast(`Libera no nível ${UNLOCK[name]}.`); return; }
@@ -3190,7 +3272,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma, ordem: tabOrdem }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -3476,7 +3558,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3521,6 +3603,7 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.ord) { ({ equip: () => { const r = findRosary(); if (r && S.inv.includes(r)) { R.sel = r.uid; equipItem(r.uid); } renderTab(); renderNpc(); }, use: useSeals, buy: buyRosary, reform: reformRosary, evolve: evolveRosary, trade: () => { const m = S.mats; m.erva -= 8; m.minerio -= 6; m.essencia -= 2; addSeals(1, 'troca'); renderTab(); renderNpc(); } })[ds.ord](); return; }
   if (ds.gw) { enterGW(); return; }
   if (ds.arena) { enterArena(ds.arena === 'grupo'); return; }
   if (ds.achtab) { R.achTab = ds.achtab; return renderTab(); }

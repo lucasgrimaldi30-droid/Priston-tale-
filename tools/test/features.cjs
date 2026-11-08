@@ -191,6 +191,16 @@ const startServer = require('./server.cjs');
     { const sk = classSkills(); R.elems = ['fogo', 'gelo', 'raio']; const mb = mechBeforeHit(sk.find((x) => x.id === 'a6'), 'x', derived()); ok('Nova Elemental gasta os 3 elementos', mb.mult > 2 && R.elems.length === 0); }
     novo('cleriga', 75, { tut: 99 }); R.res = 0; { const d = derived(); S.hp = d.maxHp; healHero(d.maxHp * 0.2, d); ok('Clériga: cura que sobra vira Escudo Sagrado', R.res > 0 && R.res <= resMax(d)); const sh = R.res; const left = mechAbsorb(sh / 2); ok('Escudo absorve dano', left === 0 && R.res < sh); }
     ok('Descrições mostram as mecânicas', skillDesc(classSkills().find((x) => x.id === 'r6')).includes('Escudo') && mechHud().includes('mech-bar'));
+    // ordem e rosário
+    novo('gladiador', 60, { tut: 99 }); S.settings.auto = false; repState();
+    const D0 = dailyState(); D0.list[0].done = true; D0.list[0].prog = D0.list[0].need; claimDaily(0); ok('Diária dá Selo de Devoção', S.rep.seals === 1);
+    S.rep.seals = 70; useSeals(); ok('Selos viram reputação até Devoto', repTier() === 4 && S.rep.seals === 0);
+    S.gold = 1e7; S.inv = []; buyRosary(); const ros = S.inv.find((i) => i.rosary); ok('Comprar Rosário (no lugar do amuleto)', !!ros && ros.slot === 'amuleto' && ros.rosary.lvl === 1);
+    S.rep.seals = 50; S.mats = { essencia: 500, minerio: 500, erva: 100 }; reformRosary(); ok('Reformular no elemento da classe', ros.rosary.elem === 'gladiador' && ros.name.includes('Fogo'));
+    for (let i = 0; i < 3; i++) evolveRosary(); ok('Evoluir o Rosário', ros.rosary.lvl === 4);
+    R.sel = ros.uid; equipItem(ros.uid); R.res = 0; { const d = derived(); mechOnTaken(d.maxHp * 0.2, d, false); } const withR = R.res;
+    S.equip.amuleto = null; R.res = 0; { const d = derived(); mechOnTaken(d.maxHp * 0.2, d, false); } ok('Rosário de Fogo enche a Fúria mais rápido', withR > R.res, `${withR.toFixed(1)} > ${R.res.toFixed(1)}`);
+    ok('Janela da Ordem abre', tabOrdem().includes('Rosário') && !!NPCS.ordem);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });
