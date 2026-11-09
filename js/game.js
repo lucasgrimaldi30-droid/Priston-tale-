@@ -751,7 +751,7 @@ function dungeonReward() {
   const gold = 2500 * tier, stones = 2 + tier;
   S.gold += gold; S.stones += stones; S.stats.dungeons = (S.stats.dungeons || 0) + 1;
   for (let i = 0; i < 2; i++) dropItem(genItem(z.min + zoneSpan(z) + 2, 6));
-  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id); if (S.lvl >= 20) addSeals(1, 'masmorra'); if (S.lvl >= CAPE_LVL) addInsig(1, 'masmorra');
+  dropGem(1, z.min + 20); dropSoul(1, z.min + 20); dailyProgress('dungeons'); storyProgress('dungeon', z.id); addSeals(1, 'masmorra'); addInsig(1, 'masmorra');
   log(`🎁 <b>Masmorra concluída!</b> Baú do tesouro: +${fmt(gold)} ouro, +${stones} 💎, 2 itens e uma gema.`, 'lvl');
   toast('Masmorra concluída!', 'good'); Sfx.play('levelup');
 }
@@ -815,7 +815,7 @@ function towerClear() {
   let msg = `✅ Andar ${f} vencido! +${fmt(gold)} ouro`;
   if (first) {
     S.towerBest = f; if (f >= 30) addMountSp('urso');
-    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; if (S.lvl >= CAPE_LVL) addInsig(1, 'guardião da Torre'); dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
+    if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; addInsig(1, 'guardião da Torre'); dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
     msg += ' (novo recorde!)';
   }
   log(msg + '. Subindo...', 'lvl');
@@ -984,7 +984,7 @@ function killMonster(m) {
   R.lootCtx = !R.inTown && m.x != null && !m.coopKill ? { x: m.x, z: m.z } : null; // os prêmios caem no chão (o pet busca)
   if (m.boss) {
     if (m.wboss) { worldBossReward(m); R.wbJust = true; }
-    if (S.lvl >= CAPE_LVL) addInsig(m.wboss ? 5 : 1, m.wboss ? 'Chefe Mundial' : 'chefe');
+    addInsig(m.wboss ? 5 : 1, m.wboss ? 'Chefe Mundial' : 'chefe');
     if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
     S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
@@ -2152,8 +2152,29 @@ function applyUnlocks() {
     if (!lock && UNLOCK[w] && !S.unl[w]) { S.unl[w] = 1; if (S.lvl === UNLOCK[w] || S.lvl === UNLOCK[w] + 1) { toast(`🔓 Novo: ${UNLOCK_NAME[w]}!`, 'good'); log(`🔓 Liberado: <b>${UNLOCK_NAME[w]}</b> (veja o menu).`, 'lvl'); } }
   }
 }
+// ---------- guardado para depois: tudo é coletado desde o nível 1, mesmo com o sistema ainda trancado ----------
+const LATER = [
+  { id: 'alma', lvl: () => UNLOCK.alma, name: '🔮 Alma', n: () => Object.values(soulState().bag).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0), what: 'pedras da Alma' },
+  { id: 'capa', lvl: () => CAPE_LVL, name: '🧥 Capa de Guerra', n: () => (capeState(), (S.insig || 0) + (S.perg || 0)), what: 'insígnias e pergaminhos' },
+  { id: 'ordem', lvl: () => ROSARY_LVL, name: '📿 Rosário', n: () => repState().seals + Math.floor(repState().pts / SEAL_REP), what: 'selos de devoção' },
+];
+function laterOf(id) { return LATER.find((L) => L.id === id && S.lvl < L.lvl()); }
+function laterNote(id) { const L = laterOf(id); return L ? ` <small class="muted">· guardado, ${L.name} libera no nível ${L.lvl()}</small>` : ''; }
+function laterBox() {
+  const ls = LATER.filter((L) => S.lvl < L.lvl());
+  if (!ls.length) return '';
+  return `<div class="ev-box later-box"><b>🔒 Guardado para depois</b><small>Você já coleta desde o começo. Quando o sistema abrir, tudo estará esperando.</small>
+    ${ls.map((L) => `<small>${L.name} <span class="muted">(nível ${L.lvl()})</span>: <b>${fmt(L.n())}</b> ${L.what}</small>`).join('')}</div>`;
+}
+function laterUnlocks() {
+  S.unlL = S.unlL || {};
+  for (const L of LATER) if (S.lvl >= L.lvl() && !S.unlL[L.id]) {
+    S.unlL[L.id] = 1; const n = L.n();
+    if (S.lvl <= L.lvl() + 1 && n > 0) { toast(`🔓 ${L.name} liberado! Você já tem ${fmt(n)} ${L.what}.`, 'good'); log(`🔓 <b>${L.name}</b> liberado: você já guardou <b>${fmt(n)}</b> ${L.what} até aqui.`, 'lvl'); }
+  }
+}
 function renderAll() {
-  applyUnlocks();
+  applyUnlocks(); laterUnlocks();
   renderHeader();
   renderChar();
   renderEquip();
@@ -2586,7 +2607,7 @@ function dropSoul(chance, lvl, n = 1) {
     const t = ts[rint(0, ts.length - 1)], l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 45)));
     if (R && R.lootCtx) { lootSpawn('soul', { t, l }, 3); continue; }
     b[t][l]++;
-    log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível ${l + 1}!`, 'loot');
+    log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível ${l + 1}!${laterNote('alma')}`, 'loot');
   }
   Sfx.play('loot', { rarity: 3, gap: 100 }); R.dirty.inv = true;
   autoAlmaMaybe();
@@ -2854,7 +2875,7 @@ const CLASS_ELEM = {
 };
 function repState() { S.rep = S.rep || { pts: 0, seals: 0 }; return S.rep; }
 function repTier() { const p = repState().pts; let t = 0; REP_TIERS.forEach((x, i) => { if (p >= x.at) t = i; }); return t; }
-function addSeals(n, why) { if (!n) return; repState().seals += n; log(`🎖️ +${n} Selo${n > 1 ? 's' : ''} de Devoção${why ? ' (' + why + ')' : ''}.`, 'loot'); }
+function addSeals(n, why) { if (!n) return; repState().seals += n; log(`🎖️ +${n} Selo${n > 1 ? 's' : ''} de Devoção${why ? ' (' + why + ')' : ''}.${laterNote('ordem')}`, 'loot'); }
 function useSeals() {
   const r = repState(); if (!r.seals) return;
   const t0 = repTier(), n = r.seals; r.pts += n * SEAL_REP; r.seals = 0;
@@ -2924,8 +2945,8 @@ const CAPE_TIERS = [{ at: 1, name: 'Capa de Couro', color: '#7a5a3a' }, { at: 4,
 function capeState() { S.cape = S.cape || { lvl: 0, ref: 0, vis: true }; S.insig = S.insig || 0; S.perg = S.perg || 0; S.fios = S.fios || 0; return S.cape; }
 function capeTier(l) { let t = CAPE_TIERS[0]; for (const x of CAPE_TIERS) if (l >= x.at) t = x; return t; }
 function capeStats(l = capeState().lvl, r = capeState().ref) { const k = 1 + r * 0.04; return { atkp: +(l * 0.6 * k).toFixed(1), defp: +(l * 0.8 * k).toFixed(1), hpp: +(l * 0.8 * k).toFixed(1) }; }
-function addInsig(n, why) { if (n < 1) return; capeState(); S.insig += n; if (!R.insigLogT || Date.now() - R.insigLogT > 5000) { R.insigLogT = Date.now(); log(`🎗️ +${n} Insígnia${n > 1 ? 's' : ''} de Batalha${why ? ' (' + why + ')' : ''}.`, 'loot'); } }
-function addPerg(n, why) { capeState(); S.perg += n; log(`📜 +${n} Pergaminho${n > 1 ? 's' : ''} de Juramento${why ? ' (' + why + ')' : ''}.`, 'loot'); }
+function addInsig(n, why) { if (n < 1) return; capeState(); S.insig += n; if (!R.insigLogT || Date.now() - R.insigLogT > 5000) { R.insigLogT = Date.now(); log(`🎗️ +${n} Insígnia${n > 1 ? 's' : ''} de Batalha${why ? ' (' + why + ')' : ''}.${laterNote('capa')}`, 'loot'); } }
+function addPerg(n, why) { capeState(); S.perg += n; log(`📜 +${n} Pergaminho${n > 1 ? 's' : ''} de Juramento${why ? ' (' + why + ')' : ''}.${laterNote('capa')}`, 'loot'); }
 function capeEvoCost(l) { return l === 0 ? { insig: 40, perg: 20, gold: 0 } : { insig: 8 * l, perg: l, gold: Math.round(12000 * Math.pow(l, 1.4)) }; }
 function capeEvolve() {
   const c = capeState(); if (c.lvl >= CAPE_MAX) return;
@@ -3045,7 +3066,7 @@ function collectLoot(l) {
   const ctx = R.lootCtx; R.lootCtx = null;
   if (l.kind === 'item') dropItem(l.data);
   else if (l.kind === 'gem') { gemBag()[l.data.t][l.data.l]++; log(`${GEMS[l.data.t].icon} Você pegou ${GEMS[l.data.t].name} nível ${l.data.l + 1}!`, 'loot'); Sfx.play('loot', { rarity: 2 + l.data.l, gap: 100 }); }
-  else if (l.kind === 'soul') { soulState().bag[l.data.t][l.data.l]++; log(`🔮 Pedra da Alma: ${SOUL[l.data.t].icon} ${SOUL[l.data.t].name} nível ${l.data.l + 1}!`, 'loot'); autoAlmaMaybe(); }
+  else if (l.kind === 'soul') { soulState().bag[l.data.t][l.data.l]++; log(`🔮 Pedra da Alma: ${SOUL[l.data.t].icon} ${SOUL[l.data.t].name} nível ${l.data.l + 1}!${laterNote('alma')}`, 'loot'); autoAlmaMaybe(); }
   else if (l.kind === 'stone') giveStones(l.data);
   else if (l.kind === 'mat') giveMat(l.data.k, l.data.n);
   R.lootCtx = ctx; R.dirty.inv = true;
@@ -3561,7 +3582,7 @@ function tabInv() {
     <span><button class="btn small primary" data-act="equip-best">Equipar melhores</button><button class="btn small" data-act="sort">Ordenar</button>
     <button class="btn small" data-act="sell-common">Vender comuns</button>
     <button class="btn small" data-act="sell-magic">Vender ≤ mágicos</button></span></div>
-    <div class="inv-grid">`;
+    ${laterBox()}<div class="inv-grid">`;
   for (const it of S.inv) {
     const better = isUpgrade(it);
     html += `<div class="inv-item ${it.uid === R.sel ? 'sel' : ''} ${canEquip(it) ? '' : 'unusable'}" data-item="${it.uid}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}">

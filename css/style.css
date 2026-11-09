@@ -635,3 +635,4 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .ordem-box small { color: #c8c8d0; }
 .rb-box { border-color: rgba(255, 140, 60, .5); }
 .rb-box small { color: #c8c8d0; }
+.later-box { border-color: rgba(120, 180, 255, .35); }

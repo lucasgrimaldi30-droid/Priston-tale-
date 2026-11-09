@@ -191,6 +191,9 @@ Atalhos no `keydown` do fim de `game.js`.
   Lendário ★3: +10 níveis, vida ×2, ataque ×1,5, penas ×3, chefe `m.legend` com marcas 30% mais rápidas e Ovo Raro garantido). `S.rbDiff`,
   `rbDiff()` cai para Normal sem ★ suficiente; botões `data-rbdiff` no `rbBox()`. Calibrar com `tools/test/rebirth.cjs` (alvo: herói médio nv100
   sente o Lendário — sem poção pode morrer; herói Full tranquilo).
+- **Guardado para depois:** tudo é coletado desde o nível 1 (insígnias, pergaminhos, selos, pedras da Alma), mesmo com o sistema trancado.
+  `LATER` (alma → `UNLOCK.alma`, capa → `CAPE_LVL`, ordem → `ROSARY_LVL`), `laterNote(id)` no texto do log, `laterBox()` no topo da Mochila,
+  `laterUnlocks()` (em `renderAll`, marca `S.unlL`) avisa ao liberar quanto já foi guardado. Não trave coleta por nível: trave só o uso.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

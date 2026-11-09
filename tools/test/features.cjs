@@ -249,6 +249,9 @@ const startServer = require('./server.cjs');
     ok('Lendário: monstros +10 níveis', n0 - n1 > 7 && rbDiff() === 1, `${n1.toFixed(1)} → ${n0.toFixed(1)}`);
     { S.rbDiff = 3; R.mons = []; const b = spawnBoss(); const hOld = hatch; let hc = 0; hatch = (k) => { if (k === 'raro') hc++; return hOld(k); }; S.feathers = 0; b.x = 0; b.z = 0; killMonster(b); flushLoot();
       ok('Chefe Lendário: penas ×3 e ovo garantido', b.legend && S.feathers === 15 && hc >= 1, `${S.feathers} penas, ${hc} ovos`); hatch = hOld; S.rbDiff = 1; }
+    { novo('gladiador', 5, { tut: 99 }); capeState(); const i0 = S.insig, s0 = repState().seals; R.mons = []; const bb = makeMonster('Rei', '👑', 7, true, 1); Object.assign(bb, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(bb); killMonster(bb); flushLoot(); addSeals(1, 'teste');
+      ok('Coleta desde o nível 1 (insígnias e selos guardados)', S.insig > i0 && repState().seals > s0 && tabInv().includes('Guardado para depois') && laterNote('capa').includes('nível 30'));
+      S.lvl = CAPE_LVL; S.unlL = { alma: 1, ordem: 0 }; laterUnlocks(); ok('Ao liberar, avisa o que já foi guardado', S.unlL.capa === 1 && !tabInv().includes('🧥 Capa de Guerra <span')); }
     return out;
   });
   const pwa = await p.evaluate(async () => { try { const m = await (await fetch('manifest.webmanifest')).json(); const sw = await fetch('sw.js'); return m.icons.length === 3 && sw.ok; } catch (e) { return false; } });
