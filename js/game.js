@@ -1466,6 +1466,7 @@ function makeFullChar(name, cls, wtype) {
   // capa de guerra no máximo, Rosário da classe no nível 9 e moedas para testar evolução/refino
   S.cape = { lvl: CAPE_MAX, ref: CAPE_REF, vis: true }; S.insig = 300; S.perg = 60; S.fios = 20;
   S.rep = { pts: 4000, seals: 30 };
+  S.awk = {}; awkAuto(); // pontos de Despertar já distribuídos (sugestão da classe)
   if (S.equip.amuleto) { const am = S.equip.amuleto; am.rosary = { lvl: ROSARY_MAX, elem: cls }; am.name = `Rosário de ${CLASS_ELEM[cls].el}`; }
   S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
@@ -2317,7 +2318,14 @@ function renderEquip() {
     const label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
     if (!it) return `<div class="eq-slot empty" title="${label}"><span class="eq-ico">${sl === 'arma' ? '⚔️' : ARMOR_SLOTS[sl].icon}</span><small>${label}</small></div>`;
     return `<div class="eq-slot" data-eq="${sl}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}"><span class="eq-ico">${itemIcon(it)}</span><small>${itemTitle(it)}</small></div>`;
-  }).join('')}</div>`;
+  }).join('')}${capeSlot()}</div>`;
+}
+// a Capa de Guerra aparece junto do equipamento (abre a janela dela)
+function capeSlot() {
+  const c = capeState();
+  if (!c.lvl) return `<div class="eq-slot cape-slot ${S.lvl >= CAPE_LVL ? '' : 'empty'}" data-win="capa" title="Capa de Guerra"><span class="eq-ico">🧥</span><small>${S.lvl >= CAPE_LVL ? 'Capa: conquistar' : `Capa (nível ${CAPE_LVL})`}</small></div>`;
+  const t = capeTier(c.lvl);
+  return `<div class="eq-slot cape-slot" data-win="capa" style="--rc:${t.color}" title="${t.name}"><span class="eq-ico">🧥</span><small>${t.name} ${c.lvl}${c.ref ? ' +' + c.ref : ''}${c.vis ? '' : ' (oculta)'}</small></div>`;
 }
 
 function renderSkillBar() {
@@ -2430,6 +2438,7 @@ function chatCommand(txt) {
   const arg = args.join(' ');
   switch (cmd) {
     case 'sairgrupo': if (online()) Net.soc('pleave'); break;
+    case 'capa': R.win = null; openWin('capa'); break;
     case 'pk': if (S.lvl < PK_MIN) { log(`O PK libera no nível ${PK_MIN}.`, 'chat'); break; } S.settings.pk = !S.settings.pk; log(`⚔️ Modo PK ${S.settings.pk ? 'ligado: cuidado nos mapas de PK!' : 'desligado.'}`, 'chat'); break;
     case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /trocar Nome, /sairgrupo, /pk, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
     case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;

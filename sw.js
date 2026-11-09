@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do jogo para abrir rápido e funcionar sem internet.
 // Ao publicar uma versão nova, aumente VERSAO para renovar o cache.
-const VERSAO = 'valdaria-v23';
+const VERSAO = 'valdaria-v24';
 const BASE = ['./', './index.html', './css/style.css', './js/data.js', './js/audio.js', './js/scene.js', './js/scene3d.js', './js/net.js', './js/game.js',
   './js/vendor/three.min.js', './js/vendor/GLTFLoader.js', './js/vendor/SkeletonUtils.js', './manifest.webmanifest', './assets/icons/icon-192.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(VERSAO).then((c) => c.addAll(BASE).catch(() => {})).then(() => self.skipWaiting())); });
