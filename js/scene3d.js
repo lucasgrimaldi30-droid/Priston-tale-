@@ -900,6 +900,54 @@ const Scene3D = (() => {
     return g;
   }
 
+  // FOICE (novo estilo, em teste) — haste fina com faixas, lâmina grande serrilhada com vazado, lâmina de baixo em camada,
+  // gancho traseiro que vira asa, soquete com gema e ponteira. Desenho próprio, na pegada dos MMORPGs clássicos.
+  function wScythe2(t, k, M, rc) {
+    const g = group(null), len = 1.85 + t * 0.07, top = 0.5, end = top - len;
+    mk(G.cyl(0.022, 0.03, len, 8), k.grip, g, 0, top - len / 2, 0);
+    for (let i = 0; i < 3 + Math.min(t, 3); i++) mk(G.cyl(0.036, 0.036, 0.05, 8), i % 2 ? k.gold : k.metal, g, 0, top - 0.25 - i * (len - 0.6) / (3 + Math.min(t, 3)), 0);
+    if (t >= 2) mk(tubeG([[0.03, end + 0.5, 0], [0, end + 0.4, 0.03], [-0.03, end + 0.3, 0], [0, end + 0.2, -0.03], [0.03, end + 0.12, 0]], 0.009, 20), k.edge, g, 0, 0, 0);
+    // ponteira
+    const bt = new THREE.Shape(); bt.moveTo(0, 0); bt.quadraticCurveTo(0.05 + t * 0.006, 0.08, 0, 0.2 + t * 0.03); bt.quadraticCurveTo(-0.05 - t * 0.006, 0.08, 0, 0);
+    mk(extrudeG(bt, 0.016), k.metal, g, 0, top, 0); mk(G.torus(0.04, 0.012), k.gold, g, 0, top, 0).rotation.x = Math.PI / 2;
+    // soquete com gema
+    const head = group(g, 0, end, 0);
+    mk(G.cyl(0.05, 0.04, 0.2, 8), k.metal, head, 0, 0.04, 0);
+    mk(G.torus(0.075, 0.018), k.gold, head, 0.0, 0, 0);
+    mk(G.oct(0.045 + t * 0.004), t >= 1 ? k.glow : k.gold, head, 0, 0, 0);
+    // lâmina principal: crescente com dorso serrilhado e vazado (corpo escuro, fio claro, dorso dourado)
+    const bl = group(head); bl.scale.y = -1; // a ponta desce em direção ao cabo, como numa foice de verdade
+    const dark = M(mixCol(k.col, '#0e0c14', 0.6), { r: 0.35, m: 0.2 }), steel = M(mixCol(k.col, '#f4f6fa', 0.7), { r: 0.2, m: 0.2, e: t >= 3 ? rc : '#000000', ei: t >= 3 ? 0.35 : 0 });
+    const L = 0.78 + t * 0.12, curl = L * 0.5, w = 0.1 + t * 0.006, nT = Math.min(4, 1 + t);
+    const P0 = [0, w], P1 = [L * 0.55, w + 0.2], P2 = [L, -curl], bez = (u) => [(1 - u) * (1 - u) * P0[0] + 2 * u * (1 - u) * P1[0] + u * u * P2[0], (1 - u) * (1 - u) * P0[1] + 2 * u * (1 - u) * P1[1] + u * u * P2[1]];
+    const sh = new THREE.Shape(); sh.moveTo(0, w); const spine = [];
+    for (let i = 1; i <= 16; i++) {
+      const u = i / 16, q = bez(u); spine.push([0.06 + q[0], q[1], 0]);
+      if (t >= 1 && i % Math.round(16 / (nT + 1)) === 0 && i < 15) { const a2 = bez(u - 0.03), b3 = bez(u + 0.02), nx = -(b3[1] - a2[1]), ny = b3[0] - a2[0], nl = Math.hypot(nx, ny) || 1, th = 0.06 + t * 0.012; sh.lineTo(a2[0], a2[1]); sh.lineTo(q[0] + nx / nl * th + 0.03, q[1] + ny / nl * th); sh.lineTo(b3[0], b3[1]); }
+      else sh.lineTo(q[0], q[1]);
+    }
+    sh.quadraticCurveTo(L * 0.5, -0.1, 0, -w);
+    if (t >= 3) { const hole = new THREE.Path(); hole.absellipse(L * 0.3, w * 0.55, 0.085, 0.04, 0, Math.PI * 2, false, 0.25); sh.holes.push(hole); }
+    mk(extrudeG(sh, 0.02), dark, bl, 0.06, 0, 0);
+    // fio: faixa clara ao longo do corte
+    const ed = new THREE.Shape(); ed.moveTo(0, -w); ed.quadraticCurveTo(L * 0.5, -0.1, L, -curl); ed.quadraticCurveTo(L * 0.5, -0.1 + 0.055 + t * 0.004, 0, -w + 0.05); ed.lineTo(0, -w);
+    mk(extrudeG(ed, 0.026), steel, bl, 0.06, 0, 0);
+    mk(tubeG([[0.06, w, 0], ...spine.filter((_, i) => i % 3 === 2), [0.06 + L, -curl, 0]], 0.012, 20), k.gold, bl, 0, 0, 0); // dorso
+    if (t >= 2) { // segunda lâmina, em camada por baixo
+      const L2 = L * 0.62, y2 = -0.15 - t * 0.008;
+      mk(extrudeG(crescent(L2, L2 * 0.55, 0.045), 0.014), steel, bl, 0.07, y2, 0);
+      mk(tubeG([[0.07, y2 + 0.045, 0], [0.07 + L2 * 0.55, y2 + 0.15, 0], [0.07 + L2, y2 - L2 * 0.55, 0]], 0.008, 12), k.gold, bl, 0, 0, 0);
+    }
+    // gancho traseiro (vira asa nos níveis altos)
+    if (t >= 1) { const L3 = 0.2 + t * 0.06; const hk = mk(extrudeG(crescent(L3, L3 * (t >= 4 ? 0.9 : 0.5), 0.05), 0.016), dark, bl, -0.05, 0.02, 0); hk.scale.x = -1; mk(G.cone(0.02, 0.08, 4), k.gold, bl, -0.05 - L3, -L3 * (t >= 4 ? 0.9 : 0.5), 0).rotation.z = 2.4; }
+    if (t >= 4) for (let i = 0; i < 3; i++) { const f = mk(extrudeG(crescent(0.22 - i * 0.04, 0.12, 0.03), 0.01), k.white, bl, -0.07, 0.12 + i * 0.07, 0); f.scale.x = -1; f.rotation.z = -0.5 - i * 0.25; }
+    if (t >= 3) for (const z of [0.05, -0.05]) mk(G.oct(0.035), k.glow, bl, 0.2, w * 0.2, z);
+    if (t >= 5) {
+      for (let i = 0; i < 3; i++) { const q = bez(0.35 + i * 0.22); const c = mk(G.oct(0.035), k.glow, bl, 0.06 + q[0] + 0.05, q[1] + 0.16, 0); c.scale.y = 1.7; }
+      const gl = glowSprite(rc, 0.9, 0.35); gl.position.set(L * 0.45, 0.05, 0); head.add(gl); mk(G.torus(0.13, 0.01), k.glow, head, 0, 0, 0);
+    }
+    return g;
+  }
   // ---- segunda arma de cada classe ----
   // MACHADO DE DUAS MÃOS — duas lâminas cheias, cabo longo, espigão
   function wGreatAxe(t, k, M, rc) {
@@ -1045,7 +1093,7 @@ const Scene3D = (() => {
     return g;
   }
   const W_BUILD = { foice: wScythe, arco: wBow, espada: wSword, machado: wAxe, martelo: wHammer, dardo: wJavelin, cajado: wStaff, cetro: wScepter,
-    machadao: wGreatAxe, malho: wMaul, besta: wCrossbow, lanca: wSpear, montante: wGreatSword, glaive: wGlaive, varinha: wWand, baculo: wCrosier };
+    foice2: wScythe2, machadao: wGreatAxe, malho: wMaul, besta: wCrossbow, lanca: wSpear, montante: wGreatSword, glaive: wGlaive, varinha: wWand, baculo: wCrosier };
   function buildWeaponT(wt, it, M) {
     const t = it ? tierOf(it) : 0, rc = it && rarIdx(it) > 0 ? rarOf(it).color : (it ? '#e0d8c0' : '#c8c0b0');
     const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0, it ? vtOf(it) : 0);
@@ -3331,9 +3379,24 @@ const Scene3D = (() => {
       } catch (e) { res(null); }
     });
   }
+  // imagem de um item sozinho (teste de modelos; serve também para ícones)
+  function itemShot(it, w = 300, h = 520, wtOverride, cls) {
+    try {
+      CUR_STYLE = CLASS_STYLE[cls] || null;
+      if (!GLOW) GLOW = glowTex();
+      if (!pv) { const c = document.createElement('canvas'); const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true }); r.setClearColor(0x000000, 0); const sc = new THREE.Scene(); const key = new THREE.DirectionalLight(0xfff0d8, 0.8); key.position.set(2.5, 5, 6); sc.add(key); const rim = new THREE.DirectionalLight(0xffa860, 0.45); rim.position.set(-4, 3, -4); sc.add(rim); sc.add(new THREE.AmbientLight(0xffffff, 0.5)); pv = { r, sc, cam: new THREE.PerspectiveCamera(30, 1, 0.1, 50) }; }
+      pv.r.setPixelRatio(1); pv.r.setSize(w, h, false);
+      const g = buildWeaponT(wtOverride || it.wtype, it, matFactory([])), hold = group(null); hold.rotation.x = Math.PI; hold.add(g); hold.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(hold), c = new THREE.Vector3(), sz = new THREE.Vector3(); box.getCenter(c); box.getSize(sz);
+      pv.sc.add(hold); pv.cam.aspect = w / h; pv.cam.updateProjectionMatrix();
+      const d = Math.max(sz.y / 2 / Math.tan(Math.PI / 12), sz.x / 2 / Math.tan(Math.PI / 12) / (w / h)) * 1.12 + 0.5;
+      pv.cam.position.set(c.x + d * 0.25, c.y, c.z + d); pv.cam.lookAt(c);
+      pv.r.render(pv.sc, pv.cam); const url = pv.r.domElement.toDataURL('image/png'); pv.sc.remove(hold); disposeObj(hold); return url;
+    } catch (e) { console.warn('itemShot', e && e.message); return null; } finally { CUR_STYLE = null; }
+  }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, heroShot, classShot, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, heroShot, classShot, itemShot, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
