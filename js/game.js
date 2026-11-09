@@ -475,7 +475,7 @@ const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
 const DANGER = { hp: 3, atk: 9, xp: 2.4, bossHp: 4, bossAtk: 4 };
 function spawnSource() {
   const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
-  if (z.special) { const cr = Math.random() < 0.25, camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)]; return { mon: cr ? z.boss : z.monsters[rint(0, 2)], lvl: clamp(S.lvl + rint(-2, 2), z.min, 100), center: c, spread: 3.5, crystal: cr }; }
+  if (z.special) { const cr = z.id === 'gw' && Math.random() < 0.25, camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)]; return { mon: cr ? z.boss : z.monsters[rint(0, 2)], lvl: clamp(S.lvl + rint(-2, 2), z.min, 100), center: c, spread: 3.5, crystal: cr }; }
   if (exits.length && Math.random() < BORDER_CHANCE) {
     const ex = exits[rint(0, exits.length - 1)], nz = zoneById(ex.to), ns = zoneSpan(nz), mi = rint(0, 2);
     const lvl = ex.side === 'prev' ? nz.min + ns - rint(1, 3) : nz.min + rint(0, 2);
@@ -534,7 +534,7 @@ function spawnWorldMonster(initial = false) {
 function spawnBoss() {
   if (R.mons.some((m) => m.boss)) return null;
   const z = zoneById(S.zone);
-  const m = makeMonster(z.boss[0], z.boss[1], z.min + zoneSpan(z) + 2, true, 1);
+  const m = makeMonster(z.boss[0], z.boss[1], z.special ? Math.min(110, S.lvl + 3) : z.min + zoneSpan(z) + 2, true, 1);
   Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2 });
   if (z.danger) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.bossHp); m.atk = Math.round(m.atk * DANGER.bossAtk); m.xp *= 3; m.danger = true; }
   R.mons.push(m);
@@ -803,7 +803,7 @@ function eventsBox() {
 }
 function tabTower() {
   const best = S.towerBest || 0, st = towerStart();
-  return eventsBox() + gwBox() + arenaBox() + `<div class="tower-box"><h3>🗼 Torre Infinita</h3>
+  return eventsBox() + rbBox() + gwBox() + arenaBox() + `<div class="tower-box"><h3>🗼 Torre Infinita</h3>
     <p>Andares sem fim. Cada andar é mais forte que o anterior e a cada 5 andares há um guardião. Morrer só te tira da torre, sem perder nada.</p>
     <p>Primeira vez em cada andar: <b>ouro triplo</b>. Guardiões vencidos pela primeira vez dão <b>pedras, item e gema</b>.</p>
     <div class="stat-cards"><div><small>Seu recorde</small><b>Andar ${best}</b></div><div><small>Monstros no próximo</small><b>Nv. ${towerMonLvl(best + 1)}</b></div></div>
@@ -938,12 +938,13 @@ function killMonster(m) {
   const lvlDiff = S.lvl - m.lvl;
   const xpMul = lvlDiff > 8 ? Math.max(0.1, 1 - (lvlDiff - 8) * 0.1) : 1; // penalidade por matar monstro muito fraco
   const sky = !R.dungeon ? worldSky(S.zone) : { night: 0, rain: false }, ev = eventNow();
-  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1) * socialXp());
+  const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1) * socialXp() * (S.zone === 'rb' && !m.dun ? 1.5 : 1));
   S.best = S.best || {}; const bk = S.best[m.name] || 0; S.best[m.name] = bk + 1;
   if (BEST_TIERS.includes(bk + 1)) log(`📖 Bestiário: ${m.icon} ${esc(m.name)} chegou a ${bk + 1} derrotados! (+0,25% dano e XP)`, 'lvl');
   petGainXp(m.boss ? 25 : m.elite ? 5 : 1);
   { const M = meter(); M.kills++; M.xp += xp; }
-  const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1));
+  const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1) * (S.zone === 'rb' && !m.dun ? 1.3 : 1));
+  if (S.zone === 'rb' && !m.dun) { const pf = m.boss ? 5 : m.elite ? (Math.random() < 0.6 ? 1 : 0) : (Math.random() < 0.12 ? 1 : 0); if (pf) { S.feathers = (S.feathers || 0) + pf; if (m.boss || Math.random() < 0.3) log(`🪶 +${pf} Pena${pf > 1 ? 's' : ''} de Fênix.`, 'loot'); } }
   if (online() && Net.st.party && !R.coop) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
@@ -1167,7 +1168,7 @@ function tick() {
   if (R.dungeon) { if (!isMember()) dungeonTick(dt); }
   // população do mapa
   else if (R.mons.filter((m) => !m.boss).length < WORLD.cap) { R.spawnT -= dt; if (R.spawnT <= 0) { spawnWorldMonster(); R.spawnT = 3.5; } }
-  if (!R.dungeon && (R.bossFight || ((S.settings.autoBoss || (storyWants() && storyWants().obj.k === 'boss' && storyWants().zone === S.zone)) && (S.zoneKills[S.zone] || 0) >= 25 && S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1 && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
+  if (!R.dungeon && (R.bossFight || ((S.settings.autoBoss || (storyWants() && storyWants().obj.k === 'boss' && storyWants().zone === S.zone)) && (S.zoneKills[S.zone] || 0) >= 25 && (zoneById(S.zone).special || S.lvl >= zoneById(S.zone).min + zoneSpan(zoneById(S.zone)) - 1) && !R.mons.some((m) => m.boss)))) { R.bossFight = false; spawnBoss(); }
   usePotions(d);
   if (S.hp <= 0) return;
   if (isMember()) coopMemberTick(dt);
@@ -1473,6 +1474,7 @@ function makeFullChar(name, cls, wtype) {
   S.cape = { lvl: CAPE_MAX, ref: CAPE_REF, vis: true }; S.insig = 300; S.perg = 60; S.fios = 20;
   S.rep = { pts: 4000, seals: 30 };
   S.awk = {}; awkAuto(); // pontos de Despertar já distribuídos (sugestão da classe)
+  S.rebirths = 1; S.feathers = 60; // herói de teste já renascido: abre o Vale da Fênix
   if (S.equip.amuleto) { const am = S.equip.amuleto; am.rosary = { lvl: ROSARY_MAX, elem: cls }; am.name = `Rosário de ${CLASS_ELEM[cls].el}`; }
   S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
@@ -3068,6 +3070,20 @@ function tabPets() {
     ${Object.entries(PET_SP).map(([k, v]) => { const q = P.list.find((x) => x.sp === k); return `<div class="q-card ${q ? 'ok' : ''} ${q && q.uid === P.active ? 'tt-eq' : ''}"><h4><span>${q ? v.icon : '🥚'} ${v.name}${q ? ` · nível ${q.lvl}` : ''}</span><small class="q-rew">${bText(v.b, q ? q.lvl : PET_MAX)}${q ? '' : ' (no nível 30)'}${v.range ? ' · alcance +60%' : ''}</small></h4>${q ? (q.uid === P.active ? '<small class="good">✔ acompanhando</small>' : `<div class="item-actions"><button class="btn small primary" data-pet="use:${q.uid}">Levar este</button></div>`) : `<small class="muted">${v.rare ? 'Só em Ovo Ancestral (Chefe Mundial).' : 'Nasce de ovos.'}</small>`}</div>`; }).join('')}`;
 }
 
+// ---------- 🪶 Vale da Fênix (só para quem renasceu) ----------
+const FEATHER_SHOP = [
+  { id: 'ovo', name: 'Ovo Ancestral (✨ Espírito)', cost: 50, give: () => hatch('espirito') },
+  { id: 'alma', name: 'Pedra da Alma nível 3', cost: 6, give: () => { const ts = Object.keys(SOUL), t = ts[rint(0, ts.length - 1)]; soulState().bag[t][2]++; log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível 3!`, 'loot'); } },
+  { id: 'insig', name: '5 Insígnias de Batalha', cost: 3, give: () => addInsig(5, 'Penas de Fênix') },
+];
+function featherBuy(id) { const f = FEATHER_SHOP.find((x) => x.id === id); if (!f || (S.feathers || 0) < f.cost) return toast('Penas de Fênix insuficientes.', 'bad'); S.feathers -= f.cost; f.give(); Sfx.play('coin'); renderTab(); }
+function rbBox() {
+  const ok = S.rebirths > 0;
+  return `<div class="ev-box rb-box"><b>🪶 Vale da Fênix ${ok ? '' : '🔒'}</b>
+    <small>Só para quem já renasceu. Os monstros acompanham o seu nível, rendem <b>+50% de XP e +30% de ouro</b> e deixam <b>Penas de Fênix</b>. O chefe é a Fênix Ancestral.</small>
+    ${ok ? `<small>🪶 Penas de Fênix: <b>${S.feathers || 0}</b></small><div class="row-btns"><button class="btn small primary" data-zone="rb">Ir para o Vale da Fênix</button>${FEATHER_SHOP.map((f) => `<button class="btn small" data-pena="${f.id}" ${(S.feathers || 0) >= f.cost ? '' : 'disabled'}>${f.name} (${f.cost} 🪶)</button>`).join('')}</div>` : '<small>Chegue ao nível 100 e renasça (janela do Herói) para abrir.</small>'}</div>`;
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -3144,6 +3160,7 @@ function rebirth() {
     if (S.quests) S.quests.active = {};
     const d = derived(); S.hp = d.maxHp; S.mp = d.maxMp;
     log(`🌟 <b>Renascimento ${S.rebirths}!</b> Seu herói recomeça mais forte.`, 'lvl'); Scene.levelUp(); Sfx.play('levelup');
+    if (S.rebirths === 1) { log('🪶 O <b>Vale da Fênix</b> abriu para você! Veja na janela Mapas: monstros no seu nível, +50% de XP e Penas de Fênix.', 'boss'); toast('🪶 Vale da Fênix liberado!', 'good'); }
     closeWin(); R.dirty.all = true;
   });
 }
@@ -3225,6 +3242,7 @@ const TITLES = [
   // provisórios: perdem ao morrer ou com o tempo
   { id: 'rei_semana', name: 'Coroa do Cerco', icon: '👑', desc: 'Seu clã ser Rei da Semana no Cerco da Coroa', prog: () => (wk() && wk().gwRank === 1 ? 1 : 0), need: 1, b: { atkp: 4, defp: 4 } },
   { id: 'sobrevivente', name: 'Sobrevivente', icon: '🏟️', desc: 'Chegue à rodada 30 da Arena da Sobrevivência', prog: () => S.stats.arenaBest || 0, need: 30, b: { hpp: 5, defp: 3 } },
+  { id: 'fenix', name: 'Asas da Fênix', icon: '🪶', desc: 'Derrote 10 Fênix Ancestrais no Vale da Fênix', prog: () => (S.bosses && S.bosses.rb) || 0, need: 10, b: { xpb: 5, hpp: 3 } },
   { id: 'manto', name: 'Portador do Manto', icon: '🧥', desc: 'Leve a Capa de Guerra ao nível 13', prog: () => (S.cape ? S.cape.lvl : 0), need: 13, b: { defp: 3, hpp: 3 } },
   { id: 'imortal', name: 'IMORTAL', icon: '💠', temp: 'death', desc: 'Fique 2 horas jogando sem morrer (perde ao morrer)', prog: () => Math.floor((S.streak ? S.streak.alive : 0) / 60), need: 120, unit: 'min', b: { evadep: 8 } },
   { id: 'invicto', name: 'Invicto', icon: '🛡️', temp: 'death', desc: 'Derrote 1.000 monstros seguidos sem morrer (perde ao morrer)', prog: () => (S.streak ? S.streak.kills : 0), need: 1000, b: { atkp: 5, defp: 3 } },
@@ -3776,7 +3794,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-pena],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3822,6 +3840,7 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.pena) { featherBuy(ds.pena); return; }
   if (ds.ptab) { R.petTab = ds.ptab; return renderTab(); }
   if (ds.pet) { const [a, u] = ds.pet.split(':'); if (a === 'feed') feedPet(); else { petsState().active = a === 'off' ? null : u; R.petPos = null; R.dirty.all = true; renderTab(); } return; }
   if (ds.mnt) { const [a, u] = ds.mnt.split(':'); if (a === 'up') mountUp(u); else { petsState(); S.mounts.active = a === 'off' ? null : u; R.dirty.all = true; renderTab(); } return; }
@@ -3868,6 +3887,7 @@ document.addEventListener('click', (e) => {
   if (ds.npc) { if (R.inTown) { if (Scene.walkToNpc && Scene.walkToNpc(ds.npc)) return; openNpc(ds.npc); } return; }
   if (t.id === 'boss-btn') { if ((S.zoneKills[S.zone] || 0) >= 25) { R.bossFight = true; log('Você desafiou o chefe do mapa!', 'boss'); } return; }
   if (ds.zone) {
+    if (zoneById(ds.zone) && zoneById(ds.zone).rebirth && !(S.rebirths > 0)) { toast('O Vale da Fênix é só para quem já renasceu.', 'bad'); return; }
     const changed = ds.zone !== S.zone;
     if (changed) { S.zone = ds.zone; R.worldZone = null; R.mon = null; R.respawn = 0.5; R.bossFight = false; log(`Você viajou para ${zoneById(ds.zone).name}.`, 'muted'); }
     if (R.dungeon) exitDungeon(false);

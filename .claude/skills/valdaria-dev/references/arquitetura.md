@@ -182,6 +182,10 @@ Atalhos no `keydown` do fim de `game.js`.
   pega; o herói pega a 1,4 m; o resto chega sozinho em 12 s (com pet) ou 20 s. `flushLoot()` ao trocar de mapa/masmorra/cidade (nada se perde).
   Filtro `S.lootF` por raridade e tipo (desmarcado vira ouro se `vender`). Cena: `updateLoot`/`lootPick`, pet e montaria com visual por espécie
   (nomes `Pet ...`/`Montaria ...` em `MON`). Janela `pets` (abas Pets, Montarias, Coleta). Progresso offline continua indo direto para a mochila.
+- **Vale da Fênix (só renascidos):** `RB_ZONE` (`rb`, `special`, `rebirth`), teleporte pela caixa `rbBox()` na janela de Mapas (o clique em
+  `data-zone` recusa sem `S.rebirths`). Monstros no nível do herói (ramo `special` do `spawnSource`; cristais só no `gw`), chefe Fênix Ancestral no
+  nível do herói +3 (`spawnBoss` com `z.special`), +50% XP e +30% ouro, **Penas de Fênix** (`S.feathers`: 12% comum, 60% elite, 5 chefe) trocadas em
+  `FEATHER_SHOP` (Ovo Ancestral 50, Pedra da Alma nv3 6, 5 insígnias 3). Heróis de teste vêm com `rebirths = 1`. Título "Asas da Fênix".
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).

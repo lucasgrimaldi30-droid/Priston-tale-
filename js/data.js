@@ -141,6 +141,7 @@ const MON_TYPE = {
   'Cogumelo Saltador': 'plant', 'Fada Sombria': 'spirit', 'Lagarta Gigante': 'beast', 'Rainha Micélio': 'plant',
   'Pantera Negra': 'beast', 'Planta Carnívora': 'plant', 'Xamã Tribal': 'demon', 'Serpente Ancestral': 'beast',
   'Sentinela do Vazio': 'demon', 'Colosso Partido': 'construct', 'Ceifador Astral': 'undead', 'Avatar da Fenda': 'demon', 'Vaelor, o Arauto do Vazio': 'demon',
+  'Fênix Jovem': 'beast', 'Guardião de Cinzas': 'construct', 'Salamandra Solar': 'beast', 'Fênix Ancestral': 'spirit',
   'Cristal da Coroa': 'construct', 'Guardião da Coroa': 'construct', 'Arqueiro da Muralha': 'undead', 'Cavaleiro Sitiante': 'demon',
   'Harpia': 'beast', 'Golem Rúnico': 'construct', 'Guerreiro da Tempestade': 'spirit', 'Senhor do Trovão': 'spirit',
 };
@@ -182,7 +183,9 @@ const BRANCHES = [
 ];
 // mapa especial do Cerco da Coroa (guerra de clãs aos domingos): os monstros acompanham o nível de quem entra
 const GW_ZONE = { id: 'gw', name: 'Fortaleza da Coroa', min: 20, span: 80, tier: 8, special: true, icon: '🏰', monsters: [['Guardião da Coroa','🛡️'],['Arqueiro da Muralha','🏹'],['Cavaleiro Sitiante','⚔️']], boss: ['Cristal da Coroa','💎'] };
-const ALL_ZONES = [...ZONES, ...BRANCHES, GW_ZONE];
+// mapa exclusivo de quem renasceu: monstros acompanham o nível, mais XP e ouro, Penas de Fênix
+const RB_ZONE = { id: 'rb', name: 'Vale da Fênix', min: 1, span: 99, tier: 9, special: true, rebirth: true, icon: '🪶', monsters: [['Fênix Jovem','🐦‍🔥'],['Guardião de Cinzas','🗿'],['Salamandra Solar','🦎']], boss: ['Fênix Ancestral','🔥'] };
+const ALL_ZONES = [...ZONES, ...BRANCHES, GW_ZONE, RB_ZONE];
 
 const RARITIES = [
   { id: 'comum',    name: 'Comum',     color: '#c8c8c8', mult: 1.0, affixes: 0, w: 60 },
@@ -260,7 +263,7 @@ function worldSky(zid) {
   const night = Math.max(0, Math.min(1, (-Math.cos(ph * Math.PI * 2) - 0.25) / 0.6)); // 0 dia … 1 noite
   const win = Math.floor(t / 360000), zi = (ALL_ZONES.findIndex((z) => z.id === zid) + 1) * 7919;
   let h = (win * 2654435761 + zi) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822507) >>> 0; h ^= h >>> 13;
-  const dry = ['z4', 'z5', 'z7', 'z8', 'z10', 'e1', 'gw'].includes(zid) || !/^z\d+$/.test(zid || ''); // caverna, deserto, neve, vulcão, abismo
+  const dry = ['z4', 'z5', 'z7', 'z8', 'z10', 'e1', 'gw', 'rb'].includes(zid) || !/^z\d+$/.test(zid || ''); // caverna, deserto, neve, vulcão, abismo
   const rain = !dry && (h % 100) < (zid === 'b4' ? 75 : 35); // nos Picos Trovejantes quase sempre há tempestade
   return { night, rain, isNight: night > 0.5, phase: ph };
 }

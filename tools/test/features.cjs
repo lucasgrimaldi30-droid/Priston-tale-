@@ -218,6 +218,7 @@ const startServer = require('./server.cjs');
     $('#char-name').value = 'Testadora'; document.getElementById('create-full').click(); stopLoop();
     ok('Criar no nível 100 (teste) no 5º espaço', slot === 4 && S.lvl === 100 && S.cls === 'cleriga' && !!loadSlot(4) && loadSlot(4).lvl === 100);
     ok('Herói de teste já vem com capa 13 e Rosário 9', S.cape.lvl === 13 && rosaryF() === 1 && S.insig > 0);
+    ok('Herói de teste já vem renascido (Vale da Fênix aberto)', S.rebirths === 1 && S.feathers > 0);
     // pets, montarias e itens no chão
     novo('arcanista', 40, { tut: 99 }); S.settings.auto = false; petsState(); S.pets = null; S.owned = { pet2: true, mount2: true }; S.companion = 'pet2'; S.mount = 'mount2';
     petsState(); ok('Mascote e montaria antigos migram', activePet().sp === 'fada' && activeMount().sp === 'grifo' && S.companion === null);
@@ -232,6 +233,14 @@ const startServer = require('./server.cjs');
     S.gold = 1e7; S.mats = { minerio: 500 }; const mm = activeMount() || addMountSp('lobo'); const ml = mm.lvl; mountUp(mm.uid); ok('Subir nível da montaria', mm.lvl === ml + 1);
     chatCommand('/testepets'); ok('Comando de teste dá os melhores pets e montarias', activePet().sp === 'espirito' && activePet().lvl === 30 && activeMount().sp === 'tigre' && activeMount().lvl === 10 && S.pets.list.length === 6);
     ok('Janela de pets abre', tabPets().includes('Pets') && (R.petTab = 'filtro', tabPets().includes('data-lootf')) && (R.petTab = 'mount', tabPets().includes('Montaria')));
+    // vale da fênix (só para quem renasceu)
+    novo('cacadora', 35, { tut: 99 }); S.settings.auto = false; S.rebirths = 0;
+    ok('Vale da Fênix fechado para quem não renasceu', tabMaps().includes('Vale da Fênix') && !tabMaps().includes('data-zone="rb"'));
+    S.rebirths = 1; ok('Renascido vê o Vale da Fênix', tabMaps().includes('data-zone="rb"'));
+    S.zone = 'rb'; initWorld(); ok('Monstros do Vale acompanham o nível', R.mons.length > 5 && R.mons.every((m) => Math.abs(m.lvl - S.lvl) <= 3) && !R.mons.some((m) => m.crystal));
+    { const m = R.mons[0]; m.hp = 0; const x0 = S.xp + S.lvl * 1e9; S.feathers = 0; for (let i = 0; i < 40; i++) { const k = makeMonster('Fênix Jovem', '🐦‍🔥', S.lvl, false, 2); Object.assign(k, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(k); killMonster(k); } flushLoot(); ok('Vale rende XP e Penas de Fênix', S.xp + S.lvl * 1e9 > x0 && S.feathers > 0, `${S.feathers} penas`); }
+    S.feathers = 10; const in0 = (S.insig || 0); featherBuy('insig'); ok('Trocar Penas de Fênix', S.insig === in0 + 5 && S.feathers === 7);
+    const b0 = spawnBoss(); ok('Chefe Fênix Ancestral no nível do herói', !!b0 && b0.name === 'Fênix Ancestral' && b0.lvl <= S.lvl + 3);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });
