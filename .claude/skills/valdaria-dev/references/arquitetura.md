@@ -251,3 +251,10 @@ Atalhos no `keydown` do fim de `game.js`.
 - **Trocas:** `tinvite`/`taccept` abrem a sessão no servidor (`trades`), `toffer` (até 8 itens + ouro; mudar destrava os dois), `tlock`, `tconfirm`;
   com os dois confirmados o servidor manda `tdone` a cada lado (`tradeDone` tira o que deu e põe o que recebeu com uid novo). Janela `troca`,
   botão 🤝 na janela Social e `/trocar Nome`. Sair do jogo cancela a troca.
+
+## Armas de uma e duas mãos, dois conjuntos (v33)
+- `WEAPON_INFO` (data.js): 16 tipos, cada um com `hands`, `anim`, `ranged`. Cada classe usa `weapon` e `weapon2` (`classWeapons(cls)`); duas mãos = dano base ×`TWO_HAND_MULT` (1.3), sem escudo.
+- `S.equip.arma/escudo` é o conjunto em uso; `S.alt = { arma, escudo }` é o outro. Invariante (`fixSets`): um conjunto é de uma mão, o outro de duas, e o escudo mora no de uma mão. Só o conjunto em uso conta em `derived()`.
+- `swapSet(auto)` troca (recarga `SWAP_CD` 3 s, tecla X, botão 🔄). `autoSwapTick`: escudo abaixo de 35% de vida, volta acima de 80% (`settings.autoSwap`).
+- `refineHalf`: a arma com refino menor custa metade até alcançar a outra. `migrateWeapons` (flag `S.w2`) converte saves antigos e dá a segunda arma.
+- Visual: `vtOf(item)` = 10 visuais (a cada 10 níveis) em 6 estágios (`VSTAGE`); `CLASS_STYLE` dá rampa de cor, elmo (`buildClassHelm`) e ombreira (`classShoulder`) próprios por classe. `Scene.classShot` gera a prévia da tela de criação.

@@ -789,3 +789,14 @@ h3 { color: var(--gold-hi); text-shadow: 0 1px 0 #000; border-bottom: 1px solid 
 #screen-create .faction-btn { background: linear-gradient(180deg, var(--wood2), var(--wood3)); border: 2px solid var(--gold-lo); }
 #screen-create .faction-btn.active { border-color: var(--fc); }
 #screen-create .faction-btn span { color: #c4b693; }
+
+/* ---------- dois conjuntos de arma ---------- */
+.doll-weapon { align-items: center; gap: 8px; }
+.swap-btn { display: flex; flex-direction: column; align-items: center; padding: 6px 10px; font-size: 18px; line-height: 1; }
+.swap-btn small { font-size: 9px; margin-top: 2px; }
+.doll-weapon .eq-slot.alt { width: 60px; height: 60px; opacity: .72; filter: saturate(.7); }
+.doll-weapon .eq-slot.alt:not(.empty):hover { opacity: 1; filter: none; }
+.eq-slot .eq-ico em { font-style: normal; font-size: 12px; position: absolute; right: 2px; bottom: 12px; }
+.eq-slot.off { border-style: dashed; }
+.set-note { grid-column: 1 / -1; text-align: center; font-size: 11px; color: #cdbf9c; }
+.set-note b { color: var(--gold-hi); }

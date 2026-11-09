@@ -32,7 +32,7 @@ const Scene2D = (() => {
     arcanista:  { body: '#5a3a9a', trim: '#e0c050', pants: '#3a2a6a', skin: '#f0cca8', head: 'wizard', hair: '#d8d8e8', robe: true },
     cleriga:    { body: '#f0ece0', trim: '#e0b040', pants: '#c8c0a8', skin: '#f6d6bc', head: 'hood', hair: '#f0d080', robe: true },
   };
-  const RANGED = { arco: 1, dardo: 1, cajado: 1, cetro: 1 };
+  const RANGED = new Proxy({}, { get: (_, wt) => (wInfo(wt).ranged ? 1 : undefined) });
 
   // ---------- aparência dos monstros ----------
   const MON = {
@@ -303,7 +303,7 @@ const Scene2D = (() => {
   }
 
   function drawHero(t) {
-    const h = st.hero, cls = CLASSES[S.cls], L = LOOK[S.cls], wt = (cls.anyWeapon && S.equip.arma) ? S.equip.arma.wtype : cls.weapon;
+    const h = st.hero, cls = CLASSES[S.cls], L = LOOK[S.cls], wt0 = (cls.anyWeapon && S.equip.arma) ? S.equip.arma.wtype : cls.weapon, wt = { machadao: 'machado', malho: 'martelo', besta: 'arco', montante: 'espada', glaive: 'dardo', varinha: 'cetro', baculo: 'cajado' }[wt0] || wt0;
     const s = clamp(Math.min(W / 520, H / 290), 0.62, 1.35);
     const gy = H * 0.84;
     let x = heroBaseX();

@@ -218,7 +218,43 @@ const WEAPON_NAMES = {
   dardo:   ['Dardo Simples', 'Azagaia', 'Dardo Farpado', 'Dardo Alado', 'Dardo Celeste', 'Dardo das Valquírias'],
   cajado:  ['Cajado de Aprendiz', 'Bastão de Carvalho', 'Cajado Rúnico', 'Cajado Estelar', 'Cajado do Arquimago', 'Cajado Primordial'],
   cetro:   ['Cetro de Madeira', 'Cetro de Prata', 'Cetro Benzido', 'Cetro Radiante', 'Cetro do Oráculo', 'Cetro Divino'],
+  // segunda arma de cada classe (a outra "pegada": uma ou duas mãos)
+  machadao: ['Machado de Lenhador', 'Machado de Batalha', 'Grande Machado', 'Devastador Bárbaro', 'Grande Machado Rúnico', 'Machado do Colosso'],
+  malho:    ['Marreta Pesada', 'Malho de Forja', 'Malho de Guerra', 'Bate-Estacas a Vapor', 'Malho Sísmico', 'Malho do Titã'],
+  besta:    ['Besta de Mão', 'Besta Leve', 'Besta de Repetição', 'Besta Rúnica', 'Besta Presa de Dragão', 'Besta Celestial'],
+  lanca:    ['Lança Curta', 'Lança de Ferro', 'Lança de Caça', 'Lança Rúnica', 'Lança Dracônica', 'Lança do Eclipse'],
+  montante: ['Espadão de Ferro', 'Espada de Duas Mãos', 'Claymore', 'Espadão Rúnico', 'Lâmina do Juramento', 'Montante do Alvorecer'],
+  glaive:   ['Lança de Arremesso', 'Lança Longa', 'Lança Alada', 'Lança dos Ventos', 'Lança Celeste', 'Lança das Valquírias'],
+  varinha:  ['Varinha de Salgueiro', 'Varinha de Prata', 'Varinha Rúnica', 'Varinha Estelar', 'Varinha do Arquimago', 'Varinha Primordial'],
+  baculo:   ['Báculo de Peregrino', 'Báculo de Prata', 'Báculo Benzido', 'Báculo Radiante', 'Báculo do Oráculo', 'Báculo Divino'],
 };
+// Cada tipo de arma: mãos (1 = usa escudo; 2 = mais dano, sem escudo), animação e se ataca de longe.
+//  anim: m1 corpo a corpo 1 mão · m2 corpo a corpo 2 mãos · stab estocada · bow arco · xbow besta · throw arremesso · cast magia
+const WEAPON_INFO = {
+  machado:  { hands: 1, label: 'Machado', plural: 'Machados', icon: '🪓', anim: 'm1' },
+  machadao: { hands: 2, label: 'Machado de duas mãos', plural: 'Machados de duas mãos', icon: '🪓', anim: 'm2' },
+  martelo:  { hands: 1, label: 'Martelo', plural: 'Martelos', icon: '🔨', anim: 'm1' },
+  malho:    { hands: 2, label: 'Malho de duas mãos', plural: 'Malhos de duas mãos', icon: '⚒️', anim: 'm2' },
+  arco:     { hands: 2, label: 'Arco', plural: 'Arcos', icon: '🏹', anim: 'bow', ranged: 1 },
+  besta:    { hands: 1, label: 'Besta de mão', plural: 'Bestas de mão', icon: '🎯', anim: 'xbow', ranged: 1 },
+  foice:    { hands: 2, label: 'Foice de duas mãos', plural: 'Foices de duas mãos', icon: '⚔️', anim: 'm2' },
+  lanca:    { hands: 1, label: 'Lança', plural: 'Lanças', icon: '🔱', anim: 'stab' },
+  espada:   { hands: 1, label: 'Espada', plural: 'Espadas', icon: '🗡️', anim: 'm1' },
+  montante: { hands: 2, label: 'Espada de duas mãos', plural: 'Espadas de duas mãos', icon: '⚔️', anim: 'm2' },
+  dardo:    { hands: 1, label: 'Dardo', plural: 'Dardos', icon: '🗡️', anim: 'throw', ranged: 1 },
+  glaive:   { hands: 2, label: 'Lança longa', plural: 'Lanças longas', icon: '🔱', anim: 'throw', ranged: 1 },
+  cajado:   { hands: 2, label: 'Cajado', plural: 'Cajados', icon: '🔮', anim: 'cast', ranged: 1 },
+  varinha:  { hands: 1, label: 'Varinha', plural: 'Varinhas', icon: '🪄', anim: 'cast', ranged: 1 },
+  cetro:    { hands: 1, label: 'Cetro', plural: 'Cetros', icon: '✨', anim: 'cast', ranged: 1 },
+  baculo:   { hands: 2, label: 'Báculo', plural: 'Báculos', icon: '☀️', anim: 'cast', ranged: 1 },
+};
+const TWO_HAND_MULT = 1.3; // arma de duas mãos: +30% de dano base (em troca do escudo)
+const wInfo = (wt) => WEAPON_INFO[wt] || WEAPON_INFO.espada;
+const wHands = (wt) => wInfo(wt).hands;
+// a segunda arma de cada classe
+const CLASS_W2 = { gladiador: 'machadao', engenheiro: 'malho', cacadora: 'besta', lanceiro: 'lanca', paladino: 'montante', valquiria: 'glaive', arcanista: 'varinha', cleriga: 'baculo' };
+for (const k in CLASS_W2) CLASSES[k].weapon2 = CLASS_W2[k];
+const classWeapons = (cls) => [CLASSES[cls].weapon, CLASSES[cls].weapon2];
 
 const ARMOR_SLOTS = {
   armadura: { label: 'Armadura', icon: '🥋', names: ['Gibão de Couro', 'Cota de Malha', 'Armadura de Placas', 'Couraça Rúnica', 'Armadura Dracônica', 'Armadura Celestial'] },

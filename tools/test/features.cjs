@@ -254,6 +254,29 @@ const startServer = require('./server.cjs');
     { novo('gladiador', 5, { tut: 99 }); capeState(); const i0 = S.insig, s0 = repState().seals; R.mons = []; const bb = makeMonster('Rei', '👑', 7, true, 1); Object.assign(bb, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(bb); killMonster(bb); flushLoot(); addSeals(1, 'teste');
       ok('Coleta desde o nível 1 (insígnias e selos guardados)', S.insig > i0 && repState().seals > s0 && tabInv().includes('Guardado para depois') && laterNote('capa').includes('nível 30'));
       S.lvl = CAPE_LVL; S.unlL = { alma: 1, ordem: 0 }; laterUnlocks(); ok('Ao liberar, avisa o que já foi guardado', S.unlL.capa === 1 && !tabInv().includes('🧥 Capa de Guerra <span')); }
+    // ---- dois conjuntos de arma (uma mão + escudo / duas mãos) ----
+    novo('gladiador', 30, { tut: 99 });
+    ok('Herói novo começa com as duas armas', S.equip.arma.wtype === 'machado' && S.alt.arma.wtype === 'machadao');
+    const mkW = (wt, ilvl) => { const it = genItem(ilvl, 1, 'arma'); const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1; it.wtype = wt; it.min = Math.round(100 / was * (wHands(wt) === 2 ? TWO_HAND_MULT : 1)); it.max = it.min + 10; it.req = 1; it.affixes = []; return it; };
+    const w1 = mkW('machado', 30), w2 = mkW('machadao', 30), shd = genItem(30, 1, 'escudo'); shd.req = 1; shd.affixes = [];
+    S.inv.push(w1, w2, shd); equipItem(w1.uid); equipItem(shd.uid); equipItem(w2.uid);
+    ok('Arma de duas mãos vai para o outro conjunto', S.equip.arma === w1 && S.equip.escudo === shd && S.alt.arma === w2);
+    const d1 = derived(); R.swapCd = 0; swapSet(false); const d2 = derived();
+    ok('Trocar: duas mãos bate mais e perde o escudo', S.equip.arma === w2 && !S.equip.escudo && S.alt.escudo === shd && d2.atkMax > d1.atkMax && d2.def < d1.def && d2.block < d1.block, `atq ${d1.atkMax}→${d2.atkMax}, def ${d1.def}→${d2.def}`);
+    ok('Troca tem recarga', swapSet(false) === false && S.equip.arma === w2);
+    S.settings.autoSwap = true; R.inTown = false; R.dead = 0; R.swapCd = 0; S.hp = d2.maxHp * 0.2; autoSwapTick(0.1, derived());
+    ok('Vida baixa: troca sozinho para o escudo', S.equip.arma === w1 && S.equip.escudo === shd);
+    R.swapCd = 0; S.hp = derived().maxHp; autoSwapTick(0.1, derived());
+    ok('Vida alta: volta para as duas mãos', S.equip.arma === w2);
+    w1.refine = 0; w2.refine = 4; const rA = refineInfo(w1); w1.refine = 4; const rB = refineInfo(w1); w1.refine = 0;
+    ok('Segunda arma refina pela metade até alcançar', rA.half && !rB.half);
+    ok('Classe usa os dois tipos e recusa os outros', canUseWeapon(w1) && canUseWeapon(w2) && !canUseWeapon(mkW('cajado', 30)));
+    { // save antigo: foice + escudo vira dois conjuntos
+      novo('lanceiro', 40, { tut: 99 }); const f = mkW('foice', 40); f.min = 100; f.max = 110; const sh2 = genItem(40, 1, 'escudo'); sh2.req = 1;
+      S.equip = { arma: f, escudo: sh2 }; delete S.alt; delete S.w2; migrateWeapons();
+      ok('Migração: bônus de duas mãos, escudo e arma nova no outro conjunto', f.min === 130 && !S.equip.escudo && S.alt.escudo === sh2 && S.alt.arma && S.alt.arma.wtype === 'lanca', `${S.alt.arma && S.alt.arma.name}`);
+    }
+    { const fc = makeFullChar('T', 'arcanista', 'cajado'); ok('Herói completo tem os dois conjuntos', fc.equip.arma.wtype === 'cajado' && !fc.equip.escudo && fc.alt.arma.wtype === 'varinha' && !!fc.alt.escudo); }
     return out;
   });
   const pwa = await p.evaluate(async () => { try { const m = await (await fetch('manifest.webmanifest')).json(); const sw = await fetch('sw.js'); return m.icons.length === 3 && sw.ok; } catch (e) { return false; } });

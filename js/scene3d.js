@@ -217,7 +217,10 @@ const Scene3D = (() => {
 
   // ---------- herói / personagens ----------
   const TIER_COL = ['#7a5a3a', '#8a9098', '#c4cad4', '#3a5aa0', '#a02a2a', '#f0e2b0'];
-  const tierOf = (it) => clamp(Math.floor((it.ilvl || 1) / 17), 0, 5);
+  // 10 visuais (um a cada 10 níveis do item): 6 estágios de forma + cor da classe que evolui a cada passo
+  const VSTAGE = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5];
+  const vtOf = (it) => clamp(Math.floor(((it && it.ilvl) || 1) / 10), 0, 9);
+  const tierOf = (it) => VSTAGE[vtOf(it)];
   const rarOf = (it) => RARITIES.find((r) => r.id === it.rarity) || RARITIES[0];
   const rarIdx = (it) => RARITIES.indexOf(rarOf(it));
   const mixCol = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t).getStyle();
@@ -710,15 +713,31 @@ const Scene3D = (() => {
   // ---------- equipamentos por tier (6 visuais por tipo) ----------
   const METAL = ['#a06a38', '#a2aab4', '#e2e7ef', '#5a82e6', '#c4303c', '#fff0c4'];
   const GRIP = ['#6a4a2a', '#4a3a2a', '#3a2c26', '#26283e', '#2a0e0e', '#f0e6d0'];
-  function gearMats(M, tier, rc, ri, refine) {
+  // estilo de cada classe: rampa de cor (início, meio, fim), dourado, elmo e ombreira próprios
+  const CLASS_STYLE = {
+    gladiador:  { ramp: ['#8a5a34', '#70707a', '#b02a1c'], gold: '#e0a040', helm: 'horns', sh: 'spikes' },
+    engenheiro: { ramp: ['#a8683a', '#d0a048', '#5a86b8'], gold: '#f0c060', helm: 'goggles', sh: 'gears' },
+    cacadora:   { ramp: ['#7a6040', '#4a8a4a', '#20a078'], gold: '#e0d070', helm: 'feather', sh: 'leaf' },
+    lanceiro:   { ramp: ['#70707e', '#4a3a70', '#281838'], gold: '#b088ff', helm: 'skull', sh: 'blades' },
+    paladino:   { ramp: ['#98a0aa', '#d4d8e0', '#fff0c0'], gold: '#ffd040', helm: 'great', sh: 'plates' },
+    valquiria:  { ramp: ['#a8b4c4', '#70a8e8', '#eef6ff'], gold: '#ffe080', helm: 'wings', sh: 'wing' },
+    arcanista:  { ramp: ['#4a5aa8', '#5a38a8', '#a050e8'], gold: '#d0a8ff', helm: 'wizard', sh: 'crystal' },
+    cleriga:    { ramp: ['#d8ccb0', '#f4eee0', '#ffe8a0'], gold: '#ffd860', helm: 'mitre', sh: 'halo' },
+  };
+  let CUR_STYLE = null; // classe do herói que está sendo montado (null = visual genérico)
+  const rampCol = (ramp, f) => (f < 0.5 ? mixCol(ramp[0], ramp[1], f * 2) : mixCol(ramp[1], ramp[2], (f - 0.5) * 2));
+  function gearMats(M, tier, rc, ri, refine, vt) {
     const lit = ri >= 2 || tier >= 3;
     const amt = (ri > 0 ? 0.25 + ri * 0.15 : 0) + (refine || 0) * 0.07 + (tier >= 3 ? 0.3 : 0);
+    const cs = CUR_STYLE, f = (vt ?? tier * 1.8) / 9;
+    const metalC = cs ? mixCol(rampCol(cs.ramp, f), METAL[tier], 0.3) : METAL[tier];
     return {
-      metal: M(METAL[tier], { r: 0.3, m: 0.2, e: tier >= 5 ? '#ffe8a0' : '#000000', ei: tier >= 5 ? 0.25 : 0 }),
-      grip: M(GRIP[tier], { r: 0.8 }),
-      gold: M(tier >= 4 ? '#ffd040' : '#c8a040', { r: 0.35, m: 0.2 }),
+      col: metalC,
+      metal: M(metalC, { r: 0.3, m: 0.2, e: tier >= 5 ? (cs ? cs.gold : '#ffe8a0') : '#000000', ei: tier >= 5 ? (cs ? 0.12 : 0.22) : 0 }),
+      grip: M(cs ? mixCol(metalC, '#1a1210', 0.62) : GRIP[tier], { r: 0.8 }),
+      gold: M(cs ? cs.gold : tier >= 4 ? '#ffd040' : '#c8a040', { r: 0.35, m: 0.2 }),
       glow: M(rc, { e: rc, ei: Math.max(0.7, amt * 1.5), r: 0.2 }),
-      edge: M(lit ? rc : METAL[tier], { e: lit ? rc : '#000000', ei: lit ? Math.max(0.5, amt) : 0, r: 0.25 }),
+      edge: M(lit ? rc : metalC, { e: lit ? rc : '#000000', ei: lit ? Math.max(0.5, amt) : 0, r: 0.25 }),
       white: M('#ffffff', { e: '#fff6d8', ei: 0.4 }),
     };
   }
@@ -881,11 +900,157 @@ const Scene3D = (() => {
     return g;
   }
 
-  const W_BUILD = { foice: wScythe, arco: wBow, espada: wSword, machado: wAxe, martelo: wHammer, dardo: wJavelin, cajado: wStaff, cetro: wScepter, lanca: wScythe };
+  // ---- segunda arma de cada classe ----
+  // MACHADO DE DUAS MÃOS — duas lâminas cheias, cabo longo, espigão
+  function wGreatAxe(t, k, M, rc) {
+    const g = group(null), len = 1.3 + t * 0.06;
+    mk(G.cyl(0.036, 0.04, len + 0.3, 7), k.grip, g, 0, 0.3 - (len + 0.3) / 2, 0);
+    for (let i = 0; i < 3; i++) mk(G.cyl(0.046, 0.046, 0.04, 8), k.gold, g, 0, 0.2 - i * 0.3, 0);
+    const hy = -len + 0.2, s0 = t * 0.04, head = group(g, 0, hy, 0);
+    const sh = new THREE.Shape();
+    sh.moveTo(0.03, 0.1); sh.lineTo(0.2 + s0, 0.27 + s0); sh.quadraticCurveTo(0.36 + s0 * 1.5, 0, 0.2 + s0, -0.27 - s0); sh.lineTo(0.03, -0.1); sh.lineTo(0.03, 0.1);
+    mk(G.box(0.12, 0.24, 0.09), k.metal, head, 0, 0, 0);
+    for (const sd of [1, -1]) {
+      const b = mk(extrudeG(sh, 0.036), k.metal, head, 0.02 * sd, 0, 0); b.scale.x = sd;
+      if (t >= 1) mk(tubeG([[(0.22 + s0) * sd, 0.27 + s0, 0], [(0.36 + s0 * 1.4) * sd, 0, 0], [(0.22 + s0) * sd, -0.27 - s0, 0]], 0.013, 12), k.edge, head, 0, 0, 0);
+      if (t >= 4) for (const y of [0.16, -0.16]) { const c = mk(G.cone(0.022, 0.1, 4), k.gold, head, 0.1 * sd, y * 1.6, 0); c.rotation.z = y > 0 ? 0 : Math.PI; }
+    }
+    mk(G.cone(0.035, 0.22 + t * 0.03, 5), t >= 2 ? k.gold : k.metal, head, 0, -0.22, 0).rotation.z = Math.PI;
+    if (t >= 3) for (const z of [0.06, -0.06]) mk(G.oct(0.055), k.glow, head, 0, 0, z);
+    mk(t >= 3 ? G.oct(0.06) : G.sph(0.05, 6), t >= 3 ? k.glow : k.metal, g, 0, 0.32, 0);
+    if (t >= 5) { head.add(glowSprite(rc, 0.8, 0.35)); for (const sd of [-1, 1]) { const w = mk(G.box(0.24, 0.08, 0.012), k.white, g, 0.14 * sd, 0.1, 0); w.rotation.z = 0.5 * sd; } }
+    return g;
+  }
+  // MALHO DE DUAS MÃOS — cabeça enorme, pistões e chaminés
+  function wMaul(t, k, M, rc) {
+    const g = group(null), len = 1.3 + t * 0.05;
+    mk(G.cyl(0.038, 0.042, len + 0.3, 7), k.grip, g, 0, 0.3 - (len + 0.3) / 2, 0);
+    for (let i = 0; i < 2; i++) mk(G.cyl(0.05, 0.05, 0.05, 8), k.gold, g, 0, 0.15 - i * 0.45, 0);
+    const head = group(g, 0, -len + 0.15, 0), hw = 0.38 + t * 0.035, hh = 0.21 + t * 0.02;
+    mk(G.box(hw, hh, hh), k.metal, head, 0, 0, 0);
+    for (const sd of [-1, 1]) {
+      mk(G.box(0.07, hh * 1.14, hh * 1.14), t >= 1 ? k.gold : k.metal, head, sd * (hw / 2 - 0.04), 0, 0);
+      if (t >= 2) mk(G.cyl(hh * 0.42, hh * 0.5, 0.07, 8), k.metal, head, sd * (hw / 2 + 0.035), 0, 0).rotation.z = Math.PI / 2;
+      if (t >= 4) for (const y of [-1, 1]) for (const z of [-1, 1]) mk(G.cone(0.03, 0.1, 4), k.gold, head, sd * (hw / 2 + 0.09), y * hh * 0.28, z * hh * 0.28).rotation.z = -sd * Math.PI / 2;
+    }
+    if (t >= 1) for (const z of [-1, 1]) mk(G.cyl(0.025, 0.025, hw * 0.8, 6), k.edge, head, 0, 0, z * hh * 0.52).rotation.z = Math.PI / 2;
+    if (t >= 3) mk(G.box(hw * 0.16, hh * 1.03, hh * 1.03), k.glow, head, 0, 0, 0);
+    if (t >= 3) for (const sd of [-1, 1]) mk(G.cyl(0.03, 0.036, 0.16 + t * 0.02, 6), k.grip, head, sd * hw * 0.25, -hh / 2 - 0.08, 0);
+    if (t >= 5) { head.add(glowSprite(rc, 0.9, 0.35)); mk(G.torus(hh * 0.9, 0.014), k.glow, head, 0, 0, 0).rotation.y = Math.PI / 2; }
+    mk(G.sph(0.05, 6), t >= 3 ? k.glow : k.metal, g, 0, 0.33, 0);
+    return g;
+  }
+  // BESTA DE MÃO — coronha, arco curto, virote; ganha mira, lâminas e asas
+  function wCrossbow(t, k, M, rc) {
+    const g = group(null), L = 0.52 + t * 0.03, tip = 0.08 - L;
+    mk(G.box(0.07, L, 0.06), k.grip, g, 0, 0.08 - L / 2, 0);
+    mk(G.box(0.05, 0.16, 0.05), k.grip, g, 0.05, 0.1, 0).rotation.z = -0.5;
+    const H = 0.3 + t * 0.03, bow = (sd) => [[0, tip + 0.06, 0], [0, tip + 0.02, sd * H * 0.5], [0, tip + 0.12, sd * H]];
+    for (const sd of [1, -1]) {
+      mk(tubeG(bow(sd), 0.02 + t * 0.002, 12), t >= 2 ? k.metal : k.grip, g, 0, 0, 0);
+      if (t >= 1) mk(G.sph(0.028, 6), t >= 3 ? k.glow : k.gold, g, 0, tip + 0.12, sd * H);
+      if (t >= 4) { const b = mk(G.cone(0.025, 0.16, 4), k.gold, g, 0, tip + 0.03, sd * (H + 0.05)); b.rotation.x = sd * -1.9; }
+    }
+    mk(G.cyl(0.004, 0.004, H * 2, 3), t >= 3 ? k.glow : M('#f2f2f2'), g, 0, tip + 0.14, 0, false).rotation.x = Math.PI / 2;
+    mk(G.cyl(0.012, 0.012, L * 0.8, 5), k.edge, g, -0.045, tip + L * 0.42, 0);
+    mk(G.cone(0.028, 0.09, 4), k.metal, g, -0.045, tip - 0.03, 0).rotation.z = Math.PI;
+    if (t >= 2) mk(G.torus(0.035, 0.008), k.gold, g, -0.07, tip + L * 0.6, 0).rotation.x = Math.PI / 2;
+    if (t >= 3) mk(G.oct(0.04), k.glow, g, 0.045, tip + 0.1, 0);
+    if (t >= 5) { for (const sd of [-1, 1]) { const w = mk(G.box(0.012, 0.09, 0.26), k.white, g, 0, tip + 0.2, sd * 0.2); w.rotation.x = sd * 0.5; } const gl = glowSprite(rc, 0.6, 0.3); gl.position.y = tip; g.add(gl); }
+    return g;
+  }
+  // LANÇA DE UMA MÃO — haste média, ponta em folha; ganha guarda, fita e runas
+  function wSpear(t, k, M, rc) {
+    const g = group(null), len = 1.55 + t * 0.05, top = 0.5, end = top - len;
+    mk(G.cyl(0.026, 0.03, len, 6), k.grip, g, 0, top - len / 2, 0);
+    mk(G.cone(0.035, 0.1, 5), k.metal, g, 0, top + 0.05, 0);
+    const tl = 0.3 + t * 0.045, w = 0.07 + t * 0.01;
+    const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.quadraticCurveTo(w, -tl * 0.35, 0, -tl); sh.quadraticCurveTo(-w, -tl * 0.35, 0, 0);
+    mk(extrudeG(sh, 0.018), k.metal, g, 0, end, 0);
+    if (t >= 1) mk(G.box(0.012, tl * 0.75, 0.03), k.edge, g, 0, end - tl * 0.45, 0);
+    mk(G.cyl(0.04, 0.04, 0.06, 8), k.gold, g, 0, end + 0.04, 0);
+    if (t >= 2) for (const sd of [-1, 1]) { const c = mk(G.cone(0.025, 0.14 + t * 0.015, 4), k.gold, g, sd * 0.07, end + 0.02, 0); c.rotation.z = sd * 2.2; }
+    if (t >= 1) { const f = mk(G.box(0.14, 0.2 + t * 0.02, 0.01), M(rc), g, 0.08, end + 0.2, 0); f.rotation.z = 0.25; }
+    if (t >= 3) { mk(G.oct(0.04), k.glow, g, 0, end + 0.04, 0.035); for (let i = 0; i < 3; i++) mk(G.sph(0.018, 6), k.glow, g, 0.03, end + 0.4 + i * 0.3, 0); }
+    if (t >= 4) for (const sd of [-1, 1]) { const b = mk(extrudeG(crescent(0.2, 0.1, 0.03), 0.012), k.metal, g, sd * 0.03, end - 0.02, 0); b.scale.x = sd; b.rotation.z = sd * -0.9; }
+    if (t >= 5) { const gl = glowSprite(rc, 0.6, 0.35); gl.position.y = end - tl * 0.5; g.add(gl); mk(G.torus(0.1, 0.01), k.glow, g, 0, end + 0.04, 0).rotation.x = Math.PI / 2; }
+    return g;
+  }
+  // ESPADA DE DUAS MÃOS — lâmina larga e longa, guarda aberta
+  function wGreatSword(t, k, M, rc) {
+    const g = group(null);
+    mk(G.cyl(0.032, 0.034, 0.42, 6), k.grip, g, 0, 0.12, 0);
+    mk(t >= 3 ? G.oct(0.065) : G.sph(0.05, 6), t >= 3 ? k.glow : k.gold, g, 0, 0.36, 0);
+    const gw = 0.42 + t * 0.05;
+    mk(G.box(0.08, 0.06, gw), k.gold, g, 0, -0.1, 0);
+    for (const sd of [-1, 1]) { const q = mk(G.cone(0.035, 0.16, 4), k.gold, g, 0, -0.14, sd * gw / 2); q.rotation.x = sd * -2.0; }
+    if (t >= 4) for (const sd of [-1, 1]) { const w = mk(G.box(0.03, 0.26, 0.15), k.edge, g, 0, -0.02, sd * (gw / 2 + 0.07)); w.rotation.x = sd * 0.5; }
+    const L = 1.25 + t * 0.07, W = 0.15 + t * 0.012;
+    const sh = new THREE.Shape(); sh.moveTo(-W / 2, 0); sh.lineTo(W / 2, 0); sh.lineTo(W / 2 * 0.86, L * 0.82); sh.lineTo(0, L); sh.lineTo(-W / 2 * 0.86, L * 0.82); sh.lineTo(-W / 2, 0);
+    const bg = extrudeG(sh, 0.018); bg.rotateZ(Math.PI);
+    mk(bg, k.metal, g, 0, -0.13, 0).rotation.y = Math.PI / 2;
+    mk(G.box(0.026, L * 0.72, W * 0.22), t >= 1 ? k.edge : k.grip, g, 0, -0.13 - L * 0.4, 0);
+    if (t >= 2) for (const sd of [-1, 1]) { const n = mk(G.cone(0.03, 0.1, 4), k.metal, g, 0, -0.2, sd * W * 0.55); n.rotation.x = sd * -1.57; }
+    if (t >= 3) for (let i = 0; i < 3; i++) mk(G.oct(0.03), k.glow, g, 0.022, -0.32 - i * L * 0.22, 0);
+    if (t >= 5) { const gl = glowSprite(rc, 0.8, 0.3); gl.position.y = -0.7; g.add(gl); for (const sd of [-1, 1]) { const w = mk(G.box(0.012, 0.1, 0.3), k.white, g, 0, -0.05, sd * 0.3); w.rotation.x = sd * -0.5; } }
+    return g;
+  }
+  // LANÇA LONGA (Valquíria) — lâmina alada, asas que crescem
+  function wGlaive(t, k, M, rc) {
+    const g = group(null), len = 1.7 + t * 0.05, top = 0.55, end = top - len;
+    mk(G.cyl(0.026, 0.03, len, 6), k.grip, g, 0, top - len / 2, 0);
+    mk(G.sph(0.045, 6), k.gold, g, 0, top + 0.02, 0);
+    const tl = 0.42 + t * 0.05, w = 0.08 + t * 0.008;
+    const sh = new THREE.Shape(); sh.moveTo(0, 0.02); sh.quadraticCurveTo(w * 1.5, -tl * 0.3, 0, -tl); sh.quadraticCurveTo(-w * 0.6, -tl * 0.4, 0, 0.02);
+    mk(extrudeG(sh, 0.018), k.metal, g, 0, end, 0);
+    mk(tubeG([[0.01, end, 0], [w * 0.8, end - tl * 0.35, 0], [0, end - tl, 0]], 0.01, 12), k.edge, g, 0, 0, 0);
+    mk(G.cyl(0.042, 0.042, 0.07, 8), k.gold, g, 0, end + 0.05, 0);
+    const nW = 1 + Math.min(2, Math.floor(t / 2));
+    for (const sd of [-1, 1]) for (let i = 0; i < nW; i++) { const f = mk(G.box(0.16 + t * 0.02 - i * 0.03, 0.06, 0.012), t >= 3 ? k.white : k.metal, g, sd * (0.1 + i * 0.01), end + 0.1 + i * 0.07, 0); f.rotation.z = sd * (0.5 + i * 0.2); }
+    if (t >= 3) mk(G.oct(0.04), k.glow, g, 0, end + 0.05, 0.04);
+    if (t >= 4) mk(G.torus(0.09, 0.01), k.gold, g, 0, end + 0.22, 0).rotation.x = Math.PI / 2;
+    if (t >= 5) { const gl = glowSprite(rc, 0.7, 0.35); gl.position.y = end - tl * 0.5; g.add(gl); }
+    return g;
+  }
+  // VARINHA — curta, cristal na ponta, espiral e anéis
+  function wWand(t, k, M, rc) {
+    const g = group(null), len = 0.5 + t * 0.03, end = 0.1 - len;
+    mk(G.cyl(0.016, 0.03, len, 6), k.grip, g, 0, 0.1 - len / 2, 0);
+    mk(G.sph(0.035, 6), k.gold, g, 0, 0.11, 0);
+    if (t >= 1) for (let i = 0; i < 2; i++) mk(G.cyl(0.03, 0.03, 0.025, 8), k.gold, g, 0, 0.02 - i * 0.12, 0);
+    const R0 = 0.05 + t * 0.008, gem = mk(G.oct(R0), k.glow, g, 0, end - R0 * 0.8, 0); gem.scale.y = 1.6;
+    const gl = glowSprite(rc, 0.4 + t * 0.05, 0.55); gl.position.copy(gem.position); g.add(gl);
+    if (t >= 2) mk(tubeG([[0.03, 0, 0], [0, -len * 0.3, 0.03], [-0.03, -len * 0.6, 0], [0, -len * 0.9, -0.03]], 0.008, 16), k.edge, g, 0, 0.05, 0);
+    if (t >= 3) { const rg = mk(G.torus(R0 * 2, 0.008), k.edge, g, 0, end - R0 * 0.8, 0); rg.rotation.x = 1.2; g.userData.spin = rg; }
+    if (t >= 4) for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; mk(G.oct(0.02), k.glow, g, Math.cos(a) * R0 * 2.4, end - R0 * 0.8, Math.sin(a) * R0 * 2.4); }
+    if (t >= 5) mk(G.torus(R0 * 2.8, 0.008), k.glow, g, 0, end - R0 * 0.8, 0);
+    g.userData.orb = gem; g.userData.glow = gl;
+    return g;
+  }
+  // BÁCULO — cajado alto com sol: raios, anéis e asas
+  function wCrosier(t, k, M, rc) {
+    const g = group(null), len = 1.5 + t * 0.05, end = 0.35 - len;
+    mk(G.cyl(0.03, 0.036, len, 7), k.gold, g, 0, 0.35 - len / 2, 0);
+    for (let i = 0; i < 2 + (t >= 2 ? 1 : 0); i++) mk(G.cyl(0.044, 0.044, 0.04, 8), k.metal, g, 0, 0.2 - i * 0.42, 0);
+    const R0 = 0.13 + t * 0.014, cy = end - R0;
+    mk(G.torus(R0, 0.024), k.gold, g, 0, cy, 0);
+    const gem = mk(G.oct(R0 * 0.55), k.glow, g, 0, cy, 0);
+    const gl = glowSprite(rc, 0.55 + t * 0.06, 0.5); gl.position.copy(gem.position); g.add(gl);
+    const nR = 4 + t;
+    if (t >= 1) for (let i = 0; i < nR; i++) { const a = (i / nR) * Math.PI * 2 + Math.PI / 2; if (Math.abs(a % (Math.PI * 2) - Math.PI / 2) < 0.3) continue; const c = mk(G.cone(0.02, 0.1 + t * 0.014, 4), k.edge, g, Math.cos(a) * (R0 + 0.07), cy + Math.sin(a) * (R0 + 0.07), 0); c.rotation.z = a - Math.PI / 2; }
+    if (t >= 3) mk(G.torus(R0 * 1.25, 0.01), k.glow, g, 0, cy, 0).rotation.y = Math.PI / 2;
+    if (t >= 4) for (const sd of [-1, 1]) mk(G.oct(0.03), k.glow, g, sd * 0.07, end + 0.12, 0);
+    if (t >= 5) for (const sd of [-1, 1]) { const w = mk(G.box(0.26, 0.09, 0.012), k.white, g, sd * 0.17, end + 0.12, 0); w.rotation.z = -0.5 * sd; }
+    g.userData.orb = gem; g.userData.glow = gl;
+    return g;
+  }
+  const W_BUILD = { foice: wScythe, arco: wBow, espada: wSword, machado: wAxe, martelo: wHammer, dardo: wJavelin, cajado: wStaff, cetro: wScepter,
+    machadao: wGreatAxe, malho: wMaul, besta: wCrossbow, lanca: wSpear, montante: wGreatSword, glaive: wGlaive, varinha: wWand, baculo: wCrosier };
   function buildWeaponT(wt, it, M) {
     const t = it ? tierOf(it) : 0, rc = it && rarIdx(it) > 0 ? rarOf(it).color : (it ? '#e0d8c0' : '#c8c0b0');
-    const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0);
-    const g = W_BUILD[wt](t, k, M, rc);
+    const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0, it ? vtOf(it) : 0);
+    const g = (W_BUILD[wt] || W_BUILD.espada)(t, k, M, rc);
+    if (it) g.scale.setScalar(1 + vtOf(it) * 0.012); // cresce um pouco a cada 10 níveis
     g.userData.glowMats = [k.edge, k.glow];
     return g;
   }
@@ -894,7 +1059,7 @@ const Scene3D = (() => {
   function buildShieldT(hand, it, M) {
     const sh = group(hand, 0.12, 0, 0);
     const t = it ? tierOf(it) : 2, rc = it && rarIdx(it) > 0 ? rarOf(it).color : '#e0b040';
-    const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0);
+    const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0, it ? vtOf(it) : undefined);
     const face = t === 0 ? M('#8a6038', { r: 0.9 }) : k.metal;
     if (t <= 1) {
       const c = mk(G.cyl(0.3, 0.3, 0.06, 18), face, sh, 0, 0, 0); c.rotation.z = Math.PI / 2;
@@ -931,12 +1096,132 @@ const Scene3D = (() => {
     }
   }
 
+  // ELMO de cada classe: silhueta própria que evolui em 6 estágios (cor muda nos 10 níveis de visual)
+  function buildClassHelm(hg0, it, M, cls, md, cfg) {
+    const cs = CLASS_STYLE[cls]; if (!cs) return buildHelmetModel(hg0, it, M);
+    const hg = group(hg0); hg.rotation.y = -Math.PI / 2; // as peças abaixo usam +x como frente; o osso da cabeça olha para +z
+    const t = tierOf(it), vt = vtOf(it), rc = it.set ? SETS[it.set].color : rarIdx(it) > 0 ? rarOf(it).color : cs.gold;
+    const k = gearMats(M, t, rc, rarIdx(it), it.refine, vt);
+    const R0 = 0.5, cy = 0.42, top = cy + R0;
+    const cap = (frac, mat, sc = 1.05) => { const c = mk(new THREE.SphereGeometry(R0, 18, 10, 0, Math.PI * 2, 0, Math.PI * frac), mat, hg, 0, cy, 0); c.scale.set(sc, 1, sc); return c; };
+    const band = (y, r, th, mat) => { const b = mk(G.torus(r * 0.93, th), mat === k.edge ? k.gold : mat, hg, 0, y, 0); b.rotation.x = Math.PI / 2; return b; };
+    const part = (name, col, ei = 0) => { const p = name && showPart(md, name); if (p) p.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(col); if (ei && o.material.emissive) { o.material.emissive = new THREE.Color(col); o.material.emissiveIntensity = ei; } } }); return p; };
+    const halo = (y, r) => { mk(G.torus(r, 0.022), M('#fff0a0', { e: cs.gold, ei: 0.9 }), hg, 0, y, 0).rotation.x = Math.PI / 2; };
+    const glow = (x, y, z, sz, op) => { const gl = glowSprite(rc, sz, op); gl.position.set(x, y, z); hg.add(gl); };
+    const wing = (z, y, len, n, mat, zr = 1.03) => { for (let i = 0; i < n; i++) { const w = mk(G.box(len - i * 0.07, 0.11, 0.02), mat, hg, -0.12 - i * 0.02, y + i * 0.1, z * (R0 * zr + i * 0.01)); w.rotation.z = 0.55 + i * 0.22; w.rotation.y = z * -0.25; } };
+    switch (cs.helm) {
+      case 'horns': { // Gladiador: elmo de chifres que crescem, crista de espinhos
+        if (!part(cfg.hat, mixCol(k.col, '#ffffff', 0.6))) cap(0.5, k.metal);
+        band(cy + 0.02, R0 * 1.03, 0.04 + t * 0.004, k.edge);
+        const bone = M(t >= 4 ? '#2a1612' : '#ece2c8');
+        for (const z of [-1, 1]) {
+          const h = mk(G.cone(0.075 + t * 0.006, 0.3 + t * 0.085, 6), bone, hg, 0, cy + 0.3, z * R0 * 0.95); h.rotation.x = z * (1.05 - t * 0.05);
+          if (t >= 2) mk(G.torus(0.08, 0.02), k.gold, hg, 0, cy + 0.19, z * R0 * 0.82).rotation.y = Math.PI / 2;
+          if (t >= 5) { const h2 = mk(G.cone(0.05, 0.36, 5), bone, hg, -0.2, cy + 0.36, z * R0 * 0.7); h2.rotation.x = z * 0.6; h2.rotation.z = 0.5; }
+        }
+        if (t >= 1) mk(G.box(0.06, 0.24, 0.08), k.metal, hg, R0 * 0.98, cy - 0.1, 0);
+        if (t >= 3) { mk(G.oct(0.065), k.glow, hg, R0 * 0.95, cy + 0.14, 0); }
+        if (t >= 4) for (let i = 0; i < 5; i++) mk(G.cone(0.055, 0.3 - Math.abs(i - 1) * 0.04, 4), k.gold, hg, 0.28 - i * 0.14, top + 0.08 - i * 0.02, 0);
+        if (t >= 5) glow(0, top + 0.1, 0, 1.0, 0.35);
+        break;
+      }
+      case 'goggles': { // Engenheiro: elmo de oficina com óculos, antena, engrenagem e bobina
+        if (!part(cfg.hat, mixCol(k.col, '#ffffff', 0.5), 0.25 + t * 0.04)) cap(0.52, k.metal);
+        band(cy + 0.14, R0 * 1.06, 0.035, k.grip);
+        for (const z of [-1, 1]) {
+          mk(G.cyl(0.13, 0.13, 0.09, 12), k.gold, hg, R0 * 0.98, cy + 0.14, z * 0.17).rotation.z = Math.PI / 2;
+          mk(G.cyl(0.095, 0.095, 0.1, 12), t >= 3 ? k.glow : M('#9fe0ff', { e: '#60c0ff', ei: 0.5 }), hg, R0 * 1.0, cy + 0.14, z * 0.17).rotation.z = Math.PI / 2;
+        }
+        if (t >= 1) { mk(G.cyl(0.012, 0.012, 0.4 + t * 0.04, 4), k.metal, hg, -0.1, top + 0.1 + t * 0.02, R0 * 0.8); mk(G.sph(0.04, 6), k.glow, hg, -0.1, top + 0.3 + t * 0.04, R0 * 0.8); }
+        if (t >= 2) { const gr = group(hg, 0, cy + 0.1, -R0 * 1.08); mk(G.torus(0.13, 0.035), k.gold, gr, 0, 0, 0); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; mk(G.box(0.05, 0.06, 0.05), k.gold, gr, Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0).rotation.z = a; } }
+        if (t >= 3) { mk(G.cyl(0.07, 0.09, 0.1, 8), k.metal, hg, 0.1, top + 0.03, 0); mk(G.sph(0.065, 8), k.glow, hg, 0.1, top + 0.1, 0); }
+        if (t >= 4) for (const z of [-1, 1]) { mk(G.cyl(0.05, 0.05, 0.34, 6), k.grip, hg, -R0 * 0.85, cy + 0.2, z * 0.2); mk(G.cyl(0.065, 0.05, 0.06, 6), k.gold, hg, -R0 * 0.85, cy + 0.38, z * 0.2); }
+        if (t >= 5) { mk(G.torus(0.34, 0.018), k.glow, hg, 0, top + 0.32, 0).rotation.x = Math.PI / 2; mk(G.torus(0.22, 0.014), k.glow, hg, 0, top + 0.42, 0).rotation.x = Math.PI / 2; glow(0, top + 0.35, 0, 0.9, 0.35); }
+        break;
+      }
+      case 'feather': { // Caçadora: tiara sobre o capuz com penas, galhada e coroa de folhas
+        const hy = cy + 0.06, hr = 0.5;
+        band(hy, hr, 0.03 + t * 0.003, t >= 2 ? k.gold : k.grip);
+        const nF = 1 + Math.min(3, t), fcol = M(mixCol(k.col, cs.gold, t / 6), { e: t >= 4 ? cs.gold : '#000000', ei: t >= 4 ? 0.4 : 0 });
+        for (let i = 0; i < nF; i++) { const f = mk(G.cone(0.05, 0.3 + t * 0.035 - i * 0.04, 4), fcol, hg, -0.02 - i * 0.07, hy + 0.2 + t * 0.012 - i * 0.02, hr * 0.92); f.scale.z = 0.3; f.rotation.z = 0.25 + i * 0.3; f.rotation.x = 0.3; }
+        if (t >= 2) mk(G.oct(0.05), k.glow, hg, hr * 0.95, hy, 0);
+        if (t >= 3) for (const z of [-1, 1]) for (let i = 0; i < 2 + (t >= 5 ? 1 : 0); i++) { const a = mk(G.cone(0.025, 0.2 + i * 0.08, 4), M('#e8dcc0'), hg, 0.1 - i * 0.1, cy + 0.42 + i * 0.03, z * (0.2 + i * 0.07)); a.rotation.x = z * 0.55; a.rotation.z = -0.3 + i * 0.3; }
+        if (t >= 4) for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; const l = mk(G.cone(0.035, 0.12, 4), k.metal, hg, Math.cos(a) * hr * 0.93, hy + 0.07, Math.sin(a) * hr * 0.93); l.scale.z = 0.4; }
+        if (t >= 5) { band(cy + 0.72, 0.3, 0.016, k.glow); glow(0, cy + 0.6, 0, 0.8, 0.3); }
+        break;
+      }
+      case 'skull': { // Lanceiro: capuz sombrio, máscara, lâmina na testa, crista, chifres para trás e chama
+        cap(0.5, M(mixCol(k.col, '#0c0812', 0.45), { r: 0.6 }), 0.95).position.y = cy - 0.04;
+        band(cy - 0.02, 0.5, 0.03, k.metal);
+        if (t >= 1) { const b = mk(G.cone(0.06, 0.26 + t * 0.05, 4), k.gold, hg, 0.5, cy + 0.16 + t * 0.02, 0); b.scale.z = 0.4; b.rotation.z = -0.25; }
+        if (t >= 2) for (let i = 0; i < 3 + Math.floor(t / 2); i++) { const f = mk(G.cone(0.05, 0.26 - i * 0.025, 4), k.metal, hg, 0.2 - i * 0.15, cy + 0.52 - i * 0.04, 0); f.scale.z = 0.3; f.rotation.z = 0.5; }
+        if (t >= 3) { mk(G.oct(0.05), k.glow, hg, 0.45, cy + 0.06, 0); for (const z of [-1, 1]) { const h = mk(G.cone(0.055, 0.42 + t * 0.05, 5), M('#1a1020'), hg, -0.15, cy + 0.3, z * 0.42); h.rotation.x = z * 0.9; h.rotation.z = 0.5; } }
+        if (t >= 4) for (const z of [-1, 0, 1]) mk(G.cone(0.025, 0.12, 4), k.gold, hg, 0.42, cy - 0.44, z * 0.13).rotation.z = Math.PI;
+        if (t >= 5) { for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; mk(G.cone(0.035, 0.2, 4), M(rc, { e: rc, ei: 1.4 }), hg, Math.cos(a) * 0.26, cy + 0.72, Math.sin(a) * 0.26); } glow(0, cy + 0.7, 0, 1.0, 0.4); }
+        break;
+      }
+      case 'great': { // Paladino: grande elmo com cruz, penacho, asas e auréola
+        if (!part(cfg.hat, mixCol(k.col, '#ffffff', 0.6), 0.3 + t * 0.07)) cap(0.62, k.metal);
+        band(cy + 0.0, R0 * 1.09, 0.04, k.gold);
+        if (t >= 1) { mk(G.box(0.05, 0.36, 0.07), k.gold, hg, R0 * 1.08, cy + 0.02, 0); mk(G.box(0.05, 0.07, 0.3), k.gold, hg, R0 * 1.08, cy + 0.1, 0); }
+        const pl = M(t >= 4 ? '#fff4d0' : '#c02a2a', { e: t >= 4 ? cs.gold : '#000000', ei: t >= 4 ? 0.35 : 0 });
+        if (t >= 1) for (let i = 0; i < 3 + t; i++) { const q = mk(G.sph(0.09 + t * 0.006, 6), pl, hg, 0.22 - i * 0.12, top + 0.12 + Math.sin(i * 0.6) * 0.05 + t * 0.01, 0); q.scale.set(1, 1.3, 0.6); }
+        if (t >= 3) mk(G.oct(0.06), k.glow, hg, R0 * 1.12, cy + 0.1, 0);
+        if (t >= 3) for (const z of [-1, 1]) wing(z, cy + 0.2, 0.36 + t * 0.04, t >= 5 ? 3 : 2, k.white);
+        if (t >= 5) { halo(top + 0.42, 0.34); glow(0, top + 0.3, 0, 1.1, 0.35); }
+        break;
+      }
+      case 'wings': { // Valquíria: tiara alada (cabelo à mostra), asas que crescem, estrela e auréola
+        const hy = cy - 0.02, hr = 0.47;
+        band(hy, hr, 0.035 + t * 0.003, k.gold);
+        mk(t >= 2 ? G.oct(0.06) : G.sph(0.045, 6), t >= 2 ? k.glow : k.gold, hg, hr * 0.93, hy + 0.02, 0);
+        for (const z of [-1, 1]) wing(z, hy + 0.1, 0.26 + t * 0.05, 1 + Math.min(3, Math.ceil(t / 2)), t >= 2 ? k.white : k.metal, 0.84);
+        if (t >= 3) { const sp = mk(G.cone(0.045, 0.2 + t * 0.03, 4), k.gold, hg, hr * 0.9, hy + 0.2, 0); sp.scale.z = 0.5; }
+        if (t >= 4) for (const z of [-1, 1]) mk(G.oct(0.04), k.glow, hg, 0, hy, z * hr * 0.95);
+        if (t >= 5) { halo(cy + 0.75, 0.28); glow(0, cy + 0.6, 0, 0.9, 0.35); }
+        break;
+      }
+      case 'wizard': { // Arcanista: chapéu de mago com faixa, estrelas, anel de runas e cristais
+        if (!part(cfg.hat, mixCol(k.col, '#ffffff', 0.5))) { const c = mk(G.cone(R0 * 0.9, 0.9, 10), k.metal, hg, -0.05, top + 0.25, 0); c.rotation.z = 0.15; band(cy + 0.3, R0 * 1.4, 0.05, k.metal); }
+        band(cy + 0.36, R0 * 0.98, 0.045, k.gold);
+        if (t >= 1) mk(G.oct(0.07 + t * 0.006), k.glow, hg, R0 * 0.98, cy + 0.38, 0);
+        if (t >= 2) for (let i = 0; i < 2 + Math.floor(t / 2); i++) { const a = (i / (2 + Math.floor(t / 2))) * Math.PI * 2 + 0.6; mk(G.oct(0.04), k.glow, hg, Math.cos(a) * 0.72, top + 0.1 + (i % 2) * 0.16, Math.sin(a) * 0.72); }
+        if (t >= 3) { const rg = mk(G.torus(0.5, 0.016), k.edge, hg, 0, top + 0.18, 0); rg.rotation.x = Math.PI / 2 + 0.25; }
+        if (t >= 4) for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; const c = mk(G.oct(0.06), k.glow, hg, Math.cos(a) * 0.86, cy + 0.5, Math.sin(a) * 0.86); c.scale.y = 1.8; }
+        if (t >= 5) { const rg = mk(G.torus(0.6, 0.014), k.glow, hg, 0, top + 0.3, 0); rg.rotation.x = Math.PI / 2 - 0.25; glow(0, top + 0.4, 0, 1.2, 0.35); }
+        break;
+      }
+      default: { // Clériga: diadema, coroa de pontas, mitra baixa, raios de sol e auréola
+        const hy = cy + 0.0, hr = 0.47;
+        band(hy, hr, 0.035 + t * 0.003, k.gold);
+        mk(G.oct(0.05 + t * 0.006), k.glow, hg, hr * 0.94, hy + 0.02, 0);
+        if (t >= 1) for (let i = 0; i < 5 + t; i++) { const a = (i / (5 + t)) * Math.PI * 2; mk(G.cone(0.03, 0.1 + t * 0.012, 4), k.gold, hg, Math.cos(a) * hr * 0.93, hy + 0.08, Math.sin(a) * hr * 0.93); }
+        if (t >= 2) { const m = mk(G.sph(0.33, 10), M(mixCol(k.col, '#ffffff', 0.5), { e: cs.gold, ei: 0.12 }), hg, -0.03, cy + 0.2, 0); m.scale.set(1, 0.85 + t * 0.05, 0.9); mk(G.box(0.03, 0.22 + t * 0.02, 0.04), k.gold, hg, 0.24, cy + 0.36, 0).rotation.z = 0.6; }
+        if (t >= 4) for (let i = 0; i < 9; i++) { const a = (i / 8) * Math.PI - Math.PI / 2; const r = mk(G.cone(0.025, 0.22, 4), k.edge, hg, -0.3, cy + 0.15 + Math.cos(a) * 0.55, Math.sin(a) * 0.55); r.rotation.x = -a; }
+        if (t >= 5) { halo(cy + 0.85, 0.28); glow(0, cy + 0.6, 0, 1.0, 0.4); }
+      }
+    }
+  }
+  // ornamento de ombro de cada classe (por cima da ombreira básica)
+  function classShoulder(g, t, k, M, cs, rc) {
+    switch (cs.sh) {
+      case 'spikes': for (let i = 0; i < 1 + Math.ceil(t / 2); i++) mk(G.cone(0.035, 0.16 + t * 0.03 - i * 0.02, 5), M(t >= 4 ? '#2a1612' : '#ece2c8'), g, (i - Math.ceil(t / 2) / 2) * 0.08, 0.2, 0); break;
+      case 'gears': { const gr = group(g, 0, 0.16, 0); gr.rotation.x = Math.PI / 2; mk(G.torus(0.09 + t * 0.008, 0.028), k.gold, gr, 0, 0, 0); for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; mk(G.box(0.045, 0.05, 0.045), k.gold, gr, Math.cos(a) * (0.13 + t * 0.008), Math.sin(a) * (0.13 + t * 0.008), 0); } if (t >= 3) mk(G.sph(0.04, 6), k.glow, g, 0, 0.18, 0); break; }
+      case 'leaf': for (let i = 0; i < 2 + Math.floor(t / 2); i++) { const f = mk(G.cone(0.05, 0.22 + t * 0.02, 4), i % 2 ? k.gold : k.metal, g, (i - 1) * 0.07, 0.16, -0.02); f.scale.z = 0.3; f.rotation.z = (i - 1) * 0.5; } break;
+      case 'blades': for (let i = 0; i < 1 + Math.floor(t / 2); i++) { const b = mk(G.cone(0.04, 0.26 + t * 0.035, 4), k.metal, g, -0.03, 0.2 + i * 0.03, (i - 0.5) * 0.09); b.scale.x = 0.3; b.rotation.x = (i - 0.5) * 0.5; } if (t >= 3) mk(G.oct(0.035), k.glow, g, 0, 0.12, 0.1); break;
+      case 'plates': { const p = mk(G.sph(0.15 + t * 0.014, 8), k.metal, g, 0, 0.14, 0); p.scale.set(1.1, 0.4, 1.1); mk(G.box(0.03, 0.12, 0.03), k.gold, g, 0, 0.1, 0.15 + t * 0.012); mk(G.box(0.09, 0.03, 0.03), k.gold, g, 0, 0.12, 0.15 + t * 0.012); if (t >= 4) mk(G.oct(0.04), k.glow, g, 0, 0.22, 0); break; }
+      case 'wing': for (let i = 0; i < 1 + Math.ceil(t / 2); i++) { const w = mk(G.box(0.2 + t * 0.02 - i * 0.03, 0.06, 0.02), t >= 2 ? k.white : k.metal, g, 0, 0.14 + i * 0.06, -0.06); w.rotation.z = 0.5 + i * 0.25; } break;
+      case 'crystal': for (let i = 0; i < 1 + Math.floor(t / 2); i++) { const c = mk(G.oct(0.045 + t * 0.004), k.glow, g, (i - 0.5) * 0.1, 0.24 + i * 0.05, 0); c.scale.y = 1.8; } break;
+      default: { mk(G.torus(0.13 + t * 0.012, 0.014), k.gold, g, 0, 0.14, 0).rotation.x = Math.PI / 2; mk(G.sph(0.04 + t * 0.004, 8), M('#fffaf0', { e: cs.gold, ei: 0.4 }), g, 0, 0.2, 0); if (t >= 4) mk(G.torus(0.09, 0.01), k.glow, g, 0, 0.24, 0).rotation.x = Math.PI / 2; }
+    }
+  }
+
   // peças de armadura presas aos ossos dos modelos
   function attachArmor(md, eq, M) {
     const inv = 1 / md.scale, B = (n) => md.obj.getObjectByName(n);
     const piece = (bone) => { const b = B(bone); if (!b) return null; const g = group(b); g.scale.setScalar(inv); return g; };
     if (eq.luvas) {
-      const t = tierOf(eq.luvas), rc = eq.luvas.set ? SETS[eq.luvas.set].color : rarOf(eq.luvas).color, k = gearMats(M, t, rc, rarIdx(eq.luvas), eq.luvas.refine);
+      const t = tierOf(eq.luvas), rc = eq.luvas.set ? SETS[eq.luvas.set].color : rarOf(eq.luvas).color, k = gearMats(M, t, rc, rarIdx(eq.luvas), eq.luvas.refine, vtOf(eq.luvas));
       for (const side of ['l', 'r']) {
         const g = piece('wrist' + side); if (!g) continue;
         const cuff = mk(G.cyl(0.085 + t * 0.006, 0.075, 0.09, 10), k.metal, g, 0, 0.02, 0);
@@ -946,7 +1231,7 @@ const Scene3D = (() => {
       }
     }
     if (eq.botas) {
-      const t = tierOf(eq.botas), rc = eq.botas.set ? SETS[eq.botas.set].color : rarOf(eq.botas).color, k = gearMats(M, t, rc, rarIdx(eq.botas), eq.botas.refine);
+      const t = tierOf(eq.botas), rc = eq.botas.set ? SETS[eq.botas.set].color : rarOf(eq.botas).color, k = gearMats(M, t, rc, rarIdx(eq.botas), eq.botas.refine, vtOf(eq.botas));
       for (const side of ['l', 'r']) {
         const g = piece('lowerleg' + side); if (!g) continue;
         mk(G.cyl(0.1 + t * 0.006, 0.09, 0.16 + t * 0.02, 10), k.metal, g, 0, 0.12, 0);
@@ -956,13 +1241,14 @@ const Scene3D = (() => {
       }
     }
     if (eq.armadura) {
-      const t = tierOf(eq.armadura), rc = eq.armadura.set ? SETS[eq.armadura.set].color : rarOf(eq.armadura).color, k = gearMats(M, t, rc, rarIdx(eq.armadura), eq.armadura.refine);
+      const t = tierOf(eq.armadura), rc = eq.armadura.set ? SETS[eq.armadura.set].color : rarOf(eq.armadura).color, k = gearMats(M, t, rc, rarIdx(eq.armadura), eq.armadura.refine, vtOf(eq.armadura));
       for (const side of ['l', 'r']) {
         const g = piece('upperarm' + side); if (!g) continue;
         const p = mk(G.sph(0.13 + t * 0.018, 10, 0), k.metal, g, 0, 0.05, 0); p.scale.set(1.15, 0.8, 1.15);
         mk(G.torus(0.12 + t * 0.017, 0.016), k.edge, g, 0, 0.0, 0).rotation.x = Math.PI / 2;
         if (t >= 2) { const p2 = mk(G.sph(0.1 + t * 0.012, 8), k.metal, g, 0, 0.13, 0); p2.scale.set(1, 0.45, 1); }
-        if (t >= 4) for (let i = 0; i < 3; i++) mk(G.cone(0.025, 0.14 + i * 0.03, 4), k.gold, g, (i - 1) * 0.06, 0.18, 0);
+        if (CUR_STYLE) classShoulder(g, t, k, M, CUR_STYLE, rc);
+        else if (t >= 4) for (let i = 0; i < 3; i++) mk(G.cone(0.025, 0.14 + i * 0.03, 4), k.gold, g, (i - 1) * 0.06, 0.18, 0);
         if (t >= 5) mk(G.oct(0.04), k.glow, g, 0, 0.12, 0.12);
       }
       const c = piece('chest');
@@ -1113,35 +1399,39 @@ const Scene3D = (() => {
     const h = st.hero, wt = h.wt, two = h.twoHand;
     h.swing = (h.swing || 0) + 1;
     const alt = h.swing % 2;
-    switch (wt) {
-      case 'machado': return skill ? (two ? '2H_Melee_Attack_Spin' : '1H_Melee_Attack_Jump_Chop') : (two ? (alt ? '2H_Melee_Attack_Chop' : '2H_Melee_Attack_Slice') : (alt ? '1H_Melee_Attack_Chop' : '1H_Melee_Attack_Slice_Diagonal'));
-      case 'martelo': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? '1H_Melee_Attack_Chop' : '1H_Melee_Attack_Slice_Diagonal');
-      case 'espada': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? '1H_Melee_Attack_Slice_Horizontal' : '1H_Melee_Attack_Slice_Diagonal');
-      case 'foice': case 'lanca': return skill ? '2H_Melee_Attack_Spin' : (alt ? '2H_Melee_Attack_Slice' : '2H_Melee_Attack_Chop');
-      case 'arco': return '2H_Ranged_Shoot';
-      case 'dardo': return 'Throw';
+    switch (wInfo(wt).anim) {
+      case 'm1': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? (wt === 'espada' ? '1H_Melee_Attack_Slice_Horizontal' : '1H_Melee_Attack_Chop') : '1H_Melee_Attack_Slice_Diagonal');
+      case 'm2': return skill ? '2H_Melee_Attack_Spin' : (alt ? '2H_Melee_Attack_Slice' : '2H_Melee_Attack_Chop');
+      case 'stab': return skill ? '1H_Melee_Attack_Jump_Chop' : (alt ? '1H_Melee_Attack_Stab' : '1H_Melee_Attack_Slice_Diagonal');
+      case 'bow': return '2H_Ranged_Shoot';
+      case 'xbow': return '1H_Ranged_Shoot';
+      case 'throw': return 'Throw';
       default: return skill ? 'Spellcast_Long' : 'Spellcast_Shoot';
     }
   }
 
   const TWO_HAND = { foice: 1, cajado: 1, arco: 1 };
   function buildHeroModel(cls, eqIn) {
+    CUR_STYLE = CLASS_STYLE[cls] || null;
+    try { return buildHeroModel0(cls, eqIn); } finally { CUR_STYLE = null; }
+  }
+  function buildHeroModel0(cls, eqIn) {
     const cfg = HERO_MODEL[cls]; if (!cfg || !Assets.gltf[cfg.m]) return null;
     const eq = {};
     const src = eqIn || S.equip;
-    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel']) if (src[k] && (k !== 'arma' || CLASSES[cls].anyWeapon || src[k].wtype === CLASSES[cls].weapon)) eq[k] = src[k];
+    for (const k of ['arma', 'armadura', 'elmo', 'luvas', 'botas', 'escudo', 'amuleto', 'anel']) if (src[k] && (k !== 'arma' || CLASSES[cls].anyWeapon || classWeapons(cls).includes(src[k].wtype))) eq[k] = src[k];
     const capa = eqIn ? eqIn._capa : (S.cape && S.cape.lvl ? { lvl: S.cape.lvl, vis: S.cape.vis !== false } : null); // Capa de Guerra
     const wt = eq.arma ? eq.arma.wtype : CLASSES[cls].weapon;
     const aT = eq.armadura ? tierOf(eq.armadura) : -1;
     let tint = cfg.tint || '#ffffff';
-    if (aT >= 0) tint = mixCol(tint, TIER_COL[aT], 0.3);
+    if (aT >= 0) tint = mixCol(tint, CUR_STYLE ? rampCol(CUR_STYLE.ramp, vtOf(eq.armadura) / 9) : TIER_COL[aT], CUR_STYLE ? 0.12 : 0.3);
     const md = instModel(cfg.m, 1.75, tint);
     const root = group(null), inner = group(root);
     inner.rotation.y = -0.45;
     inner.add(md.obj);
     const M = matFactory(md.mats);
     // arma (6 visuais por tipo, conforme o nível do item)
-    const twoHand = !!TWO_HAND[wt];
+    const twoHand = wHands(wt) === 2;
     const hand = wt === 'arco' ? md.bones.l : md.bones.r;
     const holder = group(hand);
     holder.scale.setScalar(1 / md.scale);
@@ -1149,15 +1439,19 @@ const Scene3D = (() => {
     const weapon = buildWeaponT(wt, eq.arma, M);
     holder.add(weapon);
     // escudo
-    if (!twoHand && (eq.escudo || cls === 'paladino') && md.bones.l) {
+    const mage = cfg.m === 'Mage'; // magos seguram um tomo no lugar do escudo
+    if (!twoHand && !mage && eq.escudo && md.bones.l) {
       const sh = group(md.bones.l); sh.scale.setScalar(1 / md.scale); sh.rotation.set(0, 0, Math.PI / 2);
       buildShieldT(sh, eq.escudo, M);
     }
-    if (cfg.l && !eq.escudo) showPart(md, cfg.l);
+    if (mage && !twoHand && (eq.escudo || cfg.l)) {
+      const bk = showPart(md, 'Spellbook_open');
+      if (bk && eq.escudo && md.bones.l) { const rc2 = rarOf(eq.escudo).color, gg = group(md.bones.l); gg.scale.setScalar(1 / md.scale); const gl = glowSprite(rc2, 0.5 + tierOf(eq.escudo) * 0.06, 0.5); gl.position.set(0, 0.15, 0.1); gg.add(gl); mk(G.oct(0.05 + tierOf(eq.escudo) * 0.006), M(rc2, { e: rc2, ei: 1.4 }), gg, 0, 0.32, 0.1); }
+    }
     // elmo (6 modelos) ou chapéu padrão da classe
     if (eq.elmo && md.bones.head) {
       const hg = group(md.bones.head); hg.scale.setScalar(1 / md.scale);
-      buildHelmetModel(hg, eq.elmo, M);
+      buildClassHelm(hg, eq.elmo, M, cls, md, cfg);
     } else if (cfg.hat && cfg.hatDefault) showPart(md, cfg.hat);
     // capa a partir do tier 2 da armadura (ou padrão da classe)
     if (capa && cfg.cape) { // Capa de Guerra: cor por faixa de nível, brilho a partir do 10; o jogador pode esconder
@@ -1178,7 +1472,8 @@ const Scene3D = (() => {
     aura.rotation.x = -Math.PI / 2;
     const auraGlow = glowSprite('#ffd860', 2.4, 0); auraGlow.position.set(0, 1, 0); root.add(auraGlow);
     const h = { root, inner, model: md, mats: md.mats, wt, aura, auraGlow, twoHand, weapon, atk: null, hurt: -9, x: 0 };
-    playAnim(h, 'Idle');
+    h.idle = twoHand && wInfo(wt).anim === 'm2' ? '2H_Melee_Idle' : 'Idle';
+    playAnim(h, h.idle);
     return h;
   }
 
@@ -1195,7 +1490,7 @@ const Scene3D = (() => {
       if (R.inTown) playAnim(h, h.walk ? 'Walking_A' : 'Idle', { fade: 0.2 });
       else if (st.run) playAnim(h, R.mounted && activeMount() ? 'Idle' : 'Running_A', { fade: 0.15 });
       else if (R.gathering) playAnim(h, 'Interact', { fade: 0.2 });
-      else playAnim(h, st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
+      else playAnim(h, h.idle !== 'Idle' ? h.idle : st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
     }
     md.mixer.update(dt);
     setFlash(h.mats, t - h.hurt < 0.15 ? 0.6 : 0, '#ff6060');
@@ -1525,7 +1820,7 @@ const Scene3D = (() => {
   }
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function heroAttackClipFor(wt) {
-    return { foice: '2H_Melee_Attack_Slice', lanca: '2H_Melee_Attack_Slice', arco: '2H_Ranged_Shoot', dardo: 'Throw', cajado: 'Spellcast_Shoot', cetro: 'Spellcast_Shoot', espada: '1H_Melee_Attack_Slice_Diagonal' }[wt] || '1H_Melee_Attack_Chop';
+    return { m1: '1H_Melee_Attack_Chop', m2: '2H_Melee_Attack_Slice', stab: '1H_Melee_Attack_Stab', bow: '2H_Ranged_Shoot', xbow: '1H_Ranged_Shoot', throw: 'Throw', cast: 'Spellcast_Shoot' }[wInfo(wt).anim];
   }
 
   // montaria e mascote
@@ -2074,7 +2369,7 @@ const Scene3D = (() => {
     if (/Sagrad|Luz|Raio|Celest|Ira|Cruz|Julgamento|Esfera/i.test(name)) return '#ffe680';
     if (/Nova|Arcano|Elemental/i.test(name)) return '#c070ff';
     if (/Trovão|Choque|Sísmico/i.test(name)) return '#80e0ff';
-    return { cajado: '#ff8a30', cetro: '#ffe680', arco: '#f0e0b0', dardo: '#e0e8f0' }[wt] || '#ffffff';
+    return { cajado: '#ff8a30', varinha: '#ff8a30', cetro: '#ffe680', baculo: '#ffe680', arco: '#f0e0b0', besta: '#f0e0b0', dardo: '#e0e8f0', glaive: '#e0e8f0' }[wt] || '#ffffff';
   }
 
   // ---------- números flutuantes (DOM) ----------
@@ -2453,7 +2748,7 @@ const Scene3D = (() => {
     }
     const name = o.skillName || '';
     const sky = o.skill && /Meteoro|Chuva|Tormenta|Ira|Tempestade|Explosivas|Julgamento|Nova/i.test(name);
-    const kind = wt === 'arco' ? 'arrow' : wt === 'dardo' ? 'dart' : 'orb';
+    const wa = wInfo(wt).anim, kind = wa === 'bow' || wa === 'xbow' ? 'arrow' : wa === 'throw' ? 'dart' : 'orb';
     const hx = st.hero.root.position.x;
     hits.forEach((h, i) => {
       later(dur * 0.42 + i * 0.06, () => {
@@ -2950,9 +3245,9 @@ const Scene3D = (() => {
               const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
               r.setClearColor(0x000000, 0);
               const sc = new THREE.Scene();
-              const key = new THREE.DirectionalLight(0xfff0d8, 0.55); key.position.set(2.5, 5, 6); sc.add(key);
+              const key = new THREE.DirectionalLight(0xfff0d8, 0.8); key.position.set(2.5, 5, 6); sc.add(key);
               const rim = new THREE.DirectionalLight(0xffa860, 0.45); rim.position.set(-4, 3, -4); sc.add(rim);
-              sc.add(new THREE.AmbientLight(0xffffff, 0.32));
+              sc.add(new THREE.AmbientLight(0xffffff, 0.5));
               pv = { r, sc, cam: new THREE.PerspectiveCamera(30, 1, 0.1, 50) };
             }
             pv.r.setPixelRatio(1); pv.r.setSize(w, h, false);

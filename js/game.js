@@ -69,7 +69,7 @@ function newCharacter(name, cls) {
   return {
     v: 1, name, cls, lvl: 1, xp: 0, gold: 50, pts: 0,
     attr: { ...c.base }, hp: 1, mp: 1,
-    equip: { arma: makeStarterWeapon(cls) },
+    equip: { arma: makeStarterWeapon(cls) }, alt: { arma: makeStarterWeapon(cls, CLASSES[cls].weapon2), escudo: null }, w2: 1, wset: 0,
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
     settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true, autoAlma: false, almaV2: true },
@@ -78,10 +78,79 @@ function newCharacter(name, cls) {
   };
 }
 
-function makeStarterWeapon(cls) {
-  const w = CLASSES[cls].weapon;
-  return { uid: uid(), slot: 'arma', wtype: w, name: WEAPON_NAMES[w][0], ilvl: 1, rarity: 'comum', min: 4, max: 7, def: 0, affixes: [], refine: 0, req: 1 };
+function makeStarterWeapon(cls, w = CLASSES[cls].weapon) {
+  const k = wHands(w) === 2 ? TWO_HAND_MULT : 1;
+  return { uid: uid(), slot: 'arma', wtype: w, name: WEAPON_NAMES[w][0], ilvl: 1, rarity: 'comum', min: Math.round(4 * k), max: Math.round(7 * k), def: 0, affixes: [], refine: 0, req: 1 };
 }
+
+// ---------- dois conjuntos de arma ----------
+// S.equip.arma/escudo = conjunto em uso; S.alt = o outro. Um conjunto é de uma mão (+ escudo), o outro de duas mãos.
+// Só o conjunto em uso conta nos atributos: nada se soma.
+const SWAP_CD = 3;
+function altState() { if (!S.alt) S.alt = { arma: null, escudo: null }; return S.alt; }
+const isTwoHand = (it) => !!it && wHands(it.wtype) === 2;
+function invPut(it) { if (it) S.inv.push(it); }
+// o escudo sempre mora no conjunto que não é de duas mãos
+function fixSets() {
+  const a = altState();
+  if (isTwoHand(S.equip.arma) && S.equip.escudo) { if (!a.escudo && !isTwoHand(a.arma)) a.escudo = S.equip.escudo; else invPut(S.equip.escudo); delete S.equip.escudo; }
+  if (isTwoHand(a.arma) && a.escudo) { if (!S.equip.escudo && !isTwoHand(S.equip.arma)) S.equip.escudo = a.escudo; else invPut(a.escudo); a.escudo = null; }
+}
+function canSwap() { return !!altState().arma; }
+function swapSet(auto) {
+  const a = altState();
+  if (!a.arma) { if (!auto) toast('O outro conjunto está vazio: equipe nele uma arma de ' + (isTwoHand(S.equip.arma) ? 'uma mão' : 'duas mãos') + '.', ''); return false; }
+  if ((R.swapCd || 0) > 0) { if (!auto) toast(`Troca de arma em ${Math.ceil(R.swapCd)}s.`, ''); return false; }
+  const w = S.equip.arma, e = S.equip.escudo;
+  S.equip.arma = a.arma; if (a.escudo) S.equip.escudo = a.escudo; else delete S.equip.escudo;
+  a.arma = w || null; a.escudo = e || null;
+  S.wset = S.wset ? 0 : 1;
+  fixSets();
+  R.swapCd = SWAP_CD; R.autoSwapped = !!auto && !isTwoHand(S.equip.arma);
+  clampVitals(); Sfx.play('click');
+  const sh = !!S.equip.escudo;
+  log(`🔄 ${auto ? 'Troca automática: ' : ''}${esc(S.equip.arma.name)}${sh ? ' + escudo (mais defesa)' : isTwoHand(S.equip.arma) ? ' (mais ataque)' : ''}.`, 'muted');
+  R.dirty.all = true;
+  return true;
+}
+// troca sozinho para o escudo quando a vida cai e volta para as duas mãos quando ela se recupera
+function autoSwapTick(dt, d) {
+  if (R.swapCd > 0) R.swapCd -= dt;
+  if (!S.settings.autoSwap || R.inTown || R.dead || !S.alt || !S.alt.arma) return;
+  const pct = S.hp / d.maxHp;
+  if (pct < 0.35 && isTwoHand(S.equip.arma) && !isTwoHand(S.alt.arma)) swapSet(true);
+  else if (pct > 0.8 && R.autoSwapped && !isTwoHand(S.equip.arma) && isTwoHand(S.alt.arma)) swapSet(true);
+}
+// arma do tipo pedido com os números de outra (presente da migração e herói de teste)
+function makeWeaponLike(wtype, ilvl, rarityId) {
+  let it = null;
+  for (let i = 0; i < 60; i++) { it = genItem(ilvl, 1, 'arma'); if (it.rarity === rarityId) break; }
+  const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1, now2 = wHands(wtype) === 2 ? TWO_HAND_MULT : 1;
+  it.rarity = rarityId; it.wtype = wtype; it.name = WEAPON_NAMES[wtype][clamp(Math.floor(ilvl / 17), 0, 5)];
+  it.min = Math.round(it.min / was * now2); it.max = Math.round(it.max / was * now2);
+  it.affixes = it.affixes.slice(0, rarityOf(it).affixes); delete it.set;
+  return it;
+}
+// saves antigos: armas de duas mãos ganham o bônus, o escudo vai para o conjunto certo e o herói recebe a segunda arma
+function migrateWeapons() {
+  altState();
+  if (S.w2) { fixSets(); return; }
+  S.w2 = 1;
+  for (const it of [...Object.values(S.equip), ...S.inv]) {
+    if (!it || it.slot !== 'arma') continue;
+    if (it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
+    if (isTwoHand(it)) { it.min = Math.round(it.min * TWO_HAND_MULT); it.max = Math.round(it.max * TWO_HAND_MULT); }
+  }
+  const cur = S.equip.arma;
+  if (cur && !S.alt.arma) {
+    const [w1, w2] = classWeapons(S.cls), other = isTwoHand(cur) ? (wHands(w1) === 1 ? w1 : w2) : (wHands(w1) === 2 ? w1 : w2);
+    if (cur.ilvl <= 1) S.alt.arma = makeStarterWeapon(S.cls, other);
+    else { const ri = Math.max(0, RARITIES.findIndex((r) => r.id === cur.rarity) - 1); S.alt.arma = makeWeaponLike(other, cur.ilvl, RARITIES[ri].id); S.alt.arma.req = Math.min(S.alt.arma.req, S.lvl); }
+    R_pendingNote = `🎁 Novidade: agora existem <b>dois conjuntos de arma</b>. Você ganhou ${esc(S.alt.arma.name)} no outro conjunto. Duas mãos bate mais forte; uma mão usa escudo e aguenta mais. Troque no botão 🔄.`;
+  }
+  fixSets();
+}
+let R_pendingNote = null;
 
 // ---------- itens ----------
 const SLOT_DEF = { armadura: 1.0, escudo: 0.7, elmo: 0.5, luvas: 0.3, botas: 0.35, amuleto: 0, anel: 0 };
@@ -103,10 +172,10 @@ function genItem(ilvl, boost = 1, forceSlot = null) {
   if (slotName === 'arma') {
     // 70% de chance de ser do tipo da sua classe
     const types = Object.keys(WEAPON_NAMES);
-    const own = CLASSES[S.cls].weapon;
+    const own = classWeapons(S.cls)[rint(0, 1)];
     it.wtype = Math.random() < 0.7 ? own : types[rint(0, types.length - 1)];
     it.name = WEAPON_NAMES[it.wtype][tier];
-    const base = (5 + ilvl * 2.2) * rar.mult * rnd(0.9, 1.1);
+    const base = (5 + ilvl * 2.2) * rar.mult * rnd(0.9, 1.1) * (wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1);
     it.min = Math.round(base);
     it.max = Math.round(base * rnd(1.45, 1.75));
   } else {
@@ -131,7 +200,7 @@ function itemValue(it) {
 }
 function refineMult(it) { return 1 + (it.refine || 0) * 0.08; }
 function rarityOf(it) { return RARITIES.find((r) => r.id === it.rarity) || RARITIES[0]; }
-function canUseWeapon(it) { return it.slot !== 'arma' || CLASSES[S.cls].anyWeapon || it.wtype === CLASSES[S.cls].weapon; }
+function canUseWeapon(it) { return it.slot !== 'arma' || CLASSES[S.cls].anyWeapon || classWeapons(S.cls).includes(it.wtype); }
 
 function canEquip(it) { return S.lvl >= it.req && canUseWeapon(it); }
 
@@ -310,7 +379,7 @@ function forgeItem(slotName) {
   log(`🔨 O Ferreiro forjou <span style="color:${rarityOf(it).color}">${esc(it.name)}</span> (${rarityOf(it).name})!`, 'loot');
   R.sel = it.uid; R.refSel = it.uid; renderTab();
 }
-function allItems() { return [...SLOT_ORDER.map((sl) => S.equip[sl]).filter(Boolean), ...S.inv]; }
+function allItems() { return [...eqAll(), ...S.inv]; }
 function buyShop(id, n) {
   const p = SHOP.find((x) => x.id === id); if (!p) return;
   S.owned = S.owned || {}; petsState();
@@ -516,7 +585,7 @@ function spawnSource() {
   const camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)], i = rint(0, 2);
   return { mon: z.monsters[i], lvl: z.min + Math.floor((i / 3) * span) + rint(0, Math.max(1, Math.floor(span / 3))), center: c, spread: 3 };
 }
-const RANGED_W = { arco: 1, dardo: 1, cajado: 1, cetro: 1 };
+const RANGED_W = new Proxy({}, { get: (_, wt) => (wInfo(wt).ranged ? 1 : undefined) });
 const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 function weaponRange() { return RANGED_W[curWeapon()] ? 7 : 1.8; }
 function seeded(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -870,18 +939,18 @@ function log(msg, cls = '') {
 
 function floatText(target, text, cls) { Scene.float(target, text, cls); }
 
-function curWeapon() { const c = CLASSES[S.cls]; return c.anyWeapon && S.equip.arma ? S.equip.arma.wtype : c.weapon; }
+function curWeapon() { const c = CLASSES[S.cls], w = S.equip.arma; return w && (c.anyWeapon || classWeapons(S.cls).includes(w.wtype)) ? w.wtype : c.weapon; }
 
 function attackSound(skillName, crit, miss) {
   const wt = curWeapon();
-  const ranged = { arco: 1, dardo: 1, cajado: 1, cetro: 1 }[wt];
+  const wa = wInfo(wt).anim, ranged = wInfo(wt).ranged;
   const delay = ranged ? 0.5 : 0.22;
-  if (wt === 'arco') Sfx.play('bow');
-  else if (wt === 'dardo') Sfx.play('throw');
-  else if (wt === 'cajado' || wt === 'cetro') Sfx.play('magic', { fire: /Fogo|Meteoro/.test(skillName || '') });
+  if (wa === 'bow' || wa === 'xbow') Sfx.play('bow');
+  else if (wa === 'throw') Sfx.play('throw');
+  else if (wa === 'cast') Sfx.play('magic', { fire: /Fogo|Meteoro/.test(skillName || '') });
   else Sfx.play('slash', { gap: 30 });
   if (miss) return;
-  if (skillName && (wt === 'cajado' || /Meteoro|Sísmico|Rodopio|Chuva|Tempestade|Tormenta|Nova|Julgamento|Executar/.test(skillName))) Sfx.play('boom', { delay, gap: 200 });
+  if (skillName && (wt === 'cajado' || wt === 'varinha' || /Meteoro|Sísmico|Rodopio|Chuva|Tempestade|Tormenta|Nova|Julgamento|Executar/.test(skillName))) Sfx.play('boom', { delay, gap: 200 });
   else if (skillName && wt === 'cetro') Sfx.play('holy', { delay });
   Sfx.play(crit ? 'crit' : 'hit', { delay, gap: 30 });
 }
@@ -1181,7 +1250,7 @@ function tick() {
   S.hp = Math.min(S.hp, d.maxHp);
   R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); checkTitles(); }
   if (!R.dead) { titleState(); S.streak.alive += dt; }
-  soulTick(dt); mechTick(dt, d);
+  soulTick(dt); mechTick(dt, d); autoSwapTick(dt, d);
   if (!R.inTown && !R.dead) lootTick(dt);
   if (!R.inTown && !R.dead) turretTick(dt, d);
 
@@ -1481,7 +1550,7 @@ function makeLegendary(slotName, wtype) {
   let it = null;
   for (let i = 0; i < 400; i++) { it = genItem(100, 60, slotName); if (it.rarity === 'lendario') break; }
   if (it.rarity !== 'lendario') { it.rarity = 'lendario'; }
-  if (wtype) { it.wtype = wtype; it.name = WEAPON_NAMES[wtype][5]; }
+  if (wtype) { const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1, k = wHands(wtype) === 2 ? TWO_HAND_MULT : 1; it.min = Math.round(it.min / was * k); it.max = Math.round(it.max / was * k); it.wtype = wtype; it.name = WEAPON_NAMES[wtype][5]; }
   it.refine = 10; it.req = 1;
   return it;
 }
@@ -1492,12 +1561,13 @@ function makeFullChar(name, cls, wtype) {
   autoDistribute();
   S.equip = { arma: makeLegendary('arma', wtype) };
   for (const sl of ['armadura', 'elmo', 'luvas', 'botas', 'amuleto', 'anel']) S.equip[sl] = makeLegendary(sl);
-  if (wtype !== 'foice' && wtype !== 'cajado' && wtype !== 'arco') S.equip.escudo = makeLegendary('escudo');
+  { const other = classWeapons(cls).find((w) => wHands(w) !== wHands(wtype)) || CLASSES[cls].weapon2; S.alt = { arma: makeLegendary('arma', other), escudo: null }; S.w2 = 1; }
+  S.equip.escudo = makeLegendary('escudo'); fixSets();
   S.gold = 5000000; S.stones = 250; S.pots = { hp1: 300, mp1: 300, hp2: 300, mp2: 300 };
   S.zone = 'z10'; S.tut = 99;
   S.skillLv = {}; for (const sk of CLASSES[cls].skills) S.skillLv[sk.id] = SKILL_MAX;
   const gemOrder = ['rubi', 'ametista', 'esmeralda', 'safira'];
-  for (const sl of SLOT_ORDER) if (S.equip[sl]) S.equip[sl].gems = gemOrder.slice(0, sockets(S.equip[sl])).map((t) => ({ t, l: 5 }));
+  for (const it of eqAll()) it.gems = gemOrder.slice(0, sockets(it)).map((t) => ({ t, l: 5 }));
   S.owned = {}; S.pets = { list: [{ uid: uid(), sp: 'espirito', lvl: PET_MAX, xp: 0 }, { uid: uid(), sp: 'coruja', lvl: 20, xp: 0 }], active: null }; S.pets.active = S.pets.list[0].uid;
   S.mounts = { list: [{ uid: uid(), sp: 'tigre', lvl: MOUNT_MAX }, { uid: uid(), sp: 'grifo', lvl: 6 }], active: null }; S.mounts.active = S.mounts.list[0].uid;
   // artefatos (cruz completa com ressonância) e alma completa (quadrado latino: toda linha e coluna em Harmonia)
@@ -1533,13 +1603,11 @@ function previewGear(cls) {
     S = newCharacter('prévia', cls);
     eq.arma = makeLegendary('arma', wt);
     for (const sl of ['armadura', 'elmo', 'luvas', 'botas', 'amuleto', 'anel']) eq[sl] = makeLegendary(sl);
-    if (classShield(cls)) eq.escudo = makeLegendary('escudo');
+    if (wHands(wt) === 1) eq.escudo = makeLegendary('escudo');
     eq._capa = { lvl: CAPE_MAX, vis: true };
   } finally { S = keep; }
   return eq;
 }
-const classShield = (cls) => !['foice', 'cajado', 'arco'].includes(CLASSES[cls].weapon);
-const WEAPON_LBL = { machado: 'Machados', martelo: 'Martelos', arco: 'Arcos', foice: 'Foices de duas mãos', espada: 'Espadas', dardo: 'Dardos', cajado: 'Cajados', cetro: 'Cetros' };
 const createShots = {};
 function createShot(cls, look) {
   const k = cls + ':' + look;
@@ -1591,7 +1659,8 @@ function renderCreate() {
           <div class="cr-attrs">${['for', 'int', 'des', 'agi', 'vit'].map((a) => `<div class="cr-attr ${c.main === a ? 'main' : ''}"><span>${attrLbl[a]}</span><i><em style="width:${Math.min(100, c.base[a] / maxAttr * 100)}%"></em></i><b>${c.base[a]}</b></div>`).join('')}</div>
         </div>
         <div class="cr-sec"><h4>🎒 O que pode usar</h4>
-          <div class="cr-chips"><span class="cr-chip gold">${c.icon} ${c.anyWeapon ? 'Qualquer arma (preferida: ' + WEAPON_LBL[c.weapon].toLowerCase() + ')' : WEAPON_LBL[c.weapon]}</span>${classShield(k) ? `<span class="cr-chip">🛡️ Escudo</span>` : `<span class="cr-chip off">Sem escudo (arma de duas mãos)</span>`}${wearSlots}<span class="cr-chip">🧥 Capa de Guerra</span></div>
+          <div class="cr-chips">${classWeapons(k).slice().sort((a, b) => wHands(a) - wHands(b)).map((w) => `<span class="cr-chip gold">${wInfo(w).icon} ${wInfo(w).plural}${wHands(w) === 1 ? ' + 🛡️ escudo' : ' (duas mãos)'}</span>`).join('')}${c.anyWeapon ? '<span class="cr-chip">⚙️ e qualquer outra arma</span>' : ''}${wearSlots}<span class="cr-chip">🧥 Capa de Guerra</span></div>
+          <p class="cr-small">⚔️ <b>Dois conjuntos de arma:</b> duas mãos bate 30% mais forte; uma mão usa escudo e aguenta mais. Você troca quando quiser (só um conta por vez).</p>
           <p class="cr-small">${el ? `${el.icon} Rosário de <b>${el.el}</b> (nível ${ROSARY_LVL}): ${el.txt(1)}.` : ''}</p>
           ${specs.length ? `<p class="cr-small"><b>Especializações no nível ${SPEC_LVL}:</b></p>${specs.map((sp) => `<p class="cr-small cr-spec">${sp.icon} <b>${sp.name}</b>: ${sp.desc}</p>`).join('')}` : ''}
         </div>
@@ -1612,8 +1681,8 @@ function startGame(i) {
   petsState(); // mascotes e montarias antigos viram o sistema novo
   if (!S.settings.quality) S.settings.quality = matchMedia('(max-width: 760px)').matches ? 'media' : 'alta';
   // migração: lança virou foice
-  for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
-  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, autoAlma: false, ...S.settings };
+  migrateWeapons();
+  S.settings = { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, autoSkill: true, autoQuest: true, auto: true, autoAlma: false, autoSwap: true, ...S.settings };
   if (!S.settings.almaV2) { S.settings.almaV2 = true; S.settings.autoAlma = false; } // a montagem automática passou a ser opcional (desligada)
   R = { tele: [], mon: null, mons: [], pos: null, move: null, worldZone: null, face: 0, pet: null, stealth: 0, reviveCd: 0, log: [], cds: {}, buffs: [], respawn: 0.5, dead: 0, potCd: 0, bossFight: false, tab: 'mapas', sel: null, tradeSel: new Set(), tradeGold: 0, coop: null, dirty: { all: true } };
   const off = offlineProgress();
@@ -1623,6 +1692,7 @@ function startGame(i) {
   Scene.start($('#scene'));
   if (online()) Net.connect();
   log(`Bem-vindo(a) de volta, <b>${esc(S.name)}</b>!`, 'lvl');
+  if (R_pendingNote) { log(R_pendingNote, 'lvl'); toast('Novidade: dois conjuntos de arma! Veja na ficha do herói.', 'good'); R_pendingNote = null; }
   const lg = checkLogin();
   if (off) showOffline(off);
   else if (lg) showLogin(lg);
@@ -2315,6 +2385,7 @@ function renderLive() {
   Sfx.music(R.inTown ? 'town' : (m && m.boss ? 'boss' : S.zone));
   $('#npc-bar').classList.toggle('hidden', !R.inTown);
   $('#town-btn').textContent = R.inTown ? '⚔️ Voltar a caçar' : '🏰 Cidade';
+  { const sb = $('#swap-btn'); if (sb) { const two = isTwoHand(S.equip.arma); sb.classList.toggle('hidden', !canSwap()); sb.textContent = '🔄 ' + (two ? '⚔️' : '🛡️'); sb.title = (two ? 'Duas mãos (mais ataque)' : 'Uma mão + escudo (mais defesa)') + '. Toque para trocar (X).'; } }
   const ab = $('#auto-btn'); ab.textContent = S.settings.auto ? '🤖 Auto: ON' : '🖐️ Auto: OFF'; ab.classList.toggle('on', !!S.settings.auto); ab.classList.toggle('hidden', !!R.inTown);
   if (R.inTown) {
     $('#mon-name').innerHTML = `${CITIES[CLASSES[S.cls].faction].icon} ${cityName()}`;
@@ -2399,7 +2470,7 @@ function renderChar() {
 }
 
 function itemIcon(it) {
-  if (it.slot === 'arma') { const k = Object.keys(CLASSES).find((c) => CLASSES[c].weapon === it.wtype); return k ? CLASSES[k].icon : '⚔️'; }
+  if (it.slot === 'arma') return wInfo(it.wtype).icon;
   return ARMOR_SLOTS[it.slot].icon;
 }
 function itemTitle(it) { return `${esc(it.name)}${it.refine ? ' +' + it.refine : ''}`; }
@@ -2410,14 +2481,14 @@ function itemDetail(it, compare = true) {
   const aff = AFFIXES.reduce((o, a) => (o[a.stat] = a, o), {});
   let h = `<div class="item-detail" style="--rc:${r.color}">
     <div class="it-name">${itemIcon(it)} ${itemTitle(it)}</div>
-    <div class="muted">${r.name} · ${it.slot === 'arma' ? 'Arma (' + it.wtype + ')' : ARMOR_SLOTS[it.slot].label} · Nível do item ${it.ilvl}</div>`;
-  if (it.slot === 'arma') h += `<div>Dano: <b>${Math.round(it.min * m)} - ${Math.round(it.max * m)}</b></div>`;
+    <div class="muted">${r.name} · ${it.slot === 'arma' ? wInfo(it.wtype).label : ARMOR_SLOTS[it.slot].label} · Nível do item ${it.ilvl}</div>`;
+  if (it.slot === 'arma') h += `<div>Dano: <b>${Math.round(it.min * m)} - ${Math.round(it.max * m)}</b></div><div class="muted">${isTwoHand(it) ? '🗡️ Duas mãos: +30% de dano, sem escudo' : '🛡️ Uma mão: pode usar escudo'}</div>`;
   else if (it.def) h += `<div>Defesa: <b>${Math.round(it.def * m)}</b></div>`;
   for (const a of it.affixes) h += `<div class="affix">+${a.val}${aff[a.stat].pct ? '' : ''} ${aff[a.stat].label}</div>`;
   h += `<div class="${S.lvl >= it.req ? 'muted' : 'bad'}">Requer nível ${it.req}</div>`;
-  if (!canUseWeapon(it)) h += `<div class="bad">Sua classe não usa ${it.wtype}</div>`;
+  if (!canUseWeapon(it)) h += `<div class="bad">Sua classe não usa ${wInfo(it.wtype).plural.toLowerCase()}</div>`;
   if (compare) {
-    const cur = S.equip[it.slot];
+    const cur = it.slot === 'arma' ? heldWeapon(isTwoHand(it)) : it.slot === 'escudo' ? heldShield() : S.equip[it.slot];
     if (cur && cur.uid !== it.uid) {
       if (it.slot === 'arma') {
         const diff = Math.round((it.min + it.max) / 2 * m - (cur.min + cur.max) / 2 * refineMult(cur));
@@ -2438,6 +2509,7 @@ function itemDetail(it, compare = true) {
 
 function eqSlotHtml(sl) {
   const it = S.equip[sl], label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
+  if (!it && sl === 'escudo' && isTwoHand(S.equip.arma)) { const o = altState().escudo; return `<div class="eq-slot empty off" title="Arma de duas mãos não usa escudo${o ? '. ' + esc(o.name) + ' está no outro conjunto.' : ''}"><span class="eq-ico">${o ? '🛡️' : '🚫'}</span><small>${o ? 'no outro conjunto' : 'duas mãos'}</small></div>`; }
   if (!it) return `<div class="eq-slot empty" title="${label}"><span class="eq-ico">${sl === 'arma' ? '⚔️' : ARMOR_SLOTS[sl].icon}</span><small>${label}</small></div>`;
   return `<div class="eq-slot r-${it.rarity}" data-eq="${sl}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}"><span class="eq-ico">${itemIcon(it)}</span>${it.refine ? `<i class="eq-ref">+${it.refine}</i>` : ''}<small>${itemTitle(it)}</small></div>`;
 }
@@ -2453,11 +2525,20 @@ function renderEquip() {
       <div class="doll-ilvl">Nível do equipamento <b>${il.toFixed(1)}</b></div>
     </div>
     <div class="doll-col">${['escudo', 'anel', 'botas'].map(eqSlotHtml).join('')}${capeSlot()}</div>
-    <div class="doll-weapon">${eqSlotHtml('arma')}</div>
+    <div class="doll-weapon">${eqSlotHtml('arma')}
+      <button class="btn swap-btn" data-act="swap-set" ${canSwap() ? '' : 'disabled'} title="Trocar de conjunto (tecla X)">🔄<small>Trocar</small></button>
+      ${(() => { const o = altState().arma; return o ? `<div class="eq-slot alt r-${o.rarity}" data-act="swap-set" style="--rc:${rarityOf(o).color}" title="Outro conjunto: ${esc(o.name)}${altState().escudo ? ' + ' + esc(altState().escudo.name) : ''}"><span class="eq-ico">${itemIcon(o)}${altState().escudo ? '<em>🛡️</em>' : ''}</span>${o.refine ? `<i class="eq-ref">+${o.refine}</i>` : ''}<small>${itemTitle(o)}</small></div>` : `<div class="eq-slot empty alt" title="Outro conjunto vazio"><span class="eq-ico">${isTwoHand(S.equip.arma) ? '🛡️' : '⚔️'}</span><small>${isTwoHand(S.equip.arma) ? 'uma mão' : 'duas mãos'}</small></div>`; })()}
+    </div>
+    <div class="set-note">${setNote()}</div>
   </div>
   <div class="eq-list">${SLOT_ORDER.map((sl) => { const it = S.equip[sl], label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
     return `<div class="eq-line ${it ? 'r-' + it.rarity : 'none'}" ${it ? `data-eq="${sl}"` : ''} style="--rc:${it ? rarityOf(it).color : '#555'}"><span class="eq-tag">${label}</span><b>${it ? it.ilvl : '—'}</b><span class="eq-nm">${it ? itemTitle(it) : 'vazio'}</span></div>`; }).join('')}</div>`;
   portraitSoon();
+}
+function setNote() {
+  const w = S.equip.arma, two = isTwoHand(w);
+  if (!w) return 'Sem arma equipada.';
+  return `Em uso: <b>${two ? 'duas mãos' : 'uma mão' + (S.equip.escudo ? ' + escudo' : '')}</b> · ${two ? 'mais ataque, sem escudo' : 'mais defesa e bloqueio'}. Só o conjunto em uso conta.`;
 }
 function portraitSig() { const cp = capeState(); return S.cls + '|' + SLOT_ORDER.map((sl) => (S.equip[sl] ? S.equip[sl].uid + (S.equip[sl].refine || 0) : '-')).join(',') + '|' + cp.lvl + (cp.vis ? 'v' : '') + '|' + (S.settings.gfx || ''); }
 function portraitSoon() {
@@ -2642,12 +2723,13 @@ function artTotal() { // { k, v, amp } do centro já ampliado
 function consecrate(uidv) {
   artState();
   const eqSlot = SLOT_ORDER.find((sl) => S.equip[sl] && S.equip[sl].uid === uidv);
-  const it = eqSlot ? S.equip[eqSlot] : S.inv.find((i) => i.uid === uidv);
+  const altSlot = !eqSlot && ['arma', 'escudo'].find((sl) => altState()[sl] && altState()[sl].uid === uidv);
+  const it = eqSlot ? S.equip[eqSlot] : altSlot ? S.alt[altSlot] : S.inv.find((i) => i.uid === uidv);
   if (!it || (it.refine || 0) < 10) { toast('Só itens +10 podem virar artefato.', 'bad'); return; }
   if (S.arts.length >= ART_MAX) { toast(`Limite de ${ART_MAX} artefatos.`, 'bad'); return; }
   uiConfirm('Consagrar item', `${it.name} +10 vai se transformar em artefato e sair da mochila. Continuar?`, 'Consagrar').then((y) => {
     if (!y) return;
-    if (eqSlot) S.equip[eqSlot] = null; else S.inv = S.inv.filter((i) => i !== it);
+    if (eqSlot) delete S.equip[eqSlot]; else if (altSlot) S.alt[altSlot] = null; else S.inv = S.inv.filter((i) => i !== it);
     const slot = it.slot || 'arma';
     S.arts.push({ uid: uid(), name: it.name, slot, rarity: it.rarity, ilvl: it.ilvl, set: it.set || null, wtype: it.wtype || null });
     S.stats.arts = (S.stats.arts || 0) + 1; autoAlmaMaybe();
@@ -3705,18 +3787,31 @@ function itemScore(it) {
 function equipBest() {
   let changed = 0;
   for (const sl of SLOT_ORDER) {
-    const cands = S.inv.filter((it) => it.slot === sl && canEquip(it) && (sl !== 'arma' || CLASSES[S.cls].anyWeapon || it.wtype === CLASSES[S.cls].weapon));
+    const cands = S.inv.filter((it) => it.slot === sl && canEquip(it));
     if (!cands.length) continue;
+    if (sl === 'arma') { // a melhor de uma mão e a melhor de duas mãos, cada uma no seu conjunto
+      for (const two of [false, true]) {
+        const best = cands.filter((it) => isTwoHand(it) === two).sort((a, b) => itemScore(b) - itemScore(a))[0]; if (!best) continue;
+        const cur = heldWeapon(two);
+        if (!cur || itemScore(best) > itemScore(cur)) { equipItem(best.uid); changed++; }
+      }
+      continue;
+    }
     const best = cands.sort((a, b) => itemScore(b) - itemScore(a))[0];
-    if (!S.equip[sl] || itemScore(best) > itemScore(S.equip[sl])) { equipItem(best.uid); changed++; }
+    const cur = sl === 'escudo' ? heldShield() : S.equip[sl];
+    if (!cur || itemScore(best) > itemScore(cur)) { equipItem(best.uid); changed++; }
   }
   toast(changed ? `${changed} ${changed > 1 ? 'itens equipados' : 'item equipado'}!` : 'Você já está com os melhores itens.', changed ? 'good' : '');
   R.dirty.all = true;
 }
 
+// arma em uso ou guardada com a mesma pegada (uma ou duas mãos), e o escudo de qualquer conjunto
+function heldWeapon(two) { const a = altState(); return [S.equip.arma, a.arma].find((w) => w && isTwoHand(w) === two) || null; }
+function heldShield() { return S.equip.escudo || altState().escudo || null; }
+function eqAll() { const a = altState(); return [...SLOT_ORDER.map((sl) => S.equip[sl]), a.arma, a.escudo].filter(Boolean); }
 function isUpgrade(it) {
   if (!canEquip(it)) return false;
-  const cur = S.equip[it.slot];
+  const cur = it.slot === 'arma' ? heldWeapon(isTwoHand(it)) : it.slot === 'escudo' ? heldShield() : S.equip[it.slot];
   if (!cur) return true;
   if (it.slot === 'arma') return (it.min + it.max) * refineMult(it) > (cur.min + cur.max) * refineMult(cur);
   if (it.slot === 'amuleto' || it.slot === 'anel') return RARITIES.findIndex((r) => r.id === it.rarity) > RARITIES.findIndex((r) => r.id === cur.rarity) || (it.rarity === cur.rarity && it.ilvl > cur.ilvl);
@@ -3795,21 +3890,28 @@ function tabForge() {
   <div class="forge-grid">${SLOT_ORDER.map((sl) => `<button class="btn" data-forge="${sl}" ${S.gold < c.gold || S.stones < c.stones ? 'disabled' : ''}>${sl === 'arma' ? '⚔️ Arma' : ARMOR_SLOTS[sl].icon + ' ' + ARMOR_SLOTS[sl].label}</button>`).join('')}</div>`;
 }
 
+// a segunda arma custa metade para refinar enquanto estiver atrás da outra
+function refineHalf(it) {
+  if (it.slot !== 'arma' || !S.alt) return false;
+  const a = S.equip.arma, b = S.alt.arma; if (!a || !b) return false;
+  const other = it.uid === a.uid ? b : it.uid === b.uid ? a : null;
+  return !!other && (it.refine || 0) < (other.refine || 0);
+}
 function refineInfo(it) {
-  const lv = it.refine || 0;
+  const lv = it.refine || 0, half = refineHalf(it) ? 0.5 : 1;
   return {
     chance: Math.max(10, 100 - lv * 9),
-    stones: 1 + Math.floor(lv / 3),
-    gold: Math.round(50 * (lv + 1) * (1 + it.ilvl / 5)),
-    risk: lv >= 5,
+    stones: Math.max(1, Math.ceil((1 + Math.floor(lv / 3)) * half)),
+    gold: Math.round(50 * (lv + 1) * (1 + it.ilvl / 5) * half),
+    risk: lv >= 5, half: half < 1,
   };
 }
 
 function tabRefineItems() {
-  const all = [...SLOT_ORDER.map((s) => S.equip[s]).filter(Boolean), ...S.inv];
+  const all = allItems();
   const sel = all.find((i) => i.uid === R.refSel);
   let html = `<p class="muted">Refine seus itens até <b>+10</b>. Cada nível aumenta 8% do dano/defesa base. A partir de +5, falhar faz o item perder um nível. Você tem <b>${S.stones}</b> 💎.</p>
-  <div class="inv-grid">${all.map((it) => `<div class="inv-item ${it.uid === R.refSel ? 'sel' : ''}" data-ref="${it.uid}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}">${itemIcon(it)}${it.refine ? `<i>+${it.refine}</i>` : ''}${Object.values(S.equip).some((e) => e && e.uid === it.uid) ? '<b class="eqd">E</b>' : ''}</div>`).join('')}</div>`;
+  <div class="inv-grid">${all.map((it) => `<div class="inv-item ${it.uid === R.refSel ? 'sel' : ''}" data-ref="${it.uid}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}">${itemIcon(it)}${it.refine ? `<i>+${it.refine}</i>` : ''}${eqAll().some((e) => e.uid === it.uid) ? '<b class="eqd">E</b>' : ''}</div>`).join('')}</div>`;
   if (sel) {
     const r = refineInfo(sel);
     html += itemDetail(sel, false);
@@ -3817,7 +3919,7 @@ function tabRefineItems() {
     else html += `<div class="refine-box">
       <div>+${sel.refine} → <b>+${sel.refine + 1}</b></div>
       <div>Chance de sucesso: <b>${r.chance}%</b></div>
-      <div>Custo: <b>${r.stones}</b> 💎 + <b>${fmt(r.gold)}</b> ouro</div>
+      <div>Custo: <b>${r.stones}</b> 💎 + <b>${fmt(r.gold)}</b> ouro${r.half ? ' <span class="good">(metade: segunda arma alcançando a principal)</span>' : ''}</div>
       ${r.risk ? '<div class="bad">⚠ Falhar reduz o refino em 1</div>' : ''}
       <button class="btn primary" data-act="refine" ${S.stones < r.stones || S.gold < r.gold ? 'disabled' : ''}>Refinar</button></div>`;
   } else html += `<p class="muted center">Escolha um item para refinar.</p>`;
@@ -3850,6 +3952,7 @@ function tabConfig() {
     <label class="check"><input type="checkbox" data-set="autoBoss" ${st.autoBoss ? 'checked' : ''}> Desafiar chefe automaticamente (a cada 25 abates, quando tiver nível para ele)</label>
     <label class="check"><input type="checkbox" data-set="autoTravel" ${st.autoTravel !== false ? 'checked' : ''}> No modo Auto, andar até o mapa do seu nível pelas saídas</label>
     <label class="check"><input type="checkbox" data-set="autoGather" ${st.autoGather !== false ? 'checked' : ''}> Coletar materiais automaticamente no modo Auto</label>
+    <label class="check"><input type="checkbox" data-set="autoSwap" ${st.autoSwap ? 'checked' : ''}> Trocar de arma sozinho: escudo quando a vida cai abaixo de 35%, duas mãos quando passa de 80%</label>
     <label class="check"><input type="checkbox" data-set="autoBuyPots" ${st.autoBuyPots ? 'checked' : ''}> Comprar poções menores automaticamente quando acabarem</label>
     <hr>
     <div class="row-btns">
@@ -3870,10 +3973,23 @@ function equipItem(id) {
   if (idx < 0) return;
   const it = S.inv[idx];
   if (!canEquip(it)) return;
-  const old = S.equip[it.slot];
   S.inv.splice(idx, 1);
+  // arma e escudo vão para o conjunto certo: uma mão (+ escudo) ou duas mãos
+  const a = altState();
+  let box = S.equip, note = '';
+  if (it.slot === 'arma') {
+    const cur = S.equip.arma;
+    if (cur && isTwoHand(cur) !== isTwoHand(it)) { box = a; note = `${it.name} foi para o outro conjunto. Toque em 🔄 para usar.`; }
+    else if (!cur && a.arma && isTwoHand(a.arma) === isTwoHand(it)) box = a;
+  } else if (it.slot === 'escudo' && isTwoHand(S.equip.arma)) {
+    if (isTwoHand(a.arma)) { S.inv.push(it); toast('Escudo só com arma de uma mão.', 'bad'); return; }
+    box = a; note = 'Escudo guardado no conjunto de uma mão.';
+  }
+  const old = box[it.slot];
   if (old) S.inv.push(old);
-  S.equip[it.slot] = it;
+  box[it.slot] = it;
+  fixSets();
+  if (note) toast(note, 'good');
   R.sel = null;
   clampVitals();
   R.dirty.all = true;
@@ -3909,7 +4025,7 @@ function sellUpTo(maxIdx) {
   R.sel = null;
 }
 function doRefine() {
-  const all = [...Object.values(S.equip).filter(Boolean), ...S.inv];
+  const all = allItems();
   const it = all.find((i) => i.uid === R.refSel);
   if (!it || it.refine >= 10) return;
   const r = refineInfo(it);
@@ -3938,7 +4054,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-pena],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],[data-crlook],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-pena],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],[data-crlook],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#swap-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3973,6 +4089,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (t.id === 'town-btn') { setTown(!R.inTown); return; }
+  if (t.id === 'swap-btn') { swapSet(false); return; }
   if (ds.win) { openWin(ds.win); return; }
   if (t.id === 'gwin-close') { closeWin(); return; }
   if (ds.cast) { if (!e.target.closest('[data-skill]')) { castSkill(ds.cast); R.castCount = (R.castCount || 0) + 1; } return; }
@@ -4056,6 +4173,7 @@ document.addEventListener('click', (e) => {
   switch (ds.act) {
     case 'equip': equipItem(R.sel); break;
     case 'unequip': unequip(R.selEq); break;
+    case 'swap-set': swapSet(false); break;
     case 'sell': sellItem(R.sel); renderTab(); break;
     case 'sell-common': sellUpTo(0); renderTab(); break;
     case 'sell-magic': sellUpTo(1); renderTab(); break;
@@ -4140,6 +4258,7 @@ document.addEventListener('keydown', (e) => {
   if (k >= '1' && k <= '6') { const sk = CLASSES[S.cls].skills[+k - 1]; if (sk) castSkill(sk.id); return; }
   const wins = { c: 'personagem', i: 'inventario', k: 'habilidades', j: 'missoes', m: 'mapas', l: 'conquistas', r: 'ranking', b: 'bestiario', d: 'stats', g: 'social', h: 'alma' };
   if (wins[k]) { openWin(wins[k]); return; }
+  if (k === 'x') { swapSet(false); return; }
   if (k === 'q') usePotionNow('hp');
   else if (k === 'e') usePotionNow('mp');
   else if (k === 'escape') { if (!$('#modal').classList.contains('hidden')) { $('#modal').classList.add('hidden'); $('#modal-body').classList.remove('wide'); R.npc = null; } else closeWin(); }
