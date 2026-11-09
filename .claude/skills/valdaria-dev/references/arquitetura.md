@@ -186,9 +186,10 @@ Atalhos no `keydown` do fim de `game.js`.
   `data-zone` recusa sem `S.rebirths`). Monstros no nível do herói (ramo `special` do `spawnSource`; cristais só no `gw`), chefe Fênix Ancestral no
   nível do herói +3 (`spawnBoss` com `z.special`), +50% XP e +30% ouro, **Penas de Fênix** (`S.feathers`: 12% comum, 60% elite, 5 chefe) trocadas em
   `FEATHER_SHOP` (Ovo Ancestral 50, Pedra da Alma nv3 6, 5 insígnias 3). Heróis de teste vêm com `rebirths = 3`. Título "Asas da Fênix".
-- **Ameaça dos renascidos:** `RB_THREAT` (`hp 0.3`, `atk 0.2`, `rw 0.15` por ★, até ★10) aplicada no fim de `makeMonster` (`rbScale`) em todo
-  lugar; `dropMult()` também sobe. **Dificuldades do Vale:** `RB_DIFF[1..3]` (Normal ★1, Heroico ★2: +5 níveis, vida ×1,5, ataque ×1,25, penas ×2;
-  Lendário ★3: +10 níveis, vida ×2, ataque ×1,5, penas ×3, chefe `m.legend` com marcas 30% mais rápidas e Ovo Raro garantido). `S.rbDiff`,
+- **Renascimento:** no máximo `REBIRTH_MAX = 10`; cada ★ dá `RB_GAIN` (+1% ataque/XP/ouro, +0,5% vida → +10% e +5% no total), `rbN()` limita saves antigos. Conquista "Fênix Eterna" no ★10.
+- **Ameaça dos renascidos:** `RB_THREAT` (`hp 0.12`, `atk 0.08`, `rw 0.06` por ★, até ★10), é de cada herói (cada um vê os próprios monstros); na masmorra em grupo `rbThreat()` usa a média do grupo (`rb` vem no `partyView` do servidor) aplicada no fim de `makeMonster` (`rbScale`) em todo
+  lugar; `dropMult()` também sobe. **Dificuldades do Vale:** `RB_DIFF[1..3]` (Normal ★1, Heroico ★2: +5 níveis, vida ×1,8, ataque ×1,4, penas ×2;
+  Lendário ★3: +10 níveis, vida ×2,6, ataque ×1,9, penas ×3, chefe `m.legend` com marcas 30% mais rápidas e Ovo Raro garantido). `S.rbDiff`,
   `rbDiff()` cai para Normal sem ★ suficiente; botões `data-rbdiff` no `rbBox()`. Calibrar com `tools/test/rebirth.cjs` (alvo: herói médio nv100
   sente o Lendário — sem poção pode morrer; herói Full tranquilo).
 - **Guardado para depois:** tudo é coletado desde o nível 1 (insígnias, pergaminhos, selos, pedras da Alma), mesmo com o sistema trancado.

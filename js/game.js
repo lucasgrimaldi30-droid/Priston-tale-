@@ -356,8 +356,8 @@ function derived() {
   bonus.xpb += (TB.xpb || 0) + wkBonus() + (rosaryEq() ? rosaryEq().rosary.lvl : 0); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
-  const rb = S.rebirths || 0;
-  bonus.xpb += (SB.xpb || 0) + rb * 10; bonus.gold += rb * 10; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * 10;
+  const rb = Math.min(S.rebirths || 0, REBIRTH_MAX);
+  bonus.xpb += (SB.xpb || 0) + rb * RB_GAIN.pct; bonus.gold += rb * RB_GAIN.pct; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * RB_GAIN.pct;
   { const PB = companionBonus(); bonus.gold += PB.goldb || 0; bonus.xpb += PB.xpb || 0; bonus.crit += PB.crit || 0; bonus.atkp += PB.atkp || 0; bonus.hp += 0; R._pb = PB; }
   const A = {};
   for (const k of ['for', 'int', 'des', 'agi', 'vit']) A[k] = S.attr[k] + bonus[k];
@@ -374,7 +374,7 @@ function derived() {
   const baseHp = 40 + A.vit * 8 + S.lvl * 10 + bonus.hp;
   const d = {
     A,
-    maxHp: Math.round(baseHp * (1 + buff('hpmax') + (SB.hpp || 0) / 100 + rb * 0.05)),
+    maxHp: Math.round(baseHp * (1 + buff('hpmax') + (SB.hpp || 0) / 100 + rb * RB_GAIN.hp / 100)),
     maxMp: Math.round(15 + A.int * 4 + S.lvl * 3 + bonus.mp),
     atkMin: Math.round((wmin + main * 0.8 + S.lvl) * atkMul),
     atkMax: Math.round((wmax + main * 1.0 + S.lvl) * atkMul),
@@ -416,8 +416,17 @@ function makeMonster(name, icon, lvl, boss, groupN) {
   return rbScale(m);
 }
 // ---------- ameaça dos renascidos: cada ★ deixa os monstros mais fortes para aquele herói, e os prêmios maiores ----------
-const RB_THREAT = { hp: 0.3, atk: 0.2, rw: 0.15, max: 10 };
-function rbThreat() { return Math.min((typeof S !== 'undefined' && S && S.rebirths) || 0, RB_THREAT.max); }
+const REBIRTH_MAX = 10, RB_GAIN = { pct: 1, hp: 0.5 }; // no máximo (★10): +10% ataque, XP e ouro e +5% de vida
+const RB_THREAT = { hp: 0.12, atk: 0.08, rw: 0.06, max: REBIRTH_MAX };
+const fmtPct = (v) => (Math.round(v * 10) / 10).toString().replace('.', ',') + '%';
+function rbN() { return Math.min((typeof S !== 'undefined' && S && S.rebirths) || 0, REBIRTH_MAX); }
+// a ameaça é de cada herói: no mundo cada um vê os próprios monstros; na masmorra em grupo vale a média do grupo
+function rbThreat() {
+  let n = rbN();
+  const pt = R && R.coop && typeof online === 'function' && online() && Net.st.party;
+  if (pt && pt.members && pt.members.length > 1) n = Math.round(pt.members.reduce((a, m) => a + Math.min(m.rb || 0, REBIRTH_MAX), 0) / pt.members.length);
+  return Math.min(n, RB_THREAT.max);
+}
 function rbScale(m) {
   const t = rbThreat(); if (!t) return m;
   m.maxHp = m.hp = Math.round(m.maxHp * (1 + RB_THREAT.hp * t)); m.atk = Math.round(m.atk * (1 + RB_THREAT.atk * t));
@@ -427,8 +436,8 @@ function rbScale(m) {
 // dificuldades do Vale da Fênix (abrem com ★2 e ★3)
 const RB_DIFF = [null,
   { n: 'Normal', icon: '🔥', need: 1, lv: 0, hp: 1, atk: 1, xp: 1, pena: 1 },
-  { n: 'Heroico', icon: '🔥🔥', need: 2, lv: 5, hp: 1.5, atk: 1.25, xp: 1.3, pena: 2 },
-  { n: 'Lendário', icon: '🔥🔥🔥', need: 3, lv: 10, hp: 2, atk: 1.5, xp: 1.6, pena: 3 },
+  { n: 'Heroico', icon: '🔥🔥', need: 2, lv: 5, hp: 1.8, atk: 1.4, xp: 1.3, pena: 2 },
+  { n: 'Lendário', icon: '🔥🔥🔥', need: 3, lv: 10, hp: 2.6, atk: 1.9, xp: 1.6, pena: 3 },
 ];
 function rbDiff() { const d = clamp(S.rbDiff || 1, 1, 3); return (S.rebirths || 0) >= RB_DIFF[d].need ? d : 1; }
 function rbDiffApply(m) {
@@ -2309,8 +2318,8 @@ function renderChar() {
       <button class="btn tiny" data-attr="${k}" data-n="1" ${S.pts < 1 ? 'disabled' : ''}>+1</button>
       <button class="btn tiny" data-attr="${k}" data-n="5" ${S.pts < 5 ? 'disabled' : ''}>+5</button>
     </div>`).join('')}
-    ${S.lvl >= MAX_LEVEL ? `<button class="btn primary rebirth-btn" data-act="rebirth">🌟 Renascer (${(S.rebirths || 0) + 1}º)</button>` : ''}
-    ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
+    ${S.lvl >= MAX_LEVEL && rbN() < REBIRTH_MAX ? `<button class="btn primary rebirth-btn" data-act="rebirth">🌟 Renascer (${rbN() + 1}º de ${REBIRTH_MAX})</button>` : ''}${S.lvl >= MAX_LEVEL && rbN() >= REBIRTH_MAX ? '<p class="good">🌟 Renascimentos completos (10/10).</p>' : ''}
+    ${S.rebirths ? `<p class="muted">Renascimentos: <b>${Math.min(S.rebirths, REBIRTH_MAX)}/${REBIRTH_MAX}</b> · +${fmtPct(rbN() * RB_GAIN.pct)} ataque, XP e ouro · +${fmtPct(rbN() * RB_GAIN.hp)} vida</p>` : ''}
     ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
     ${specOf() ? `<p class="set-mini" style="--sc:#ffd060">${specOf().icon} Especialização: ${specOf().name}</p>` : (S.lvl >= SPEC_LVL ? '<p class="good">✨ Escolha sua especialização na janela Skills!</p>' : '')}
     <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button><button class="btn small" data-win="capa">🧥 Capa</button><button class="btn small" data-win="pets">🐾 Pets</button></div>
@@ -3223,10 +3232,10 @@ function showLogin(L) {
 }
 
 // ---------- renascimento ----------
-function canRebirth() { return S.lvl >= MAX_LEVEL; }
+function canRebirth() { return S.lvl >= MAX_LEVEL && rbN() < REBIRTH_MAX; }
 function rebirth() {
   if (!canRebirth()) return;
-  uiConfirm('Renascer', `Você volta ao nível 1, mas ganha para sempre +10% de ataque, +10% de experiência, +10% de ouro e +5% de vida (acumula a cada renascimento). Itens, ouro, gemas, montarias e conquistas ficam com você; os equipamentos acima do seu nível ficam inativos até você alcançá-los.`, 'Renascer').then((y) => {
+  uiConfirm('Renascer', `Você volta ao nível 1, mas ganha para sempre +${RB_GAIN.pct}% de ataque, experiência e ouro e +${fmtPct(RB_GAIN.hp)} de vida (acumula até ${REBIRTH_MAX} renascimentos: +${RB_GAIN.pct * REBIRTH_MAX}% e +${RB_GAIN.hp * REBIRTH_MAX}% no total). Os monstros também ficam mais fortes para você a cada ★, e rendem mais. Itens, ouro, gemas, montarias e conquistas ficam com você; os equipamentos acima do seu nível ficam inativos até você alcançá-los.`, 'Renascer').then((y) => {
     if (!y) return;
     S.rebirths = (S.rebirths || 0) + 1;
     S.lvl = 1; S.xp = 0; S.pts = 0; S.attr = { ...CLASSES[S.cls].base }; S.skillLv = {};
@@ -3288,6 +3297,7 @@ const ACH = [
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
   { id: 'rb1', name: 'Renascido', desc: 'Renasça pela primeira vez', ok: () => (S.rebirths || 0) >= 1, stones: 30, title: 'Renascido' },
   { id: 'rb5', name: 'Imortal', desc: 'Renasça 5 vezes', ok: () => (S.rebirths || 0) >= 5, stones: 80, title: 'Imortal' },
+  { id: 'rb10', name: 'Fênix Eterna', desc: 'Complete os 10 renascimentos', ok: () => (S.rebirths || 0) >= REBIRTH_MAX, stones: 150, title: 'Fênix Eterna' },
   { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.mounts && S.mounts.list.length > 0, gold: 10000 },
 ];
 

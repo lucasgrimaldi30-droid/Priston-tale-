@@ -242,8 +242,10 @@ const startServer = require('./server.cjs');
     S.feathers = 10; const in0 = (S.insig || 0); featherBuy('insig'); ok('Trocar Penas de Fênix', S.insig === in0 + 5 && S.feathers === 7);
     const b0 = spawnBoss(); ok('Chefe Fênix Ancestral no nível do herói', !!b0 && b0.name === 'Fênix Ancestral' && b0.lvl <= S.lvl + 3);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
-    { R.mons = []; const r0 = S.rebirths; S.rebirths = 0; const m0 = makeMonster('Lobo', '🐺', 50, false, 2); S.rebirths = 2; const m2 = makeMonster('Lobo', '🐺', 50, false, 2); const dm0 = dropMult(); S.rebirths = 0; const dmA = dropMult(); S.rebirths = r0;
+    { R.mons = []; const r0 = S.rebirths; S.rebirths = 0; const m0 = makeMonster('Lobo', '🐺', 50, false, 2); S.rebirths = 5; const m2 = makeMonster('Lobo', '🐺', 50, false, 2); const dm0 = dropMult(); S.rebirths = 0; const dmA = dropMult(); S.rebirths = r0;
       ok('Renascido enfrenta monstros mais fortes e ganha mais', m2.maxHp > m0.maxHp * 1.5 && m2.atk > m0.atk * 1.3 && m2.xp > m0.xp * 1.2 && dm0 > dmA, `${m0.maxHp}→${m2.maxHp}`); }
+    { const r0 = S.rebirths, l0 = S.lvl; S.rebirths = 0; const a0 = derived().atkMax; S.rebirths = 10; const a10 = derived().atkMax; S.rebirths = 25; const a25 = derived().atkMax; S.lvl = MAX_LEVEL; const cr = canRebirth(); S.rebirths = 9; const cr9 = canRebirth(); S.rebirths = r0; S.lvl = l0;
+      ok('Renascimento: limite de 10 e bônus total de 10%', !cr && cr9 && a25 === a10 && a10 / a0 > 1.05 && a10 / a0 < 1.16, `${a0}→${a10}`); }
     S.rebirths = 1; S.rbDiff = 3; ok('Lendário trancado com ★1', rbDiff() === 1 && tabTower().includes('🔒★3'));
     S.rebirths = 3; const n0 = (initWorld(), R.mons.reduce((a, m) => a + m.lvl, 0) / R.mons.length); S.rbDiff = 1; initWorld(); const n1 = R.mons.reduce((a, m) => a + m.lvl, 0) / R.mons.length;
     ok('Lendário: monstros +10 níveis', n0 - n1 > 7 && rbDiff() === 1, `${n1.toFixed(1)} → ${n0.toFixed(1)}`);

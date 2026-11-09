@@ -18,12 +18,12 @@ const startServer = require('./server.cjs');
     const medio = (cls, rb, pots) => { localStorage.clear(); slot = 0; S = newCharacter('M', cls); S.lvl = 100; S.pts = 99 * 5; autoDistribute(); S.tut = 99; S.settings.gfx = '2d'; S.rebirths = rb;
       for (const sl of SLOT_ORDER) { let it; for (let k = 0; k < 50; k++) { it = genItem(100, 3, sl); if (it.rarity === 'raro' || it.rarity === 'epico') break; } if (sl === 'arma') it.wtype = CLASSES[cls].weapon; it.refine = 5; it.req = 1; S.equip[sl] = it; }
       S.pots = pots ? { hp1: 0, hp2: 30, mp1: 0, mp2: 30 } : { hp1: 0, hp2: 0, mp1: 0, mp2: 0 }; S.gold = pots ? 300000 : 0; S.settings.autoBuyPots = !!pots; };
-    for (const cls of ['gladiador', 'arcanista', 'cleriga']) for (const rb of [1, 2, 3]) for (let d = 1; d <= rb; d++) for (const pots of [true, false]) {
+    for (const cls of ['gladiador', 'arcanista', 'cleriga']) for (const rb of [1, 3, 10]) for (let d = 1; d <= Math.min(3, rb); d++) for (const pots of [true, false]) {
       medio(cls, rb, pots); run(`${cls} médio ★${rb} ${RB_DIFF[d].n} ${pots ? 'c/ poção' : 's/ poção'}`, 'rb', d);
     }
-    for (const cls of ['gladiador', 'arcanista', 'cleriga']) { localStorage.clear(); slot = 0; S = makeFullChar('F', cls); S.rebirths = 3; S.tut = 99; S.settings.gfx = '2d'; run(`${cls} Full ★3 Lendário`, 'rb', 3); }
+    for (const cls of ['gladiador', 'arcanista', 'cleriga']) { localStorage.clear(); slot = 0; S = makeFullChar('F', cls); S.rebirths = 10; S.tut = 99; S.settings.gfx = '2d'; run(`${cls} Full ★10 Lendário`, 'rb', 3); }
     // renascido subindo de novo: nível 50 com os itens de antes (nível 100, inativos acima do nível) — usa itens do nível 50
-    for (const cls of ['gladiador', 'arcanista', 'cleriga']) for (const rb of [0, 1, 3]) {
+    for (const cls of ['gladiador', 'arcanista', 'cleriga']) for (const rb of [0, 5, 10]) {
       localStorage.clear(); slot = 0; S = newCharacter('M', cls); S.lvl = 50; S.pts = 49 * 5; autoDistribute(); S.tut = 99; S.settings.gfx = '2d'; S.rebirths = rb;
       for (const sl of SLOT_ORDER) { let it; for (let k = 0; k < 50; k++) { it = genItem(50, 3, sl); if (it.rarity === 'raro') break; } if (sl === 'arma') it.wtype = CLASSES[cls].weapon; it.refine = 4; it.req = 1; S.equip[sl] = it; }
       S.pots = { hp1: 0, hp2: 20, mp1: 0, mp2: 20 }; S.gold = 50000; S.settings.autoBuyPots = true;

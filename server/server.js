@@ -178,7 +178,7 @@ function leaveParty(p) {
   else { if (pt.leader === p) pt.leader = [...pt.members][0]; for (const o of pt.members) sendTo(o.ws, { t: 'sys', text: `${p.name} saiu do grupo.` }); }
   sendTo(p.ws, { t: 'party', party: null });
 }
-function partyView(pt) { return { leader: pt.leader.name, members: [...pt.members].map((o) => ({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, hp: o.hp, zone: o.zone, town: o.town, dun: o.dun })) }; }
+function partyView(pt) { return { leader: pt.leader.name, members: [...pt.members].map((o) => ({ id: o.id, name: o.name, cls: o.cls, lvl: o.lvl, rb: o.rb || 0, hp: o.hp, zone: o.zone, town: o.town, dun: o.dun })) }; }
 
 // ---------- guildas (salvas no banco) ----------
 const gkey = (n) => n.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -213,7 +213,7 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'state') {
       if (!CLASSES.includes(m.cls)) return;
       Object.assign(p, {
-        name: clean(m.name, 16), cls: m.cls, lvl: Math.max(1, Math.min(100, m.lvl | 0)), rb: Math.max(0, m.rb | 0), title: clean(m.title, 30),
+        name: clean(m.name, 16), cls: m.cls, lvl: Math.max(1, Math.min(100, m.lvl | 0)), rb: Math.max(0, Math.min(10, m.rb | 0)), title: clean(m.title, 30),
         zone: clean(m.zone, 4), town: !!m.town, dun: !!m.dun, x: +m.x || 0, z: +m.z || 0, face: +m.face || 0, moving: !!m.moving, atk: !!m.atk,
         coop: !!m.coop, pk: !!m.pk, prot: !!m.prot, pd: Math.max(0, Math.min(1e6, +m.pd || 0)), pe: Math.max(0, Math.min(0.6, +m.pe || 0)), look: m.look && typeof m.look === 'object' ? m.look : {}, hp: Math.max(0, Math.min(1, +m.hp || 0)),
       });
