@@ -636,3 +636,97 @@ h3 { font-size: 14px; color: var(--gold); letter-spacing: .5px; display: flex; j
 .rb-box { border-color: rgba(255, 140, 60, .5); }
 .rb-box small { color: #c8c8d0; }
 .later-box { border-color: rgba(120, 180, 255, .35); }
+
+/* =====================================================================
+   TEMA "LENDAS": madeira escura, molduras douradas e faixas vermelhas
+   (inspirado em RPGs de fantasia com interface ornamentada; arte própria)
+   ===================================================================== */
+:root {
+  --wood: #2b1a10; --wood2: #3d2616; --wood3: #1c110a;
+  --gold-hi: #ffe7a0; --gold-md: #d6a64a; --gold-lo: #7a5420;
+  --banner: #8a2416; --banner2: #4e1009;
+  --frame: 0 0 0 1px #000, 0 0 0 3px var(--gold-md), 0 0 0 4px #000, 0 6px 18px rgba(0,0,0,.6);
+}
+body { background: radial-gradient(ellipse at 50% 0%, #6a2a12 0%, #2a120a 45%, #120806 100%) fixed, #120806; }
+.title-box h1 { background: linear-gradient(#fff4c8, #f0c060 45%, #b07020); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 0 #3a1a08) drop-shadow(0 0 14px rgba(255,160,60,.35)); letter-spacing: 1px; }
+.title-box .subtitle { color: #f0d9a8; }
+
+/* painéis e janelas: madeira com borda dourada dupla */
+.panel, .modal-box, .gwin {
+  background: linear-gradient(180deg, var(--wood2), var(--wood) 40%, var(--wood3));
+  border: 2px solid var(--gold-md); border-radius: 10px;
+  box-shadow: inset 0 0 0 2px #120a05, inset 0 0 0 3px rgba(255,220,140,.25), 0 8px 24px rgba(0,0,0,.6);
+}
+.gwin { border-width: 3px; box-shadow: inset 0 0 0 2px #120a05, inset 0 0 0 3px rgba(255,220,140,.3), 0 12px 40px rgba(0,0,0,.75); }
+.gwin-head {
+  background: linear-gradient(180deg, #b8402a, var(--banner) 45%, var(--banner2));
+  border-bottom: 2px solid var(--gold-md); border-radius: 7px 7px 0 0;
+  font-weight: 800; font-size: 16px; letter-spacing: .5px;
+  color: var(--gold-hi); text-shadow: 0 2px 0 #2a0804, 0 0 8px rgba(255,200,100,.35);
+}
+.gwin-x { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #e06040, #7a1a0c); border: 2px solid var(--gold-md); color: #fff2d0; font-size: 13px; line-height: 1; box-shadow: 0 2px 0 #000; }
+h3 { color: var(--gold-hi); text-shadow: 0 1px 0 #000; border-bottom: 1px solid rgba(214,166,74,.35); padding-bottom: 4px; }
+
+/* botões: bronze com relevo */
+.btn { background: linear-gradient(180deg, #5a3a22, #3a2414 55%, #2a180c); border: 1px solid #9a7434; color: #f4e4c0; box-shadow: inset 0 1px 0 rgba(255,230,170,.25), 0 2px 0 #0c0603; border-radius: 6px; text-shadow: 0 1px 0 #000; }
+.btn.primary { background: linear-gradient(180deg, #ffe08a, #e0a63c 50%, #a8701c); border-color: #fff0b0; color: #2a1404; text-shadow: 0 1px 0 rgba(255,240,200,.6); box-shadow: inset 0 1px 0 #fff6d0, 0 2px 0 #3a2006; }
+.btn.danger { background: linear-gradient(180deg, #d0503a, #8a2416 55%, #5a1008); border-color: #f09070; }
+.btn.boss { background: linear-gradient(180deg, #a060e0, #6a2aa8 55%, #3e1470); border-color: #d0a0ff; }
+
+/* HUD do jogo */
+.hud, .chat { background: linear-gradient(180deg, rgba(61,38,22,.86), rgba(28,17,10,.86)); border: 2px solid var(--gold-lo); box-shadow: inset 0 0 0 1px rgba(255,220,140,.18), 0 4px 12px rgba(0,0,0,.5); }
+.hud .f-name, #p-name { color: var(--gold-hi); font-family: Cinzel, serif; text-shadow: 0 1px 0 #000; }
+.pc-lvl { background: radial-gradient(circle at 35% 30%, #ffe08a, #a8701c); color: #2a1404; border: 1px solid #3a2006; border-radius: 10px; font-weight: 800; }
+.minimap-wrap { border: 3px solid var(--gold-md); box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--gold-lo), 0 4px 14px rgba(0,0,0,.6); }
+.hud-top #zone-title { color: var(--gold-hi); text-shadow: 0 2px 0 #2a0804, 0 0 10px rgba(255,160,60,.5); }
+.chat-tab.active { color: var(--gold-hi); background: rgba(138,36,22,.55); }
+.menu-btns button { background: linear-gradient(180deg, #5a3a22, #2a180c); border: 2px solid #9a7434; color: #f4e4c0; border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,230,170,.25), 0 2px 0 #000; }
+.menu-btns button.active { border-color: var(--gold-hi); box-shadow: 0 0 10px rgba(255,200,90,.6), inset 0 1px 0 rgba(255,230,170,.35); }
+.skill, .pot-slot { background: radial-gradient(circle at 50% 20%, #4a3020, #1c110a); border: 2px solid #9a7434; box-shadow: inset 0 0 0 1px #000, 0 2px 0 #000; color: #f4e4c0; }
+.skill.casted { box-shadow: 0 0 0 2px var(--gold-hi) inset, 0 0 10px rgba(255,200,90,.6); }
+
+/* raridade: moldura grossa com brilho da cor */
+.eq-slot, .inv-item { background: radial-gradient(circle at 50% 35%, #3a2a20, #120a06); border: 2px solid var(--rc, #5a4630); border-radius: 8px; box-shadow: inset 0 0 0 1px #000, inset 0 0 14px color-mix(in srgb, var(--rc, transparent) 40%, transparent), 0 2px 0 #000; }
+.eq-slot.r-epico, .inv-item.r-epico, .eq-slot.r-lendario, .inv-item.r-lendario { box-shadow: inset 0 0 0 1px #000, inset 0 0 16px color-mix(in srgb, var(--rc) 55%, transparent), 0 0 8px color-mix(in srgb, var(--rc) 60%, transparent); }
+.eq-ref { position: absolute; top: 1px; right: 3px; font: 800 10px Inter, sans-serif; font-style: normal; color: #ffe08a; text-shadow: 0 1px 2px #000; }
+.eq-slot { position: relative; }
+
+/* janela de item: estilo "dica" escura com nome colorido */
+.item-detail { background: linear-gradient(180deg, rgba(14,10,20,.97), rgba(8,6,12,.97)); border: 2px solid var(--rc); border-radius: 6px; box-shadow: inset 0 0 0 1px #000, 0 0 12px color-mix(in srgb, var(--rc) 35%, transparent); font-family: Inter, sans-serif; }
+.it-name { font-family: Cinzel, serif; font-size: 16px; text-shadow: 0 1px 0 #000, 0 0 8px color-mix(in srgb, var(--rc) 50%, transparent); }
+.affix { color: #5af07a; }
+
+/* ---------- ficha do herói (boneco de papel) ---------- */
+.doll { display: grid; grid-template-columns: 62px minmax(0, 1fr) 62px; grid-template-rows: auto auto; gap: 6px; align-items: start; }
+.doll-col { display: flex; flex-direction: column; gap: 6px; }
+.doll-col .eq-slot { width: 62px; height: 62px; aspect-ratio: auto; flex: none; }
+#equip-panel { overflow: hidden; }
+.doll-col .eq-slot small, .doll-weapon .eq-slot small { font-size: 8px; }
+.doll-mid { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.doll-head { width: 100%; text-align: center; background: linear-gradient(180deg, #b8402a, var(--banner) 50%, var(--banner2)); border: 2px solid var(--gold-md); border-radius: 6px; padding: 3px 6px; box-shadow: 0 2px 0 #000; }
+.doll-head b { display: block; font-family: Cinzel, serif; color: var(--gold-hi); font-size: 15px; text-shadow: 0 2px 0 #2a0804; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doll-head small { color: #ffd890; font-family: Cinzel, serif; font-size: 11px; }
+.doll-portrait { position: relative; width: 100%; aspect-ratio: 4 / 5; max-height: 250px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 2px solid var(--gold-lo);
+  background: radial-gradient(ellipse at 50% 85%, rgba(255,170,80,.5), transparent 55%), radial-gradient(ellipse at 50% 40%, #6a3a1c, #2a160a 70%); box-shadow: inset 0 0 24px #000; overflow: hidden; }
+.doll-portrait img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 6px rgba(0,0,0,.6)); }
+.doll-ico { font-size: 72px; filter: drop-shadow(0 6px 8px #000); }
+.doll-ilvl { font-family: Cinzel, serif; font-size: 12px; color: #f0d9a8; }
+.doll-ilvl b { color: var(--gold-hi); font-size: 15px; }
+.doll-weapon { grid-column: 1 / -1; display: flex; justify-content: center; }
+.doll-weapon .eq-slot { width: 74px; height: 74px; aspect-ratio: auto; }
+.eq-list { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+.eq-line { display: grid; grid-template-columns: 86px 34px minmax(0, 1fr); align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.eq-line.none { cursor: default; opacity: .55; }
+.eq-tag { background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 80%, #fff 10%), color-mix(in srgb, var(--rc) 55%, #000)); color: #1a0e06; font-weight: 800; font-family: Cinzel, serif; font-size: 11px; padding: 2px 6px; border-radius: 3px; border: 1px solid #000; text-shadow: 0 1px 0 rgba(255,255,255,.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-line b { color: #f4e4c0; text-align: right; font-family: Cinzel, serif; }
+.eq-nm { color: var(--rc); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 #000; }
+.stat-grid b, .attr-row b { color: #ffd890; }
+.attr-row span { color: #f0d9a8; }
+/* diálogos, cartões e avisos no mesmo tema */
+.sd-box { background: linear-gradient(180deg, var(--wood2), var(--wood) 50%, var(--wood3)); border: 2px solid var(--gold-md); box-shadow: inset 0 0 0 2px #120a05, inset 0 0 0 3px rgba(255,220,140,.25), 0 10px 30px rgba(0,0,0,.6); }
+.sd-title { color: var(--gold-hi); font-family: Cinzel, serif; text-shadow: 0 1px 0 #000; }
+.q-card, .skill-row, .shop-row, .tower-box, .ev-box, .ordem-box { background: linear-gradient(180deg, rgba(70,44,24,.55), rgba(28,17,10,.7)); border: 1px solid rgba(214,166,74,.45); box-shadow: inset 0 1px 0 rgba(255,220,140,.12); }
+.q-card.ok { border-color: var(--good); }
+.later-box { border-color: rgba(120, 180, 255, .45); }
+.toast { background: linear-gradient(180deg, var(--wood2), var(--wood3)); border: 2px solid var(--gold-md); color: #f4e4c0; box-shadow: 0 6px 18px rgba(0,0,0,.6); }
+.npc-bar .btn { background: linear-gradient(180deg, rgba(90,58,34,.92), rgba(42,24,12,.92)); }

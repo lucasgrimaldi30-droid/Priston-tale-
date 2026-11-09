@@ -2367,13 +2367,39 @@ function itemDetail(it, compare = true) {
   return h;
 }
 
+function eqSlotHtml(sl) {
+  const it = S.equip[sl], label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
+  if (!it) return `<div class="eq-slot empty" title="${label}"><span class="eq-ico">${sl === 'arma' ? '⚔️' : ARMOR_SLOTS[sl].icon}</span><small>${label}</small></div>`;
+  return `<div class="eq-slot r-${it.rarity}" data-eq="${sl}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}"><span class="eq-ico">${itemIcon(it)}</span>${it.refine ? `<i class="eq-ref">+${it.refine}</i>` : ''}<small>${itemTitle(it)}</small></div>`;
+}
+// ficha do herói: equipamentos em volta do retrato (estilo "boneco de papel") e lista com o nível dos itens
 function renderEquip() {
-  $('#equip-panel').innerHTML = `<h3>Equipamento</h3><div class="equip-grid">${SLOT_ORDER.map((sl) => {
-    const it = S.equip[sl];
-    const label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
-    if (!it) return `<div class="eq-slot empty" title="${label}"><span class="eq-ico">${sl === 'arma' ? '⚔️' : ARMOR_SLOTS[sl].icon}</span><small>${label}</small></div>`;
-    return `<div class="eq-slot" data-eq="${sl}" style="--rc:${rarityOf(it).color}" title="${esc(it.name)}"><span class="eq-ico">${itemIcon(it)}</span><small>${itemTitle(it)}</small></div>`;
-  }).join('')}${capeSlot()}</div>`;
+  const eq = SLOT_ORDER.map((sl) => S.equip[sl]).filter(Boolean), il = eq.length ? eq.reduce((a, it) => a + it.ilvl + (it.refine || 0) * 2, 0) / eq.length : 0;
+  const c = CLASSES[S.cls], url = R.portrait && R.portrait.sig === portraitSig() ? R.portrait.url : '';
+  $('#equip-panel').innerHTML = `<div class="doll">
+    <div class="doll-col">${['elmo', 'amuleto', 'armadura', 'luvas'].map(eqSlotHtml).join('')}</div>
+    <div class="doll-mid">
+      <div class="doll-head"><b>${esc(S.name)}</b><small>${S.rebirths ? '★' + S.rebirths + ' · ' : ''}Nível ${S.lvl} ${c.name}</small></div>
+      <div class="doll-portrait">${url ? `<img id="doll-img" src="${url}" alt="">` : `<span class="doll-ico">${c.icon}</span>`}</div>
+      <div class="doll-ilvl">Nível do equipamento <b>${il.toFixed(1)}</b></div>
+    </div>
+    <div class="doll-col">${['escudo', 'anel', 'botas'].map(eqSlotHtml).join('')}${capeSlot()}</div>
+    <div class="doll-weapon">${eqSlotHtml('arma')}</div>
+  </div>
+  <div class="eq-list">${SLOT_ORDER.map((sl) => { const it = S.equip[sl], label = sl === 'arma' ? 'Arma' : ARMOR_SLOTS[sl].label;
+    return `<div class="eq-line ${it ? 'r-' + it.rarity : 'none'}" ${it ? `data-eq="${sl}"` : ''} style="--rc:${it ? rarityOf(it).color : '#555'}"><span class="eq-tag">${label}</span><b>${it ? it.ilvl : '—'}</b><span class="eq-nm">${it ? itemTitle(it) : 'vazio'}</span></div>`; }).join('')}</div>`;
+  portraitSoon();
+}
+function portraitSig() { const cp = capeState(); return S.cls + '|' + SLOT_ORDER.map((sl) => (S.equip[sl] ? S.equip[sl].uid + (S.equip[sl].refine || 0) : '-')).join(',') + '|' + cp.lvl + (cp.vis ? 'v' : '') + '|' + (S.settings.gfx || ''); }
+function portraitSoon() {
+  if (!Scene.is3D || !Scene.is3D()) return;
+  const sig = portraitSig(); if (R.portrait && R.portrait.sig === sig) return;
+  clearTimeout(R.portraitT);
+  R.portraitT = setTimeout(() => { // espera o modelo do herói trocar de equipamento
+    if (R.win !== 'personagem') return;
+    const url = Scene.heroShot(240, 300); if (!url) return;
+    R.portrait = { sig, url }; const box = document.querySelector('.doll-portrait'); if (box) box.innerHTML = `<img id="doll-img" src="${url}" alt="">`;
+  }, 700);
 }
 // a Capa de Guerra aparece junto do equipamento (abre a janela dela)
 function capeSlot() {

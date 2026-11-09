@@ -2903,9 +2903,39 @@ const Scene3D = (() => {
     resize();
     if (!running) { running = true; lastT = 0; raf = requestAnimationFrame(frame); }
   }
+  // retrato do herói (ficha do personagem): só o herói, fundo transparente, câmera de frente
+  function heroShot(w = 240, h = 300) {
+    if (!renderer || !st.hero || !st.hero.root) return null;
+    const root = st.hero.root, ry0 = root.rotation.y; root.rotation.y = 0; root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root), size = new THREE.Vector3(), c = new THREE.Vector3();
+    box.getSize(size); box.getCenter(c); if (!isFinite(size.y) || size.y <= 0) { root.rotation.y = ry0; return null; }
+    const ry = 0.35, cam = new THREE.PerspectiveCamera(30, w / h, 0.1, 100), dist = size.y * 1.7 + 0.4;
+    cam.position.set(c.x + Math.sin(ry) * dist, c.y + size.y * 0.12, c.z + Math.cos(ry) * dist); cam.lookAt(c.x, c.y, c.z);
+    const hidden = [];
+    for (const o of scene.children) if (o !== root && !o.isLight && o.visible) { o.visible = false; hidden.push(o); }
+    const bg = scene.background, fog = scene.fog, cc = renderer.getClearColor(new THREE.Color()).clone(), ca = renderer.getClearAlpha();
+    const rt = new THREE.WebGLRenderTarget(w, h, { format: THREE.RGBAFormat }), lightsTmp = [];
+    let url = null;
+    try {
+      scene.background = null; scene.fog = null; renderer.setClearColor(0x000000, 0);
+      const key = new THREE.DirectionalLight(0xfff0d8, 0.75), amb = new THREE.AmbientLight(0xffffff, 0.25), rim = new THREE.DirectionalLight(0xffa860, 0.6);
+      key.position.copy(cam.position).add(new THREE.Vector3(1, 2, 0)); key.target.position.copy(c); rim.position.set(c.x - Math.sin(ry) * 4, c.y + 3, c.z - Math.cos(ry) * 4); rim.target.position.copy(c);
+      lightsTmp.push(key, key.target, amb, rim, rim.target); for (const l of lightsTmp) scene.add(l);
+      renderer.setRenderTarget(rt); renderer.render(scene, cam);
+      const px = new Uint8Array(w * h * 4); renderer.readRenderTargetPixels(rt, 0, 0, w, h, px);
+      const c2 = document.createElement('canvas'); c2.width = w; c2.height = h; const g = c2.getContext('2d'), img = g.createImageData(w, h);
+      for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+      g.putImageData(img, 0, 0); url = c2.toDataURL('image/png');
+    } catch (e) { url = null; }
+    for (const l of lightsTmp) scene.remove(l);
+    renderer.setRenderTarget(null); rt.dispose(); scene.background = bg; scene.fog = fog; renderer.setClearColor(cc, ca);
+    for (const o of hidden) o.visible = true;
+    root.rotation.y = ry0;
+    return url;
+  }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, heroShot, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2927,6 +2957,7 @@ const Scene = (() => {
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
     petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), mechFx: fwd('mechFx'), turretZap: fwd('turretZap'), lootPick: fwd('lootPick'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
+    heroShot: (w, h) => (impl === Scene3D ? Scene3D.heroShot(w, h) : null),
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };
 })();
