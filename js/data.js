@@ -236,21 +236,23 @@ const WEAPON_INFO = {
   martelo:  { hands: 1, label: 'Martelo', plural: 'Martelos', icon: '🔨', anim: 'm1' },
   malho:    { hands: 2, label: 'Malho de duas mãos', plural: 'Malhos de duas mãos', icon: '⚒️', anim: 'm2' },
   arco:     { hands: 2, label: 'Arco', plural: 'Arcos', icon: '🏹', anim: 'bow', ranged: 1 },
-  besta:    { hands: 1, label: 'Besta de mão', plural: 'Bestas de mão', icon: '🎯', anim: 'xbow', ranged: 1 },
+  besta:    { mult: 1.15, hands: 1, label: 'Besta de mão', plural: 'Bestas de mão', icon: '🎯', anim: 'xbow', ranged: 1 },
   foice:    { hands: 2, label: 'Foice de duas mãos', plural: 'Foices de duas mãos', icon: '⚔️', anim: 'm2' },
-  lanca:    { hands: 1, label: 'Lança', plural: 'Lanças', icon: '🔱', anim: 'stab' },
+  lanca:    { mult: 1.15, hands: 1, label: 'Lança', plural: 'Lanças', icon: '🔱', anim: 'stab' },
   espada:   { hands: 1, label: 'Espada', plural: 'Espadas', icon: '🗡️', anim: 'm1' },
   montante: { hands: 2, label: 'Espada de duas mãos', plural: 'Espadas de duas mãos', icon: '⚔️', anim: 'm2' },
   dardo:    { hands: 1, label: 'Dardo', plural: 'Dardos', icon: '🗡️', anim: 'throw', ranged: 1 },
   glaive:   { hands: 2, label: 'Lança longa', plural: 'Lanças longas', icon: '🔱', anim: 'throw', ranged: 1 },
   cajado:   { hands: 2, label: 'Cajado', plural: 'Cajados', icon: '🔮', anim: 'cast', ranged: 1 },
-  varinha:  { hands: 1, label: 'Varinha', plural: 'Varinhas', icon: '🪄', anim: 'cast', ranged: 1 },
+  varinha:  { mult: 1.15, hands: 1, label: 'Varinha', plural: 'Varinhas', icon: '🪄', anim: 'cast', ranged: 1 },
   cetro:    { hands: 1, label: 'Cetro', plural: 'Cetros', icon: '✨', anim: 'cast', ranged: 1 },
   baculo:   { hands: 2, label: 'Báculo', plural: 'Báculos', icon: '☀️', anim: 'cast', ranged: 1 },
 };
 const TWO_HAND_MULT = 1.3; // arma de duas mãos: +30% de dano base (em troca do escudo)
 const wInfo = (wt) => WEAPON_INFO[wt] || WEAPON_INFO.espada;
 const wHands = (wt) => wInfo(wt).hands;
+// multiplicador de dano base do tipo: duas mãos ×1.3; a arma de uma mão das classes que nasceram com duas mãos ×1.15
+const wMult = (wt) => wInfo(wt).mult || (wHands(wt) === 2 ? TWO_HAND_MULT : 1);
 // a segunda arma de cada classe
 const CLASS_W2 = { gladiador: 'machadao', engenheiro: 'malho', cacadora: 'besta', lanceiro: 'lanca', paladino: 'montante', valquiria: 'glaive', arcanista: 'varinha', cleriga: 'baculo' };
 for (const k in CLASS_W2) CLASSES[k].weapon2 = CLASS_W2[k];

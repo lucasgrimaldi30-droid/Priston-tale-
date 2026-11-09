@@ -69,7 +69,7 @@ function newCharacter(name, cls) {
   return {
     v: 1, name, cls, lvl: 1, xp: 0, gold: 50, pts: 0,
     attr: { ...c.base }, hp: 1, mp: 1,
-    equip: { arma: makeStarterWeapon(cls) }, alt: { arma: makeStarterWeapon(cls, CLASSES[cls].weapon2), escudo: null }, w2: 1, wset: 0,
+    equip: { arma: makeStarterWeapon(cls) }, alt: { arma: makeStarterWeapon(cls, CLASSES[cls].weapon2), escudo: null }, w2: 1, w3: 1, wset: 0,
     inv: [], pots: { hp1: 10, mp1: 10, hp2: 0, mp2: 0 }, stones: 0,
     zone: 'z1', zoneKills: {}, bosses: {},
     settings: { autoHp: 50, autoMp: 30, autoSell: 'nenhum', autoBoss: false, autoBuyPots: true, autoPts: false, gfx: '3d', sfxVol: 70, musVol: 45, muted: false, auto: true, autoQuest: true, autoSkill: true, autoAlma: false, almaV2: true },
@@ -79,7 +79,7 @@ function newCharacter(name, cls) {
 }
 
 function makeStarterWeapon(cls, w = CLASSES[cls].weapon) {
-  const k = wHands(w) === 2 ? TWO_HAND_MULT : 1;
+  const k = wMult(w);
   return { uid: uid(), slot: 'arma', wtype: w, name: WEAPON_NAMES[w][0], ilvl: 1, rarity: 'comum', min: Math.round(4 * k), max: Math.round(7 * k), def: 0, affixes: [], refine: 0, req: 1 };
 }
 
@@ -125,7 +125,7 @@ function autoSwapTick(dt, d) {
 function makeWeaponLike(wtype, ilvl, rarityId) {
   let it = null;
   for (let i = 0; i < 60; i++) { it = genItem(ilvl, 1, 'arma'); if (it.rarity === rarityId) break; }
-  const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1, now2 = wHands(wtype) === 2 ? TWO_HAND_MULT : 1;
+  const was = wMult(it.wtype), now2 = wMult(wtype);
   it.rarity = rarityId; it.wtype = wtype; it.name = WEAPON_NAMES[wtype][clamp(Math.floor(ilvl / 17), 0, 5)];
   it.min = Math.round(it.min / was * now2); it.max = Math.round(it.max / was * now2);
   it.affixes = it.affixes.slice(0, rarityOf(it).affixes); delete it.set;
@@ -134,6 +134,9 @@ function makeWeaponLike(wtype, ilvl, rarityId) {
 // saves antigos: armas de duas mãos ganham o bônus, o escudo vai para o conjunto certo e o herói recebe a segunda arma
 function migrateWeapons() {
   altState();
+  // v34: lança, besta e varinha (uma mão das classes de duas mãos) ficaram 15% mais fortes
+  if (S.w2 && !S.w3) for (const it of allItems()) if (it.slot === 'arma' && wInfo(it.wtype).mult) { it.min = Math.round(it.min * wInfo(it.wtype).mult); it.max = Math.round(it.max * wInfo(it.wtype).mult); }
+  S.w3 = 1;
   if (S.w2) { fixSets(); return; }
   S.w2 = 1;
   for (const it of [...Object.values(S.equip), ...S.inv]) {
@@ -175,7 +178,7 @@ function genItem(ilvl, boost = 1, forceSlot = null) {
     const own = classWeapons(S.cls)[rint(0, 1)];
     it.wtype = Math.random() < 0.7 ? own : types[rint(0, types.length - 1)];
     it.name = WEAPON_NAMES[it.wtype][tier];
-    const base = (5 + ilvl * 2.2) * rar.mult * rnd(0.9, 1.1) * (wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1);
+    const base = (5 + ilvl * 2.2) * rar.mult * rnd(0.9, 1.1) * wMult(it.wtype);
     it.min = Math.round(base);
     it.max = Math.round(base * rnd(1.45, 1.75));
   } else {
@@ -1550,7 +1553,7 @@ function makeLegendary(slotName, wtype) {
   let it = null;
   for (let i = 0; i < 400; i++) { it = genItem(100, 60, slotName); if (it.rarity === 'lendario') break; }
   if (it.rarity !== 'lendario') { it.rarity = 'lendario'; }
-  if (wtype) { const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1, k = wHands(wtype) === 2 ? TWO_HAND_MULT : 1; it.min = Math.round(it.min / was * k); it.max = Math.round(it.max / was * k); it.wtype = wtype; it.name = WEAPON_NAMES[wtype][5]; }
+  if (wtype) { const was = wMult(it.wtype), k = wMult(wtype); it.min = Math.round(it.min / was * k); it.max = Math.round(it.max / was * k); it.wtype = wtype; it.name = WEAPON_NAMES[wtype][5]; }
   it.refine = 10; it.req = 1;
   return it;
 }
@@ -1660,7 +1663,7 @@ function renderCreate() {
         </div>
         <div class="cr-sec"><h4>🎒 O que pode usar</h4>
           <div class="cr-chips">${classWeapons(k).slice().sort((a, b) => wHands(a) - wHands(b)).map((w) => `<span class="cr-chip gold">${wInfo(w).icon} ${wInfo(w).plural}${wHands(w) === 1 ? ' + 🛡️ escudo' : ' (duas mãos)'}</span>`).join('')}${c.anyWeapon ? '<span class="cr-chip">⚙️ e qualquer outra arma</span>' : ''}${wearSlots}<span class="cr-chip">🧥 Capa de Guerra</span></div>
-          <p class="cr-small">⚔️ <b>Dois conjuntos de arma:</b> duas mãos bate 30% mais forte; uma mão usa escudo e aguenta mais. Você troca quando quiser (só um conta por vez).</p>
+          <p class="cr-small">⚔️ <b>Dois conjuntos de arma:</b> duas mãos bate 30% mais forte; uma mão usa escudo e aguenta mais${wInfo(CLASSES[k].weapon2).mult || wInfo(CLASSES[k].weapon).mult ? ' (e nesta classe a arma de uma mão ainda bate 15% a mais)' : ''}. Você troca quando quiser (só um conta por vez).</p>
           <p class="cr-small">${el ? `${el.icon} Rosário de <b>${el.el}</b> (nível ${ROSARY_LVL}): ${el.txt(1)}.` : ''}</p>
           ${specs.length ? `<p class="cr-small"><b>Especializações no nível ${SPEC_LVL}:</b></p>${specs.map((sp) => `<p class="cr-small cr-spec">${sp.icon} <b>${sp.name}</b>: ${sp.desc}</p>`).join('')}` : ''}
         </div>
@@ -2482,7 +2485,7 @@ function itemDetail(it, compare = true) {
   let h = `<div class="item-detail" style="--rc:${r.color}">
     <div class="it-name">${itemIcon(it)} ${itemTitle(it)}</div>
     <div class="muted">${r.name} · ${it.slot === 'arma' ? wInfo(it.wtype).label : ARMOR_SLOTS[it.slot].label} · Nível do item ${it.ilvl}</div>`;
-  if (it.slot === 'arma') h += `<div>Dano: <b>${Math.round(it.min * m)} - ${Math.round(it.max * m)}</b></div><div class="muted">${isTwoHand(it) ? '🗡️ Duas mãos: +30% de dano, sem escudo' : '🛡️ Uma mão: pode usar escudo'}</div>`;
+  if (it.slot === 'arma') h += `<div>Dano: <b>${Math.round(it.min * m)} - ${Math.round(it.max * m)}</b></div><div class="muted">${isTwoHand(it) ? '🗡️ Duas mãos: +30% de dano, sem escudo' : '🛡️ Uma mão: pode usar escudo' + (wInfo(it.wtype).mult ? ' (+15% de dano)' : '')}</div>`;
   else if (it.def) h += `<div>Defesa: <b>${Math.round(it.def * m)}</b></div>`;
   for (const a of it.affixes) h += `<div class="affix">+${a.val}${aff[a.stat].pct ? '' : ''} ${aff[a.stat].label}</div>`;
   h += `<div class="${S.lvl >= it.req ? 'muted' : 'bad'}">Requer nível ${it.req}</div>`;

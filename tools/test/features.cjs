@@ -257,7 +257,7 @@ const startServer = require('./server.cjs');
     // ---- dois conjuntos de arma (uma mão + escudo / duas mãos) ----
     novo('gladiador', 30, { tut: 99 });
     ok('Herói novo começa com as duas armas', S.equip.arma.wtype === 'machado' && S.alt.arma.wtype === 'machadao');
-    const mkW = (wt, ilvl) => { const it = genItem(ilvl, 1, 'arma'); const was = wHands(it.wtype) === 2 ? TWO_HAND_MULT : 1; it.wtype = wt; it.min = Math.round(100 / was * (wHands(wt) === 2 ? TWO_HAND_MULT : 1)); it.max = it.min + 10; it.req = 1; it.affixes = []; return it; };
+    const mkW = (wt, ilvl) => { const it = genItem(ilvl, 1, 'arma'); it.wtype = wt; it.min = Math.round(100 * wMult(wt)); it.max = it.min + 10; it.req = 1; it.affixes = []; return it; };
     const w1 = mkW('machado', 30), w2 = mkW('machadao', 30), shd = genItem(30, 1, 'escudo'); shd.req = 1; shd.affixes = [];
     S.inv.push(w1, w2, shd); equipItem(w1.uid); equipItem(shd.uid); equipItem(w2.uid);
     ok('Arma de duas mãos vai para o outro conjunto', S.equip.arma === w1 && S.equip.escudo === shd && S.alt.arma === w2);
@@ -275,6 +275,10 @@ const startServer = require('./server.cjs');
       novo('lanceiro', 40, { tut: 99 }); const f = mkW('foice', 40); f.min = 100; f.max = 110; const sh2 = genItem(40, 1, 'escudo'); sh2.req = 1;
       S.equip = { arma: f, escudo: sh2 }; delete S.alt; delete S.w2; migrateWeapons();
       ok('Migração: bônus de duas mãos, escudo e arma nova no outro conjunto', f.min === 130 && !S.equip.escudo && S.alt.escudo === sh2 && S.alt.arma && S.alt.arma.wtype === 'lanca', `${S.alt.arma && S.alt.arma.name}`);
+    }
+    { // lança, besta e varinha: +15% (save já migrado para dois conjuntos ganha o bônus uma vez só)
+      novo('lanceiro', 40, { tut: 99 }); const l1 = mkW('lanca', 40); l1.min = 100; l1.max = 120; S.alt.arma = l1; S.w2 = 1; delete S.w3; migrateWeapons(); migrateWeapons();
+      ok('Arma de uma mão do Lanceiro/Caçadora/Arcanista +15%', l1.min === 115 && wMult('besta') === 1.15 && wMult('varinha') === 1.15 && wMult('espada') === 1 && wMult('foice') === 1.3, `lança ${l1.min}`);
     }
     { const fc = makeFullChar('T', 'arcanista', 'cajado'); ok('Herói completo tem os dois conjuntos', fc.equip.arma.wtype === 'cajado' && !fc.equip.escudo && fc.alt.arma.wtype === 'varinha' && !!fc.alt.escudo); }
     return out;

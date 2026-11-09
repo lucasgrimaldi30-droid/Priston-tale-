@@ -1055,12 +1055,70 @@ const Scene3D = (() => {
     return g;
   }
 
+  // ESCUDO de cada classe (o Paladino usa o clássico em pipa; magos seguram um tomo)
+  function classShield(sh, t, k, M, cs, rc, face) {
+    const disc = (r, mat, x = 0, th = 0.06) => { const c = mk(G.cyl(r, r, th, 20), mat, sh, x, 0, 0); c.rotation.z = Math.PI / 2; return c; };
+    const rim = (r, th, mat) => { const o = mk(G.torus(r, th), mat, sh, 0, 0, 0); o.rotation.y = Math.PI / 2; return o; };
+    const plate = (shape, mat, d = 0.05) => { const p = mk(extrudeG(shape, d), mat, sh, 0, 0, 0); p.rotation.y = Math.PI / 2; return p; };
+    const around = (n, r, fn) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; fn(Math.cos(a) * r, Math.sin(a) * r, a); } };
+    switch (cs.helm) {
+      case 'horns': { // Gladiador: broquel redondo de arena com espigão e cravos
+        const r = 0.3 + t * 0.022; disc(r, face); rim(r, 0.03, t ? k.gold : M('#5a4020'));
+        mk(G.sph(0.09, 8), k.gold, sh, 0.04, 0, 0); mk(G.cone(0.05, 0.16 + t * 0.03, 5), t >= 3 ? k.glow : k.metal, sh, 0.12 + t * 0.012, 0, 0).rotation.z = -Math.PI / 2;
+        if (t >= 1) around(4 + t, r * 0.7, (y, z) => mk(G.sph(0.03, 6), k.gold, sh, 0.04, y, z));
+        if (t >= 3) around(6 + t, r + 0.03, (y, z, a) => { const c = mk(G.cone(0.03, 0.12, 4), M(t >= 4 ? '#2a1612' : '#ece2c8'), sh, 0, y, z); c.rotation.x = a - Math.PI / 2 + Math.PI; c.rotation.x = Math.atan2(z, y); });
+        if (t >= 5) { const gl = glowSprite(rc, 0.7, 0.3); gl.position.x = 0.1; sh.add(gl); }
+        return true;
+      }
+      case 'goggles': { // Engenheiro: escudo-engrenagem com núcleo de energia
+        const r = 0.29 + t * 0.02; disc(r, face, 0, 0.07);
+        around(8, r + 0.03, (y, z, a) => { const b = mk(G.box(0.07, 0.09, 0.09), t ? k.gold : face, sh, 0, y, z); b.rotation.x = a; });
+        rim(r * 0.62, 0.025, k.gold); disc(r * 0.3, t >= 2 ? k.glow : k.gold, 0.03, 0.05);
+        if (t >= 1) around(6, r * 0.82, (y, z) => mk(G.sph(0.025, 6), k.grip, sh, 0.04, y, z));
+        if (t >= 3) around(3, r * 0.62, (y, z, a) => { const p = mk(G.cyl(0.02, 0.02, r * 0.6, 5), k.edge, sh, 0.045, y / 2, z / 2); p.rotation.x = a + Math.PI / 2; });
+        if (t >= 5) { rim(r + 0.12, 0.012, k.glow); const gl = glowSprite(rc, 0.7, 0.35); gl.position.x = 0.1; sh.add(gl); }
+        return true;
+      }
+      case 'feather': { // Caçadora: broquel em folha com nervura e penas
+        const H = 0.5 + t * 0.035, W = 0.3 + t * 0.02, s = new THREE.Shape();
+        s.moveTo(0, H / 2); s.quadraticCurveTo(W * 0.9, H * 0.15, 0, -H / 2); s.quadraticCurveTo(-W * 0.9, H * 0.15, 0, H / 2);
+        plate(s, t === 0 ? face : k.metal); mk(G.box(0.03, H * 0.8, 0.03), k.gold, sh, 0.04, -0.02, 0);
+        if (t >= 1) for (const sd of [-1, 1]) for (let i = 0; i < 2 + Math.floor(t / 2); i++) { const v = mk(G.box(0.02, 0.02, W * 0.34), k.gold, sh, 0.04, H * 0.2 - i * 0.11, sd * W * 0.16); v.rotation.x = sd * 0.7; }
+        if (t >= 2) mk(G.oct(0.045), k.glow, sh, 0.06, H * 0.12, 0);
+        if (t >= 3) for (const sd of [-1, 1]) for (let i = 0; i < Math.min(3, t - 2); i++) { const f = mk(G.cone(0.04, 0.2, 4), M(cs.gold, { e: cs.gold, ei: 0.3 }), sh, 0, H * 0.42 + i * 0.02, sd * (0.08 + i * 0.07)); f.scale.x = 0.3; f.rotation.x = sd * (0.4 + i * 0.3); }
+        if (t >= 5) { const gl = glowSprite(rc, 0.6, 0.3); gl.position.x = 0.1; sh.add(gl); }
+        return true;
+      }
+      case 'skull': { // Lanceiro: escudo-lâmina estreito com lua crescente
+        const H = 0.62 + t * 0.045, W = 0.26 + t * 0.018, s = new THREE.Shape();
+        s.moveTo(0, H / 2); s.lineTo(W / 2, H * 0.22); s.lineTo(W * 0.32, -H * 0.15); s.lineTo(0, -H / 2); s.lineTo(-W * 0.32, -H * 0.15); s.lineTo(-W / 2, H * 0.22); s.lineTo(0, H / 2);
+        plate(s, M(mixCol(k.col, '#0c0812', 0.45), { r: 0.5 }));
+        mk(G.box(0.03, H * 0.86, 0.025), k.metal, sh, 0.04, 0, 0);
+        const moon = mk(extrudeG(crescent(0.16 + t * 0.015, 0.1, 0.035), 0.02), t >= 2 ? k.glow : k.gold, sh, 0.06, H * 0.12, 0.08); moon.rotation.set(0, Math.PI / 2, -0.5);
+        if (t >= 2) for (const sd of [-1, 1]) mk(G.cone(0.03, 0.14, 4), k.gold, sh, 0.02, H * 0.26, sd * (W / 2 + 0.04)).rotation.x = sd * 1.2;
+        if (t >= 4) for (const y of [H / 2 + 0.06, -H / 2 - 0.06]) mk(G.cone(0.03, 0.16, 4), k.gold, sh, 0.02, y, 0).rotation.z = y > 0 ? 0 : Math.PI;
+        if (t >= 5) { const gl = glowSprite(rc, 0.6, 0.35); gl.position.set(0.1, H * 0.12, 0); sh.add(gl); }
+        return true;
+      }
+      case 'wings': { // Valquíria: escudo redondo com estrela e asas
+        const r = 0.28 + t * 0.02; disc(r, t === 0 ? face : k.metal); rim(r, 0.028, k.gold);
+        around(4, r * 0.5, (y, z, a) => { const c = mk(G.cone(0.035, r * 0.75, 4), t >= 2 ? k.glow : k.gold, sh, 0.035, y, z); c.scale.x = 0.3; c.rotation.x = Math.atan2(z, y); });
+        mk(G.oct(0.05 + t * 0.005), k.glow, sh, 0.06, 0, 0);
+        if (t >= 2) for (const sd of [-1, 1]) for (let i = 0; i < Math.min(3, t - 1); i++) { const w = mk(G.box(0.02, 0.07, 0.22 + t * 0.02 - i * 0.04), k.white, sh, -0.01, r * 0.5 + i * 0.09, sd * (r + 0.07)); w.rotation.x = sd * -(0.5 + i * 0.2); }
+        if (t >= 5) { const gl = glowSprite(rc, 0.7, 0.3); gl.position.x = 0.1; sh.add(gl); }
+        return true;
+      }
+      default: return false;
+    }
+  }
+
   // ESCUDO — madeira, ferro, pipa, torre rúnica, dracônico com espinhos, celestial com asas
   function buildShieldT(hand, it, M) {
     const sh = group(hand, 0.12, 0, 0);
     const t = it ? tierOf(it) : 2, rc = it && rarIdx(it) > 0 ? rarOf(it).color : '#e0b040';
     const k = gearMats(M, t, rc, it ? rarIdx(it) : 0, it ? it.refine : 0, it ? vtOf(it) : undefined);
     const face = t === 0 ? M('#8a6038', { r: 0.9 }) : k.metal;
+    if (CUR_STYLE && classShield(sh, t, k, M, CUR_STYLE, rc, face)) return sh;
     if (t <= 1) {
       const c = mk(G.cyl(0.3, 0.3, 0.06, 18), face, sh, 0, 0, 0); c.rotation.z = Math.PI / 2;
       const rim = mk(G.torus(0.3, 0.025), t ? k.gold : M('#5a4020'), sh, 0, 0, 0); rim.rotation.y = Math.PI / 2;
@@ -1150,14 +1208,18 @@ const Scene3D = (() => {
         if (t >= 5) { band(cy + 0.72, 0.3, 0.016, k.glow); glow(0, cy + 0.6, 0, 0.8, 0.3); }
         break;
       }
-      case 'skull': { // Lanceiro: capuz sombrio, máscara, lâmina na testa, crista, chifres para trás e chama
-        cap(0.5, M(mixCol(k.col, '#0c0812', 0.45), { r: 0.6 }), 0.95).position.y = cy - 0.04;
-        band(cy - 0.02, 0.5, 0.03, k.metal);
-        if (t >= 1) { const b = mk(G.cone(0.06, 0.26 + t * 0.05, 4), k.gold, hg, 0.5, cy + 0.16 + t * 0.02, 0); b.scale.z = 0.4; b.rotation.z = -0.25; }
-        if (t >= 2) for (let i = 0; i < 3 + Math.floor(t / 2); i++) { const f = mk(G.cone(0.05, 0.26 - i * 0.025, 4), k.metal, hg, 0.2 - i * 0.15, cy + 0.52 - i * 0.04, 0); f.scale.z = 0.3; f.rotation.z = 0.5; }
-        if (t >= 3) { mk(G.oct(0.05), k.glow, hg, 0.45, cy + 0.06, 0); for (const z of [-1, 1]) { const h = mk(G.cone(0.055, 0.42 + t * 0.05, 5), M('#1a1020'), hg, -0.15, cy + 0.3, z * 0.42); h.rotation.x = z * 0.9; h.rotation.z = 0.5; } }
-        if (t >= 4) for (const z of [-1, 0, 1]) mk(G.cone(0.025, 0.12, 4), k.gold, hg, 0.42, cy - 0.44, z * 0.13).rotation.z = Math.PI;
-        if (t >= 5) { for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; mk(G.cone(0.035, 0.2, 4), M(rc, { e: rc, ei: 1.4 }), hg, Math.cos(a) * 0.26, cy + 0.72, Math.sin(a) * 0.26); } glow(0, cy + 0.7, 0, 1.0, 0.4); }
+      case 'skull': { // Lanceiro: capuz de ceifador com bico, cachecol, lua na testa, crista, chifres e chama
+        const dark = M(mixCol(k.col, '#0c0812', 0.5), { r: 0.7 });
+        const hood = cap(0.6, dark, 1.0); hood.position.y = cy - 0.02; hood.scale.set(1.02, 1.08, 0.98);
+        const beak = mk(G.cone(0.2, 0.34, 4), dark, hg, 0.36, cy + 0.3, 0); beak.rotation.z = -1.95; beak.scale.z = 1.5; // bico do capuz sobre a testa
+        const tail = mk(G.cone(0.2, 0.5 + t * 0.03, 5), dark, hg, -0.42, cy + 0.12, 0); tail.rotation.z = 1.9; // ponta caída para trás
+        const sc = mk(new THREE.CylinderGeometry(0.4, 0.36, 0.2, 14, 1, true), M(mixCol(cs.gold, '#201030', 0.45), { r: 0.8 }), hg, 0.02, cy - 0.42, 0); sc.material.side = THREE.DoubleSide; // cachecol
+        band(cy + 0.02, 0.56, 0.022 + t * 0.003, t >= 2 ? k.gold : k.metal);
+        if (t >= 1) { const moon = mk(extrudeG(crescent(0.16 + t * 0.02, 0.1, 0.035), 0.02), t >= 3 ? k.glow : k.gold, hg, 0.5, cy + 0.2, 0.07 + t * 0.008); moon.rotation.set(0, Math.PI / 2, -0.5); }
+        if (t >= 2) for (let i = 0; i < 2 + Math.floor(t / 2); i++) { const f = mk(G.cone(0.05, 0.22 - i * 0.02, 4), k.metal, hg, 0.12 - i * 0.14, cy + 0.56 - i * 0.03, 0); f.scale.z = 0.3; f.rotation.z = 0.6; }
+        if (t >= 3) for (const z of [-1, 1]) { const h = mk(G.cone(0.055, 0.36 + t * 0.05, 5), M('#1a1020'), hg, -0.08, cy + 0.36, z * 0.44); h.rotation.x = z * 1.0; h.rotation.z = 0.6; mk(G.sph(0.035, 6), k.glow, hg, -0.2, cy + 0.5 + t * 0.02, z * (0.62 + t * 0.03)); }
+        if (t >= 4) for (const z of [-1, 1]) mk(G.oct(0.04), k.glow, hg, 0.3, cy - 0.42, z * 0.26);
+        if (t >= 5) { for (let i = 0; i < 5; i++) { const a2 = (i / 5) * Math.PI * 2; mk(G.cone(0.035, 0.2, 4), M(rc, { e: rc, ei: 1.4 }), hg, Math.cos(a2) * 0.26, cy + 0.82, Math.sin(a2) * 0.26); } glow(0, cy + 0.8, 0, 1.0, 0.4); }
         break;
       }
       case 'great': { // Paladino: grande elmo com cruz, penacho, asas e auréola
@@ -1201,6 +1263,7 @@ const Scene3D = (() => {
         if (t >= 5) { halo(cy + 0.85, 0.28); glow(0, cy + 0.6, 0, 1.0, 0.4); }
       }
     }
+    if (vt > 0 && vt % 2 === 0) for (const z of [-1, 1]) { mk(G.oct(0.045), k.glow, hg, 0.08, cy + 0.02, z * 0.52); mk(G.torus(0.06, 0.012), k.gold, hg, 0.08, cy + 0.02, z * 0.52).rotation.y = Math.PI / 2; } // 2º visual de cada estágio: gemas nas têmporas
   }
   // ornamento de ombro de cada classe (por cima da ombreira básica)
   function classShoulder(g, t, k, M, cs, rc) {
@@ -1247,7 +1310,7 @@ const Scene3D = (() => {
         const p = mk(G.sph(0.13 + t * 0.018, 10, 0), k.metal, g, 0, 0.05, 0); p.scale.set(1.15, 0.8, 1.15);
         mk(G.torus(0.12 + t * 0.017, 0.016), k.edge, g, 0, 0.0, 0).rotation.x = Math.PI / 2;
         if (t >= 2) { const p2 = mk(G.sph(0.1 + t * 0.012, 8), k.metal, g, 0, 0.13, 0); p2.scale.set(1, 0.45, 1); }
-        if (CUR_STYLE) classShoulder(g, t, k, M, CUR_STYLE, rc);
+        if (CUR_STYLE) { classShoulder(g, t, k, M, CUR_STYLE, rc); const v2 = vtOf(eq.armadura); if (v2 > 0 && v2 % 2 === 0) mk(G.torus(0.15 + t * 0.017, 0.012), k.gold, g, 0, 0.06, 0).rotation.x = Math.PI / 2; }
         else if (t >= 4) for (let i = 0; i < 3; i++) mk(G.cone(0.025, 0.14 + i * 0.03, 4), k.gold, g, (i - 1) * 0.06, 0.18, 0);
         if (t >= 5) mk(G.oct(0.04), k.glow, g, 0, 0.12, 0.12);
       }
