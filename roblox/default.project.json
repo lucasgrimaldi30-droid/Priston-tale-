@@ -1,0 +1,18 @@
+{
+  "name": "Cronicas de Valdaria",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Dados": { "$path": "src/shared/Dados.lua" },
+      "Regras": { "$path": "src/shared/Regras.lua" }
+    },
+    "ServerScriptService": {
+      "Valdaria": { "$path": "src/server/Main.server.lua" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Interface": { "$path": "src/client/Interface.client.lua" }
+      }
+    }
+  }
+}

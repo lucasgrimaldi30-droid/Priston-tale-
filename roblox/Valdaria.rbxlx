@@ -1,0 +1,3256 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><Item class="ReplicatedStorage" referent="RBX00000003"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Dados</string><ProtectedString name="Source"><![CDATA[-- GERADO por roblox/ferramentas/dados.cjs a partir de js/data.js. Não edite à mão.
+local D = {}
+D.ORDEM_CLASSES = {
+	"gladiador",
+	"engenheiro",
+	"cacadora",
+	"lanceiro",
+	"paladino",
+	"valquiria",
+	"arcanista",
+	"cleriga"
+}
+D.CLASSES = {
+	gladiador = {
+		name = "Gladiador",
+		faction = "ferro",
+		icon = "🪓",
+		weapon = "machado",
+		role = "Corpo a corpo · Caçador de chefes",
+		mech = "rage",
+		desc = "Força bruta com machados. A Fúria cresce com o dano que ele leva e causa, e a Execução gasta tudo num golpe que destrói chefes.",
+		base = {
+			["for"] = 28,
+			int = 6,
+			des = 14,
+			agi = 12,
+			vit = 25
+		},
+		main = "for",
+		speed = 1.1,
+		skills = {
+			{
+				id = "g1",
+				name = "Golpe Brutal",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.9,
+				cd = 4,
+				mp = 6
+			},
+			{
+				id = "g2",
+				name = "Machado Veloz",
+				lvl = 10,
+				type = "buff",
+				stat = "spd",
+				val = 0.45,
+				dur = 20,
+				cd = 32,
+				mp = 18
+			},
+			{
+				id = "g3",
+				name = "Furacão de Aço",
+				lvl = 20,
+				type = "aoe",
+				mult = 2.3,
+				cd = 8,
+				mp = 24
+			},
+			{
+				id = "g4",
+				name = "Rugido de Guerra",
+				lvl = 35,
+				type = "aoe",
+				mult = 0.8,
+				stun = 2.5,
+				cd = 18,
+				mp = 30
+			},
+			{
+				id = "g5",
+				name = "Queda do Titã",
+				lvl = 50,
+				type = "dmg",
+				mult = 6.5,
+				boss = 0.5,
+				cd = 13,
+				mp = 45
+			},
+			{
+				id = "g6",
+				name = "Execução",
+				lvl = 70,
+				type = "dmg",
+				mult = 9,
+				boss = 0.6,
+				cd = 19,
+				mp = 70,
+				res = {
+					max = 100,
+					per = 0.015,
+					exec = 0.5
+				}
+			}
+		},
+		weapon2 = "machadao"
+	},
+	engenheiro = {
+		name = "Engenheiro",
+		faction = "ferro",
+		icon = "⚙️",
+		weapon = "martelo",
+		anyWeapon = true,
+		role = "Tanque · Torretas e autômato",
+		mech = "cells",
+		desc = "Mestre da metalurgia. Monta torretas Tesla no chão, invoca um autômato e acumula células de energia para uma sobrecarga explosiva.",
+		base = {
+			["for"] = 24,
+			int = 12,
+			des = 12,
+			agi = 10,
+			vit = 26
+		},
+		main = "for",
+		speed = 1,
+		skills = {
+			{
+				id = "e1",
+				name = "Choque Mecânico",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.8,
+				cd = 4,
+				mp = 6,
+				res = {
+					gain = 1.5
+				}
+			},
+			{
+				id = "e2",
+				name = "Armadura Metálica",
+				lvl = 10,
+				type = "buff",
+				stat = "def",
+				val = 0.8,
+				dur = 25,
+				cd = 32,
+				mp = 18
+			},
+			{
+				id = "e3",
+				name = "Torreta Tesla",
+				lvl = 20,
+				type = "turret",
+				mult = 0.75,
+				dur = 15,
+				cd = 14,
+				mp = 24
+			},
+			{
+				id = "e4",
+				name = "Autômato de Ferro",
+				lvl = 35,
+				type = "summon",
+				pet = "golem",
+				mult = 0.6,
+				dur = 35,
+				cd = 45,
+				mp = 40
+			},
+			{
+				id = "e5",
+				name = "Esferas Giratórias",
+				lvl = 50,
+				type = "buff",
+				stat = "absorb",
+				val = 0.3,
+				dur = 22,
+				cd = 38,
+				mp = 40
+			},
+			{
+				id = "e6",
+				name = "Sobrecarga Sísmica",
+				lvl = 70,
+				type = "aoe",
+				mult = 5.5,
+				stun = 1.5,
+				cd = 16,
+				mp = 70,
+				res = {
+					max = 5,
+					per = 0.25,
+					stunPer = 0.2,
+					boom = true
+				}
+			}
+		},
+		weapon2 = "malho"
+	},
+	cacadora = {
+		name = "Caçadora",
+		faction = "ferro",
+		icon = "🏹",
+		weapon = "arco",
+		role = "Dano à distância · Foco no alvo",
+		mech = "focus",
+		desc = "Precisão máxima com o arco. Acumula Foco acertando sempre o mesmo alvo e solta um disparo que atravessa todos. Esquiva com um mortal para trás.",
+		base = {
+			["for"] = 14,
+			int = 8,
+			des = 30,
+			agi = 22,
+			vit = 16
+		},
+		main = "des",
+		speed = 1.35,
+		skills = {
+			{
+				id = "c1",
+				name = "Flecha Certeira",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.7,
+				cd = 3,
+				mp = 5,
+				res = {
+					gain = 2
+				}
+			},
+			{
+				id = "c2",
+				name = "Falcão Espiritual",
+				lvl = 10,
+				type = "summon",
+				pet = "falcao",
+				mult = 0.6,
+				dur = 40,
+				cd = 48,
+				mp = 22
+			},
+			{
+				id = "c3",
+				name = "Chuva de Flechas",
+				lvl = 20,
+				type = "aoe",
+				mult = 2.2,
+				cd = 8,
+				mp = 20
+			},
+			{
+				id = "c4",
+				name = "Salto Evasivo",
+				lvl = 35,
+				type = "buff",
+				stat = "evade",
+				val = 0.25,
+				dur = 25,
+				cd = 34,
+				mp = 28
+			},
+			{
+				id = "c5",
+				name = "Mira Perfeita",
+				lvl = 50,
+				type = "buff",
+				stat = "crit",
+				val = 0.35,
+				dur = 16,
+				cd = 34,
+				mp = 40
+			},
+			{
+				id = "c6",
+				name = "Disparo Perfurante",
+				lvl = 70,
+				type = "aoe",
+				mult = 5.5,
+				cd = 16,
+				mp = 72,
+				res = {
+					max = 5,
+					per = 0.3,
+					pierce = true
+				}
+			}
+		},
+		weapon2 = "besta"
+	},
+	lanceiro = {
+		name = "Lanceiro",
+		faction = "ferro",
+		icon = "⚔️",
+		weapon = "foice",
+		critMult = 2.3,
+		role = "Corpo a corpo · Crítico explosivo",
+		desc = "Ceifador com foices de duas mãos. Colhe almas com o dano que causa e solta tudo nos golpes finais. Some nas sombras e tem o maior dano crítico do jogo.",
+		mech = "souls",
+		base = {
+			["for"] = 24,
+			int = 6,
+			des = 22,
+			agi = 20,
+			vit = 18
+		},
+		main = "for",
+		speed = 1.2,
+		skills = {
+			{
+				id = "l1",
+				name = "Corte da Foice",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.9,
+				cd = 4,
+				mp = 6,
+				soul = {
+					gain = 1.5
+				}
+			},
+			{
+				id = "l2",
+				name = "Desvanecer",
+				lvl = 10,
+				type = "stealth",
+				dur = 3,
+				cd = 18,
+				mp = 15
+			},
+			{
+				id = "l3",
+				name = "Rodopio da Foice",
+				lvl = 20,
+				type = "aoe",
+				mult = 2.4,
+				cd = 9,
+				mp = 22,
+				soul = {
+					max = 2,
+					per = 0.25
+				}
+			},
+			{
+				id = "l4",
+				name = "Mestre das Sombras",
+				lvl = 35,
+				type = "buff",
+				stat = "critdmg",
+				val = 0.6,
+				dur = 20,
+				cd = 36,
+				mp = 30,
+				also = {
+					stat = "crit",
+					val = 0.2
+				}
+			},
+			{
+				id = "l5",
+				name = "Salto Ceifador",
+				lvl = 50,
+				type = "dmg",
+				mult = 7.2,
+				hits = 4,
+				cd = 13,
+				mp = 45,
+				soul = {
+					max = 5,
+					per = 0.2,
+					hitEvery = 2
+				}
+			},
+			{
+				id = "l6",
+				name = "Ceifa Final",
+				lvl = 70,
+				type = "aoe",
+				mult = 6.5,
+				cd = 17,
+				mp = 72,
+				soul = {
+					max = 5,
+					per = 0.3,
+					stun5 = 1.5
+				}
+			}
+		},
+		weapon2 = "lanca"
+	},
+	paladino = {
+		name = "Paladino",
+		faction = "luz",
+		icon = "🛡️",
+		weapon = "espada",
+		role = "Tanque sagrado · Fé que vem do escudo",
+		mech = "faith",
+		desc = "Espada e escudo abençoados. Cada bloqueio e cada golpe recebido viram Fé, que cai do céu como martelo e colunas de luz.",
+		base = {
+			["for"] = 24,
+			int = 14,
+			des = 14,
+			agi = 12,
+			vit = 24
+		},
+		main = "for",
+		speed = 1.1,
+		skills = {
+			{
+				id = "p1",
+				name = "Lâmina Sagrada",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.8,
+				holy = 1,
+				cd = 4,
+				mp = 6
+			},
+			{
+				id = "p2",
+				name = "Bloqueio Mestre",
+				lvl = 10,
+				type = "passive",
+				stat = "block",
+				val = 0.15
+			},
+			{
+				id = "p3",
+				name = "Espada Sagrada",
+				lvl = 20,
+				type = "buff",
+				stat = "undead",
+				val = 0.8,
+				dur = 25,
+				cd = 34,
+				mp = 22,
+				also = {
+					stat = "atk",
+					val = 0.15
+				}
+			},
+			{
+				id = "p4",
+				name = "Escudo Divino",
+				lvl = 35,
+				type = "buff",
+				stat = "block",
+				val = 0.25,
+				dur = 20,
+				cd = 34,
+				mp = 30,
+				also = {
+					stat = "def",
+					val = 0.3
+				}
+			},
+			{
+				id = "p5",
+				name = "Martelo da Justiça",
+				lvl = 50,
+				type = "aoe",
+				mult = 4.5,
+				holy = 1,
+				cd = 12,
+				mp = 45,
+				res = {
+					max = 50,
+					per = 0.012
+				}
+			},
+			{
+				id = "p6",
+				name = "Julgamento Celestial",
+				lvl = 70,
+				type = "aoe",
+				mult = 7.5,
+				holy = 1,
+				cd = 18,
+				mp = 72,
+				res = {
+					max = 100,
+					per = 0.012
+				}
+			}
+		},
+		weapon2 = "montante"
+	},
+	valquiria = {
+		name = "Valquíria",
+		faction = "luz",
+		icon = "🗡️",
+		weapon = "dardo",
+		role = "Distância com escudo · Ritmo celeste",
+		mech = "combo",
+		desc = "Arremessa lanças e usa escudo. A cada 4 ataques solta uma Investida Celeste com asas de luz, e faz chover lanças douradas.",
+		base = {
+			["for"] = 20,
+			int = 10,
+			des = 26,
+			agi = 22,
+			vit = 18
+		},
+		main = "des",
+		speed = 1.3,
+		skills = {
+			{
+				id = "v1",
+				name = "Dardo Veloz",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.7,
+				cd = 3,
+				mp = 5
+			},
+			{
+				id = "v2",
+				name = "Lança Solar",
+				lvl = 10,
+				type = "buff",
+				stat = "atk",
+				val = 0.3,
+				dur = 25,
+				cd = 34,
+				mp = 18
+			},
+			{
+				id = "v3",
+				name = "Arremesso Triplo",
+				lvl = 20,
+				type = "aoe",
+				mult = 2.4,
+				targets = 3,
+				cd = 8,
+				mp = 20
+			},
+			{
+				id = "v4",
+				name = "Vento Divino",
+				lvl = 35,
+				type = "buff",
+				stat = "spd",
+				val = 0.35,
+				dur = 25,
+				cd = 34,
+				mp = 30,
+				also = {
+					stat = "evade",
+					val = 0.1
+				}
+			},
+			{
+				id = "v5",
+				name = "Fera Alada",
+				lvl = 50,
+				type = "summon",
+				pet = "fera",
+				mult = 0.85,
+				dur = 40,
+				cd = 48,
+				mp = 45
+			},
+			{
+				id = "v6",
+				name = "Tormenta de Lanças",
+				lvl = 70,
+				type = "aoe",
+				mult = 8,
+				cd = 18,
+				mp = 75
+			}
+		},
+		weapon2 = "glaive"
+	},
+	arcanista = {
+		name = "Arcanista",
+		faction = "luz",
+		icon = "🔮",
+		weapon = "cajado",
+		role = "Dano mágico · Combina elementos",
+		mech = "elements",
+		desc = "Fogo, gelo e raio que se combinam: Vapor Explosivo, Prisão Elétrica e Plasma. A Nova Elemental solta tudo de uma vez.",
+		base = {
+			["for"] = 8,
+			int = 32,
+			des = 14,
+			agi = 12,
+			vit = 16
+		},
+		main = "int",
+		speed = 0.95,
+		skills = {
+			{
+				id = "a1",
+				name = "Bola de Fogo",
+				lvl = 1,
+				type = "dmg",
+				mult = 2,
+				cd = 3,
+				mp = 7,
+				elem = "fogo"
+			},
+			{
+				id = "a2",
+				name = "Escudo de Energia",
+				lvl = 10,
+				type = "buff",
+				stat = "mshield",
+				val = 0.6,
+				dur = 40,
+				cd = 44,
+				mp = 20
+			},
+			{
+				id = "a3",
+				name = "Onda de Gelo",
+				lvl = 20,
+				type = "aoe",
+				mult = 2.1,
+				slow = 4,
+				cd = 9,
+				mp = 24,
+				elem = "gelo"
+			},
+			{
+				id = "a4",
+				name = "Raio em Cadeia",
+				lvl = 35,
+				type = "aoe",
+				mult = 3.4,
+				cd = 10,
+				mp = 34,
+				elem = "raio"
+			},
+			{
+				id = "a5",
+				name = "Meteoro",
+				lvl = 50,
+				type = "aoe",
+				mult = 6.2,
+				cd = 14,
+				mp = 55,
+				elem = "fogo"
+			},
+			{
+				id = "a6",
+				name = "Nova Elemental",
+				lvl = 70,
+				type = "aoe",
+				mult = 9,
+				cd = 20,
+				mp = 90,
+				res = {
+					nova = 0.3
+				}
+			}
+		},
+		weapon2 = "varinha"
+	},
+	cleriga = {
+		name = "Clériga",
+		faction = "luz",
+		icon = "✨",
+		weapon = "cetro",
+		role = "Cura · Escudo Sagrado · Ressurreição",
+		mech = "shield",
+		desc = "Curandeira suprema. A cura que passa da vida vira Escudo Sagrado, o Raio Sagrado cura quem o lança e a Onda Divina transforma o escudo em dano.",
+		base = {
+			["for"] = 8,
+			int = 30,
+			des = 12,
+			agi = 12,
+			vit = 22
+		},
+		main = "int",
+		speed = 1,
+		skills = {
+			{
+				id = "r1",
+				name = "Raio Sagrado",
+				lvl = 1,
+				type = "dmg",
+				mult = 1.8,
+				holy = 1,
+				cd = 3,
+				mp = 6,
+				lifesteal = 0.15
+			},
+			{
+				id = "r2",
+				name = "Cura",
+				lvl = 5,
+				type = "heal",
+				mult = 0.35,
+				cd = 10,
+				mp = 15
+			},
+			{
+				id = "r3",
+				name = "Vida Virtual",
+				lvl = 20,
+				type = "buff",
+				stat = "hpmax",
+				val = 0.25,
+				dur = 60,
+				cd = 66,
+				mp = 30
+			},
+			{
+				id = "r4",
+				name = "Espelho Divino",
+				lvl = 35,
+				type = "buff",
+				stat = "reflect",
+				val = 0.3,
+				dur = 20,
+				cd = 38,
+				mp = 32,
+				also = {
+					stat = "absorb",
+					val = 0.15
+				}
+			},
+			{
+				id = "r5",
+				name = "Ressurreição",
+				lvl = 50,
+				type = "passive",
+				revive = 90
+			},
+			{
+				id = "r6",
+				name = "Onda Divina",
+				lvl = 70,
+				type = "aoe",
+				mult = 6,
+				holy = 1,
+				healPct = 0.2,
+				cd = 16,
+				mp = 80,
+				res = {
+					shield = 2.2
+				}
+			}
+		},
+		weapon2 = "baculo"
+	}
+}
+D.FACTIONS = {
+	ferro = {
+		name = "Clã de Ferrovale",
+		desc = "Povo das forjas e das máquinas. Confia no aço e na força bruta.",
+		color = "#e0a050",
+		icon = "⚒️",
+		lore = "Nas montanhas de Ferrovale o fogo das forjas nunca apaga. Quando a Marca do Vazio começou a corroer o reino, o clã não esperou por milagre: fechou os portões, afiou o aço e desceu para a guerra. Aqui o respeito se ganha com calo na mão."
+	},
+	luz = {
+		name = "Ordem de Lumínia",
+		desc = "Povo dos santuários. Domina a fé, o vento e as artes arcanas.",
+		color = "#70b8ff",
+		icon = "🕊️",
+		lore = "Lumínia nasceu ao redor dos santuários brancos do leste, onde a primeira luz do dia toca a terra. A Ordem guarda os livros, os votos e as estrelas, e acredita que o Vazio só avança onde a esperança já se apagou. Por isso carrega a luz para onde ninguém mais vai."
+	}
+}
+D.CLASS_LORE = {
+	gladiador = "Criado nas arenas de pedra de Ferrovale, o Gladiador aprendeu cedo que a dor é combustível. Cada golpe que leva só o deixa mais perigoso. Quando a Fúria transborda, nem os chefes do Vazio ficam de pé.",
+	engenheiro = "Enquanto outros rezam, o Engenheiro aperta parafusos. Mestre das oficinas a vapor, ele entra em batalha com torretas, um autômato fiel e uma armadura que ele mesmo forjou. Se algo pode ser consertado, pode ser melhorado.",
+	cacadora = "As Caçadoras patrulham as trilhas altas da montanha com um falcão no ombro. Paciência é a arma delas: escolhem um alvo, respiram fundo e não erram duas vezes. Dizem que enxergam a Marca do Vazio antes de ela aparecer.",
+	lanceiro = "Ninguém sabe ao certo de onde vêm os Lanceiros da Foice. Andam nas sombras das minas abandonadas e colhem as almas inquietas que o Vazio deixa para trás. O clã os teme um pouco, e precisa deles muito.",
+	paladino = "O Paladino fez um voto diante do Santuário do Alvorecer: ser o escudo de quem não tem um. Cada golpe que ele bloqueia fortalece a sua Fé, e a Fé, quando desce em forma de martelo, julga sem piedade.",
+	valquiria = "Escolhidas pelos ventos do leste, as Valquírias lutam num ritmo que só elas escutam. Dardo, escudo, passo, salto. No quarto compasso, asas de luz se abrem e o céu inteiro cai sobre o inimigo.",
+	arcanista = "Nas torres de Lumínia, o Arcanista estudou o que a maioria teme: fogo, gelo e raio numa mesma mão. Sozinhos, são perigosos. Combinados, reescrevem o campo de batalha. Ele é frágil como vidro e forte como uma tempestade.",
+	cleriga = "A Clériga caminha onde a batalha é pior, porque é lá que precisam dela. Sua luz fecha feridas, levanta os caídos e, quando sobra, vira um escudo dourado. Um grupo com uma Clériga não desiste."
+}
+D.ZONES = {
+	{
+		id = "z1",
+		name = "Campos de Aurora",
+		min = 1,
+		icon = "🌾",
+		monsters = {
+			{
+				"Coelho Saltador",
+				"🐇"
+			},
+			{
+				"Lesma Verde",
+				"🐌"
+			},
+			{
+				"Lobo Filhote",
+				"🐺"
+			}
+		},
+		boss = {
+			"Rei Javali",
+			"🐗"
+		}
+	},
+	{
+		id = "z2",
+		name = "Bosque Sussurrante",
+		min = 6,
+		icon = "🌲",
+		monsters = {
+			{
+				"Ent Jovem",
+				"🌳"
+			},
+			{
+				"Aranha da Mata",
+				"🕷️"
+			},
+			{
+				"Goblin Ladrão",
+				"👺"
+			}
+		},
+		boss = {
+			"Matriarca Aracnídea",
+			"🕸️"
+		}
+	},
+	{
+		id = "z3",
+		name = "Pântano Cinzento",
+		min = 12,
+		icon = "🐸",
+		monsters = {
+			{
+				"Sapo Venenoso",
+				"🐸"
+			},
+			{
+				"Zumbi do Brejo",
+				"🧟"
+			},
+			{
+				"Serpente Lodosa",
+				"🐍"
+			}
+		},
+		boss = {
+			"Bruxa do Pântano",
+			"🧙‍♀️"
+		}
+	},
+	{
+		id = "z4",
+		name = "Minas de Ferro Negro",
+		min = 20,
+		icon = "⛏️",
+		monsters = {
+			{
+				"Morcego Sombrio",
+				"🦇"
+			},
+			{
+				"Golem de Rocha",
+				"🗿"
+			},
+			{
+				"Minerador Maldito",
+				"💀"
+			}
+		},
+		boss = {
+			"Colosso de Ferro",
+			"🤖"
+		}
+	},
+	{
+		id = "z5",
+		name = "Deserto de Cobre",
+		min = 28,
+		icon = "🏜️",
+		monsters = {
+			{
+				"Escorpião Gigante",
+				"🦂"
+			},
+			{
+				"Múmia Errante",
+				"🧟‍♂️"
+			},
+			{
+				"Verme da Areia",
+				"🪱"
+			}
+		},
+		boss = {
+			"Faraó Esquecido",
+			"👑"
+		}
+	},
+	{
+		id = "z6",
+		name = "Catacumbas Esquecidas",
+		min = 37,
+		icon = "⚰️",
+		monsters = {
+			{
+				"Esqueleto Guerreiro",
+				"💀"
+			},
+			{
+				"Espectro",
+				"👻"
+			},
+			{
+				"Ghoul",
+				"🧟‍♀️"
+			}
+		},
+		boss = {
+			"Lich Ancião",
+			"☠️"
+		}
+	},
+	{
+		id = "z7",
+		name = "Picos Gélidos",
+		min = 46,
+		icon = "🏔️",
+		monsters = {
+			{
+				"Yeti",
+				"🦍"
+			},
+			{
+				"Lobo de Gelo",
+				"🐺"
+			},
+			{
+				"Elemental de Gelo",
+				"❄️"
+			}
+		},
+		boss = {
+			"Dragão Branco",
+			"🐉"
+		}
+	},
+	{
+		id = "z8",
+		name = "Cidadela Infernal",
+		min = 56,
+		icon = "🔥",
+		monsters = {
+			{
+				"Diabrete",
+				"😈"
+			},
+			{
+				"Cão Infernal",
+				"🐕‍🦺"
+			},
+			{
+				"Cavaleiro Demônio",
+				"👹"
+			}
+		},
+		boss = {
+			"Senhor das Chamas",
+			"🔥"
+		}
+	},
+	{
+		id = "z9",
+		name = "Vale dos Titãs",
+		min = 68,
+		icon = "⛰️",
+		monsters = {
+			{
+				"Ciclope",
+				"👁️"
+			},
+			{
+				"Gigante de Pedra",
+				"🗿"
+			},
+			{
+				"Grifo",
+				"🦅"
+			}
+		},
+		boss = {
+			"Titã Primordial",
+			"🌋"
+		}
+	},
+	{
+		id = "z10",
+		name = "Abismo Eterno",
+		min = 82,
+		icon = "🌌",
+		monsters = {
+			{
+				"Horror do Vazio",
+				"🦑"
+			},
+			{
+				"Anjo Caído",
+				"😇"
+			},
+			{
+				"Devorador",
+				"👾"
+			}
+		},
+		boss = {
+			"Deus do Abismo",
+			"🌑"
+		}
+	}
+}
+D.RARITIES = {
+	{
+		id = "comum",
+		name = "Comum",
+		color = "#c8c8c8",
+		mult = 1,
+		affixes = 0,
+		w = 60
+	},
+	{
+		id = "magico",
+		name = "Mágico",
+		color = "#5aa0ff",
+		mult = 1.2,
+		affixes = 1,
+		w = 25
+	},
+	{
+		id = "raro",
+		name = "Raro",
+		color = "#ffd84a",
+		mult = 1.45,
+		affixes = 2,
+		w = 10
+	},
+	{
+		id = "epico",
+		name = "Épico",
+		color = "#c070ff",
+		mult = 1.8,
+		affixes = 3,
+		w = 4
+	},
+	{
+		id = "lendario",
+		name = "Lendário",
+		color = "#ff8030",
+		mult = 2.4,
+		affixes = 4,
+		w = 1
+	}
+}
+D.WEAPON_NAMES = {
+	machado = {
+		"Machadinha",
+		"Machado de Guerra",
+		"Machado Duplo",
+		"Cutelo Bárbaro",
+		"Machado Rúnico",
+		"Machado do Carrasco"
+	},
+	martelo = {
+		"Marreta",
+		"Martelo de Forja",
+		"Malho Mecânico",
+		"Martelo a Vapor",
+		"Martelo Trovejante",
+		"Malho Titânico"
+	},
+	arco = {
+		"Arco de Caça",
+		"Arco Longo",
+		"Arco Recurvo",
+		"Arco Rúnico",
+		"Arco Asa de Dragão",
+		"Arco Celestial"
+	},
+	foice = {
+		"Foice de Camponês",
+		"Foice de Ferro",
+		"Foice Gêmea",
+		"Ceifadora Rúnica",
+		"Foice Dracônica",
+		"Foice do Eclipse"
+	},
+	espada = {
+		"Espada Curta",
+		"Espada Longa",
+		"Montante",
+		"Espada Bastarda",
+		"Lâmina Sagrada",
+		"Espada do Alvorecer"
+	},
+	dardo = {
+		"Dardo Simples",
+		"Azagaia",
+		"Dardo Farpado",
+		"Dardo Alado",
+		"Dardo Celeste",
+		"Dardo das Valquírias"
+	},
+	cajado = {
+		"Cajado de Aprendiz",
+		"Bastão de Carvalho",
+		"Cajado Rúnico",
+		"Cajado Estelar",
+		"Cajado do Arquimago",
+		"Cajado Primordial"
+	},
+	cetro = {
+		"Cetro de Madeira",
+		"Cetro de Prata",
+		"Cetro Benzido",
+		"Cetro Radiante",
+		"Cetro do Oráculo",
+		"Cetro Divino"
+	},
+	machadao = {
+		"Machado de Lenhador",
+		"Machado de Batalha",
+		"Grande Machado",
+		"Devastador Bárbaro",
+		"Grande Machado Rúnico",
+		"Machado do Colosso"
+	},
+	malho = {
+		"Marreta Pesada",
+		"Malho de Forja",
+		"Malho de Guerra",
+		"Bate-Estacas a Vapor",
+		"Malho Sísmico",
+		"Malho do Titã"
+	},
+	besta = {
+		"Besta de Mão",
+		"Besta Leve",
+		"Besta de Repetição",
+		"Besta Rúnica",
+		"Besta Presa de Dragão",
+		"Besta Celestial"
+	},
+	lanca = {
+		"Lança Curta",
+		"Lança de Ferro",
+		"Lança de Caça",
+		"Lança Rúnica",
+		"Lança Dracônica",
+		"Lança do Eclipse"
+	},
+	montante = {
+		"Espadão de Ferro",
+		"Espada de Duas Mãos",
+		"Claymore",
+		"Espadão Rúnico",
+		"Lâmina do Juramento",
+		"Montante do Alvorecer"
+	},
+	glaive = {
+		"Lança de Arremesso",
+		"Lança Longa",
+		"Lança Alada",
+		"Lança dos Ventos",
+		"Lança Celeste",
+		"Lança das Valquírias"
+	},
+	varinha = {
+		"Varinha de Salgueiro",
+		"Varinha de Prata",
+		"Varinha Rúnica",
+		"Varinha Estelar",
+		"Varinha do Arquimago",
+		"Varinha Primordial"
+	},
+	baculo = {
+		"Báculo de Peregrino",
+		"Báculo de Prata",
+		"Báculo Benzido",
+		"Báculo Radiante",
+		"Báculo do Oráculo",
+		"Báculo Divino"
+	}
+}
+D.WEAPON_INFO = {
+	machado = {
+		hands = 1,
+		label = "Machado",
+		plural = "Machados",
+		icon = "🪓",
+		anim = "m1"
+	},
+	machadao = {
+		hands = 2,
+		label = "Machado de duas mãos",
+		plural = "Machados de duas mãos",
+		icon = "🪓",
+		anim = "m2"
+	},
+	martelo = {
+		hands = 1,
+		label = "Martelo",
+		plural = "Martelos",
+		icon = "🔨",
+		anim = "m1"
+	},
+	malho = {
+		hands = 2,
+		label = "Malho de duas mãos",
+		plural = "Malhos de duas mãos",
+		icon = "⚒️",
+		anim = "m2"
+	},
+	arco = {
+		hands = 2,
+		label = "Arco",
+		plural = "Arcos",
+		icon = "🏹",
+		anim = "bow",
+		ranged = 1
+	},
+	besta = {
+		mult = 1.15,
+		hands = 1,
+		label = "Besta de mão",
+		plural = "Bestas de mão",
+		icon = "🎯",
+		anim = "xbow",
+		ranged = 1
+	},
+	foice = {
+		hands = 2,
+		label = "Foice de duas mãos",
+		plural = "Foices de duas mãos",
+		icon = "⚔️",
+		anim = "m2"
+	},
+	lanca = {
+		mult = 1.15,
+		hands = 1,
+		label = "Lança",
+		plural = "Lanças",
+		icon = "🔱",
+		anim = "stab"
+	},
+	espada = {
+		hands = 1,
+		label = "Espada",
+		plural = "Espadas",
+		icon = "🗡️",
+		anim = "m1"
+	},
+	montante = {
+		hands = 2,
+		label = "Espada de duas mãos",
+		plural = "Espadas de duas mãos",
+		icon = "⚔️",
+		anim = "m2"
+	},
+	dardo = {
+		hands = 1,
+		label = "Dardo",
+		plural = "Dardos",
+		icon = "🗡️",
+		anim = "throw",
+		ranged = 1
+	},
+	glaive = {
+		hands = 2,
+		label = "Lança longa",
+		plural = "Lanças longas",
+		icon = "🔱",
+		anim = "throw",
+		ranged = 1
+	},
+	cajado = {
+		hands = 2,
+		label = "Cajado",
+		plural = "Cajados",
+		icon = "🔮",
+		anim = "cast",
+		ranged = 1
+	},
+	varinha = {
+		mult = 1.15,
+		hands = 1,
+		label = "Varinha",
+		plural = "Varinhas",
+		icon = "🪄",
+		anim = "cast",
+		ranged = 1
+	},
+	cetro = {
+		hands = 1,
+		label = "Cetro",
+		plural = "Cetros",
+		icon = "✨",
+		anim = "cast",
+		ranged = 1
+	},
+	baculo = {
+		hands = 2,
+		label = "Báculo",
+		plural = "Báculos",
+		icon = "☀️",
+		anim = "cast",
+		ranged = 1
+	}
+}
+D.ARMOR_SLOTS = {
+	armadura = {
+		label = "Armadura",
+		icon = "🥋",
+		names = {
+			"Gibão de Couro",
+			"Cota de Malha",
+			"Armadura de Placas",
+			"Couraça Rúnica",
+			"Armadura Dracônica",
+			"Armadura Celestial"
+		}
+	},
+	elmo = {
+		label = "Elmo",
+		icon = "⛑️",
+		names = {
+			"Capuz",
+			"Elmo de Ferro",
+			"Elmo Cornudo",
+			"Elmo Rúnico",
+			"Coroa de Guerra",
+			"Elmo Celestial"
+		}
+	},
+	escudo = {
+		label = "Escudo",
+		icon = "🛡️",
+		names = {
+			"Broquel",
+			"Escudo Redondo",
+			"Escudo Torre",
+			"Égide Rúnica",
+			"Escudo Dracônico",
+			"Escudo Celestial"
+		}
+	},
+	luvas = {
+		label = "Luvas",
+		icon = "🧤",
+		names = {
+			"Luvas de Pano",
+			"Luvas de Couro",
+			"Manoplas",
+			"Manoplas Rúnicas",
+			"Garras Dracônicas",
+			"Luvas Celestiais"
+		}
+	},
+	botas = {
+		label = "Botas",
+		icon = "🥾",
+		names = {
+			"Sandálias",
+			"Botas de Couro",
+			"Grevas",
+			"Botas Rúnicas",
+			"Botas Dracônicas",
+			"Botas Celestiais"
+		}
+	},
+	amuleto = {
+		label = "Amuleto",
+		icon = "📿",
+		names = {
+			"Colar de Osso",
+			"Amuleto de Prata",
+			"Pingente Rúnico",
+			"Talismã Arcano",
+			"Olho do Dragão",
+			"Lágrima Celestial"
+		}
+	},
+	anel = {
+		label = "Anel",
+		icon = "💍",
+		names = {
+			"Anel de Cobre",
+			"Anel de Prata",
+			"Anel de Ouro",
+			"Anel Rúnico",
+			"Anel Dracônico",
+			"Anel Celestial"
+		}
+	}
+}
+D.AFFIXES = {
+	{
+		stat = "for",
+		label = "Força",
+		per = 0.35
+	},
+	{
+		stat = "int",
+		label = "Intelecto",
+		per = 0.35
+	},
+	{
+		stat = "des",
+		label = "Destreza",
+		per = 0.35
+	},
+	{
+		stat = "agi",
+		label = "Agilidade",
+		per = 0.35
+	},
+	{
+		stat = "vit",
+		label = "Vitalidade",
+		per = 0.35
+	},
+	{
+		stat = "hp",
+		label = "Vida",
+		per = 3
+	},
+	{
+		stat = "mp",
+		label = "Mana",
+		per = 1.5
+	},
+	{
+		stat = "crit",
+		label = "% Crítico",
+		per = 0.06,
+		pct = true
+	},
+	{
+		stat = "xpb",
+		label = "% Experiência",
+		per = 0.1,
+		pct = true
+	},
+	{
+		stat = "gold",
+		label = "% Ouro",
+		per = 0.15,
+		pct = true
+	}
+}
+D.SLOT_ORDER = {
+	"arma",
+	"escudo",
+	"elmo",
+	"armadura",
+	"luvas",
+	"botas",
+	"amuleto",
+	"anel"
+}
+D.TWO_HAND_MULT = 1.3
+return D
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000002"><Properties><string name="Name">Regras</string><ProtectedString name="Source"><![CDATA[-- Regras do jogo (as mesmas contas do jogo do navegador, js/game.js), usadas pelo servidor e pela interface.
+local D = require(script.Parent:WaitForChild("Dados"))
+local R = {}
+
+R.MAX_LEVEL = 100
+R.PONTOS_POR_NIVEL = 5
+R.ATRIBUTOS = { "for", "int", "des", "agi", "vit" }
+R.NOME_ATRIBUTO = { ["for"] = "Força", int = "Intelecto", des = "Destreza", agi = "Agilidade", vit = "Vitalidade" }
+R.SLOTS_ARMADURA = { "escudo", "elmo", "armadura", "luvas", "botas", "amuleto", "anel" }
+R.DEF_SLOT = { armadura = 1.0, escudo = 0.7, elmo = 0.5, luvas = 0.3, botas = 0.35, amuleto = 0, anel = 0 }
+R.ABATES_CHEFE = 25
+
+local function arred(x) return math.floor(x + 0.5) end
+local function limitar(x, a, b) if x < a then return a elseif x > b then return b end return x end
+R.arred, R.limitar = arred, limitar
+function R.rnd(a, b) return a + math.random() * (b - a) end
+
+function R.xpNeed(l)
+	local m = 1
+	if l >= 80 then m = 1 + (l - 79) * 0.08 end
+	return math.floor(40 * (l ^ 2.6) * m + 60)
+end
+
+-- faixa de nível de cada mapa: do mínimo dele até o mínimo do próximo
+function R.faixaMapa(i)
+	local z = D.ZONES[i]
+	local prox = D.ZONES[i + 1]
+	local max = prox and (prox.min - 1) or (z.min + 14)
+	if max < z.min then max = z.min end
+	return z.min, max
+end
+
+function R.monstro(nivel, chefe)
+	local k = chefe and 1 or 0
+	local hp = arred((30 + (nivel ^ 1.5) * 10) * (chefe and 10 or 1))
+	return {
+		lvl = nivel, chefe = chefe, hp = hp, maxHp = hp,
+		atk = arred((4 + nivel * 3.2) * (chefe and 1.8 or 1)),
+		def = arred(nivel * 1.5 * (chefe and 1.5 or 1)),
+		xp = arred((8 + (nivel ^ 1.5) * 3) * (chefe and 12 or 1)),
+		ouro = arred((2 + nivel * 1.5) * (chefe and 15 or 1) * R.rnd(0.8, 1.2)),
+		k = k,
+	}
+end
+
+-- ---------- itens ----------
+local function indiceRaridade(id)
+	for i, r in ipairs(D.RARITIES) do if r.id == id then return i end end
+	return 1
+end
+R.indiceRaridade = indiceRaridade
+function R.raridade(it) return D.RARITIES[indiceRaridade(it.rarity)] end
+
+local function sortearRaridade(boost)
+	local total = 0
+	for i, r in ipairs(D.RARITIES) do total = total + r.w * (i > 1 and boost or 1) end
+	local x = math.random() * total
+	for i, r in ipairs(D.RARITIES) do
+		x = x - r.w * (i > 1 and boost or 1)
+		if x <= 0 then return r end
+	end
+	return D.RARITIES[1]
+end
+
+function R.maoes(wt) local w = D.WEAPON_INFO[wt]; return w and w.hands or 1 end
+function R.multArma(wt)
+	local w = D.WEAPON_INFO[wt]
+	if w and w.mult then return w.mult end
+	return R.maoes(wt) == 2 and D.TWO_HAND_MULT or 1
+end
+function R.armasDaClasse(cls) local c = D.CLASSES[cls]; return { c.weapon, c.weapon2 } end
+function R.podeUsar(cls, it)
+	if it.slot ~= "arma" then return true end
+	local c = D.CLASSES[cls]
+	if c.anyWeapon then return true end
+	return it.wtype == c.weapon or it.wtype == c.weapon2
+end
+
+local contador = 0
+local function novoId()
+	contador = contador + 1
+	return tostring(math.floor(os.clock() * 1000)) .. "-" .. tostring(math.random(1, 1e6)) .. "-" .. contador
+end
+
+function R.gerarItem(cls, ilvl, boost, slot)
+	local rar = sortearRaridade(boost or 1)
+	local tier = limitar(math.floor(ilvl / 17), 0, 5)
+	if not slot then
+		if math.random() < 0.35 then slot = "arma" else slot = R.SLOTS_ARMADURA[math.random(1, #R.SLOTS_ARMADURA)] end
+	end
+	local it = { uid = novoId(), slot = slot, ilvl = ilvl, rarity = rar.id, min = 0, max = 0, def = 0, affixes = {}, refine = 0, req = math.max(1, ilvl - 3) }
+	if slot == "arma" then
+		local proprias = R.armasDaClasse(cls)
+		it.wtype = proprias[math.random(1, 2)]
+		it.name = D.WEAPON_NAMES[it.wtype][tier + 1]
+		local base = (5 + ilvl * 2.2) * rar.mult * R.rnd(0.9, 1.1) * R.multArma(it.wtype)
+		it.min = arred(base)
+		it.max = arred(base * R.rnd(1.45, 1.75))
+	else
+		it.name = D.ARMOR_SLOTS[slot].names[tier + 1]
+		it.def = arred((3 + ilvl * 1.3) * R.DEF_SLOT[slot] * rar.mult * R.rnd(0.9, 1.1))
+	end
+	local n = rar.affixes + ((slot == "amuleto" or slot == "anel") and 1 or 0)
+	local pool = {}
+	for _, a in ipairs(D.AFFIXES) do table.insert(pool, a) end
+	local ri = indiceRaridade(rar.id) - 1
+	for _ = 1, n do
+		if #pool == 0 then break end
+		local a = table.remove(pool, math.random(1, #pool))
+		local val = a.per * ilvl * R.rnd(0.6, 1.2) * (0.8 + ri * 0.15)
+		if a.pct then
+			val = math.max(0.5, math.floor(val * 10 + 0.5) / 10)
+			val = math.min(val, a.stat == "crit" and 15 or 50)
+		else
+			val = math.max(1, arred(val))
+		end
+		table.insert(it.affixes, { stat = a.stat, val = val })
+	end
+	return it
+end
+
+function R.armaInicial(cls)
+	local w = D.CLASSES[cls].weapon
+	local k = R.multArma(w)
+	return { uid = novoId(), slot = "arma", wtype = w, name = D.WEAPON_NAMES[w][1], ilvl = 1, rarity = "comum", min = arred(4 * k), max = arred(7 * k), def = 0, affixes = {}, refine = 0, req = 1 }
+end
+
+function R.multRefino(it) return 1 + (it.refine or 0) * 0.08 end
+function R.pontuacao(it)
+	local ri = indiceRaridade(it.rarity) - 1
+	local base = it.slot == "arma" and (it.min + it.max) / 2 or it.def
+	return base * R.multRefino(it) * 1.5 + #it.affixes * it.ilvl * 0.6 + ri * it.ilvl * 0.4
+end
+function R.valor(it)
+	local ri = indiceRaridade(it.rarity) - 1
+	return arred((4 + it.ilvl * 3) * (1 + ri * ri * 0.8) * (1 + (it.refine or 0) * 0.25))
+end
+
+-- ---------- herói ----------
+function R.novoHeroi(cls)
+	local c = D.CLASSES[cls]
+	local attr = {}
+	for _, k in ipairs(R.ATRIBUTOS) do attr[k] = c.base[k] end
+	return {
+		v = 1, cls = cls, lvl = 1, xp = 0, gold = 50, pts = 0, attr = attr,
+		equip = { arma = R.armaInicial(cls) }, inv = {},
+		zone = 1, kills = {}, auto = true, pots = { hp = 20, mp = 20 },
+		stats = { kills = 0, deaths = 0, bosses = 0 },
+	}
+end
+
+-- pontos automáticos: atributo principal e vitalidade (3 para 2), como no jogo
+function R.distribuir(h)
+	local c = D.CLASSES[h.cls]
+	local main = c.main
+	while h.pts > 0 do
+		local n = h.attr[main] - c.base[main]
+		local v = h.attr.vit - c.base.vit
+		if n * 2 <= v * 3 then h.attr[main] = h.attr[main] + 1 else h.attr.vit = h.attr.vit + 1 end
+		h.pts = h.pts - 1
+	end
+end
+
+-- atributos derivados (vida, ataque, defesa...) a partir do herói salvo e dos efeitos ativos
+function R.ficha(h, buffs)
+	local c = D.CLASSES[h.cls]
+	local bonus = setmetatable({}, { __index = function() return 0 end })
+	local wmin, wmax, def = 1, 3, 0
+	for _, sl in ipairs(D.SLOT_ORDER) do
+		local it = h.equip[sl]
+		if it and h.lvl >= it.req then
+			local m = R.multRefino(it)
+			if sl == "arma" then
+				if R.podeUsar(h.cls, it) then wmin, wmax = it.min * m, it.max * m end
+			else
+				def = def + it.def * m
+			end
+			for _, a in ipairs(it.affixes) do bonus[a.stat] = bonus[a.stat] + a.val end
+		end
+	end
+	local A = {}
+	for _, k in ipairs(R.ATRIBUTOS) do A[k] = h.attr[k] + bonus[k] end
+	local main = A[c.main]
+	local B = setmetatable({}, { __index = function() return 0 end })
+	for _, b in ipairs(buffs or {}) do B[b.stat] = B[b.stat] + b.val end
+	for _, sk in ipairs(c.skills) do
+		if sk.type == "passive" and sk.stat and h.lvl >= sk.lvl then B[sk.stat] = B[sk.stat] + sk.val end
+	end
+	local atkMul = 1 + B.atk + bonus.atkp / 100
+	local baseHp = 40 + A.vit * 8 + h.lvl * 10 + bonus.hp
+	return {
+		A = A,
+		maxHp = arred(baseHp * (1 + B.hpmax)),
+		maxMp = arred(15 + A.int * 4 + h.lvl * 3 + bonus.mp),
+		atkMin = arred((wmin + main * 0.8 + h.lvl) * atkMul),
+		atkMax = arred((wmax + main * 1.0 + h.lvl) * atkMul),
+		def = arred((def + A.agi * 0.6 + A.vit * 0.2) * (1 + B.def)),
+		crit = limitar(5 + A.des * 0.08 + bonus.crit + B.crit * 100, 0, 75),
+		critMult = (c.critMult or 1.75) + B.critdmg,
+		aps = c.speed * (1 + A.agi / 400) * (1 + B.spd),
+		evade = limitar(A.agi * 0.0012 + B.evade, 0, 0.55),
+		block = limitar((h.equip.escudo and 0.08 or 0) + B.block, 0, 0.6),
+		absorb = limitar(B.absorb, 0, 0.6),
+		reflect = B.reflect,
+		mshield = limitar(B.mshield, 0, 0.8),
+		hpRegen = 0.01 * baseHp + A.vit * 0.1,
+		mpRegen = 0.015 * (15 + A.int * 4 + h.lvl * 3) + A.int * 0.05,
+		xpb = bonus.xpb, goldb = bonus.gold,
+		alcance = (D.WEAPON_INFO[(h.equip.arma and h.equip.arma.wtype) or c.weapon] or {}).ranged and 26 or 7,
+	}
+end
+
+-- texto curto de uma habilidade (interface)
+local ROTULO = { atk = "ataque", def = "defesa", crit = "crítico", critdmg = "dano crítico", spd = "velocidade", evade = "esquiva", block = "bloqueio", absorb = "redução de dano", reflect = "reflexo", hpmax = "vida máxima", undead = "dano em mortos-vivos", mshield = "escudo de mana" }
+function R.textoHabilidade(sk)
+	local custo = sk.cd and (" Recarga " .. sk.cd .. "s, " .. sk.mp .. " MP.") or ""
+	if sk.type == "dmg" then return "Causa " .. arred(sk.mult * 100) .. "% de dano" .. (sk.hits and (" em " .. sk.hits .. " golpes") or "") .. "." .. custo end
+	if sk.type == "aoe" then return "Causa " .. arred(sk.mult * 100) .. "% de dano em " .. (sk.targets and ("até " .. sk.targets .. " monstros") or "todos por perto") .. (sk.stun and (", atordoa " .. sk.stun .. "s") or "") .. "." .. custo end
+	if sk.type == "heal" then return "Cura " .. arred(sk.mult * 100) .. "% da vida de você e dos aliados por perto." .. custo end
+	if sk.type == "passive" then
+		if sk.revive then return "Passiva: ao morrer, volta na hora com 60% da vida (a cada " .. sk.revive .. "s)." end
+		return "Passiva: +" .. arred(sk.val * 100) .. "% de " .. (ROTULO[sk.stat] or sk.stat) .. "."
+	end
+	if sk.type == "summon" or sk.type == "turret" then return "Invoca um aliado que bate junto por " .. sk.dur .. "s." .. custo end
+	if sk.type == "stealth" then return "Some por " .. sk.dur .. "s: os monstros erram e o próximo golpe é crítico." .. custo end
+	local t = "+" .. arred(sk.val * 100) .. "% de " .. (ROTULO[sk.stat] or sk.stat)
+	if sk.also then t = t .. " e +" .. arred(sk.also.val * 100) .. "% de " .. (ROTULO[sk.also.stat] or sk.also.stat) end
+	return t .. " por " .. sk.dur .. "s." .. custo
+end
+
+return R
+]]></ProtectedString></Properties></Item></Item><Item class="ServerScriptService" referent="RBX00000005"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000004"><Properties><string name="Name">Valdaria</string><ProtectedString name="Source"><![CDATA[-- Crônicas de Valdária (Roblox) — servidor: mundo, monstros, combate, habilidades, itens e salvamento.
+-- As contas vêm de ReplicatedStorage.Regras (as mesmas do jogo do navegador).
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local D = require(RS:WaitForChild("Dados"))
+local R = require(RS:WaitForChild("Regras"))
+
+-- ---------- canais com a interface ----------
+local pastaRemotos = Instance.new("Folder")
+pastaRemotos.Name = "Remotos"
+pastaRemotos.Parent = RS
+local function remoto(nome)
+	local r = Instance.new("RemoteEvent")
+	r.Name = nome
+	r.Parent = pastaRemotos
+	return r
+end
+local evEscolher = remoto("Escolher") -- cliente -> servidor: classe escolhida
+local evAcao = remoto("Acao")         -- cliente -> servidor: alvo, habilidade, auto, mapa, chefe, equipar...
+local evEstado = remoto("Estado")     -- servidor -> cliente: vida, mana, XP, alvo... (várias vezes por segundo)
+local evFicha = remoto("Ficha")       -- servidor -> cliente: herói completo (quando muda)
+local evAviso = remoto("Aviso")       -- servidor -> cliente: mensagens do registro e avisos grandes
+
+-- ---------- luz ----------
+Lighting.ClockTime = 14.5
+Lighting.Brightness = 2.2
+Lighting.OutdoorAmbient = Color3.fromRGB(150, 140, 130)
+Lighting.Ambient = Color3.fromRGB(80, 70, 70)
+do
+	local atm = Instance.new("Atmosphere")
+	atm.Density = 0.28
+	atm.Color = Color3.fromRGB(255, 230, 200)
+	atm.Decay = Color3.fromRGB(120, 100, 90)
+	atm.Parent = Lighting
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.6
+	bloom.Threshold = 1.4
+	bloom.Parent = Lighting
+end
+
+-- ---------- mundo: os 10 mapas lado a lado ----------
+local ESPACO, TAM = 320, 230
+local TEMAS = {
+	{ chao = Color3.fromRGB(116, 176, 82), det = Color3.fromRGB(64, 128, 48), mon = Color3.fromRGB(214, 184, 140), prop = "arvore" },
+	{ chao = Color3.fromRGB(78, 132, 64), det = Color3.fromRGB(38, 92, 40), mon = Color3.fromRGB(128, 96, 64), prop = "arvore" },
+	{ chao = Color3.fromRGB(86, 98, 72), det = Color3.fromRGB(58, 72, 50), mon = Color3.fromRGB(116, 150, 86), prop = "junco" },
+	{ chao = Color3.fromRGB(72, 66, 72), det = Color3.fromRGB(112, 104, 96), mon = Color3.fromRGB(150, 146, 156), prop = "pedra" },
+	{ chao = Color3.fromRGB(218, 182, 122), det = Color3.fromRGB(176, 136, 86), mon = Color3.fromRGB(192, 120, 70), prop = "cacto" },
+	{ chao = Color3.fromRGB(78, 72, 84), det = Color3.fromRGB(124, 118, 112), mon = Color3.fromRGB(222, 216, 200), prop = "lapide" },
+	{ chao = Color3.fromRGB(228, 236, 246), det = Color3.fromRGB(150, 176, 200), mon = Color3.fromRGB(196, 228, 255), prop = "pinheiro" },
+	{ chao = Color3.fromRGB(92, 42, 32), det = Color3.fromRGB(56, 24, 20), mon = Color3.fromRGB(255, 104, 44), prop = "pedra" },
+	{ chao = Color3.fromRGB(142, 122, 92), det = Color3.fromRGB(100, 90, 70), mon = Color3.fromRGB(172, 152, 122), prop = "pedra" },
+	{ chao = Color3.fromRGB(38, 28, 58), det = Color3.fromRGB(84, 62, 146), mon = Color3.fromRGB(156, 104, 255), prop = "cristal" },
+}
+local function centro(i) return Vector3.new((i - 1) * ESPACO, 0, 0) end
+
+local mundo = Instance.new("Folder")
+mundo.Name = "Mundo"
+mundo.Parent = workspace
+local pastaMonstros = Instance.new("Folder")
+pastaMonstros.Name = "Monstros"
+pastaMonstros.Parent = workspace
+local pastaEfeitos = Instance.new("Folder")
+pastaEfeitos.Name = "Efeitos"
+pastaEfeitos.Parent = workspace
+
+local function peca(pai, tam, cf, cor, forma, material, colide)
+	local p = Instance.new("Part")
+	p.Size = tam
+	p.CFrame = cf
+	p.Color = cor
+	p.Anchored = true
+	p.CanCollide = colide == true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Material = material or Enum.Material.SmoothPlastic
+	if forma then p.Shape = forma end
+	p.Parent = pai
+	return p
+end
+
+local function criarProp(pai, tipo, pos, t)
+	local s = R.rnd(0.8, 1.6)
+	if tipo == "arvore" then
+		peca(pai, Vector3.new(1.2, 6, 1.2) * s, CFrame.new(pos + Vector3.new(0, 3 * s, 0)), Color3.fromRGB(110, 76, 48), Enum.PartType.Cylinder, Enum.Material.Wood, true).CFrame = CFrame.new(pos + Vector3.new(0, 3 * s, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		peca(pai, Vector3.new(7, 7, 7) * s, CFrame.new(pos + Vector3.new(0, 7.5 * s, 0)), t.det, Enum.PartType.Ball, Enum.Material.Grass)
+	elseif tipo == "pinheiro" then
+		peca(pai, Vector3.new(1, 4, 1) * s, CFrame.new(pos + Vector3.new(0, 2 * s, 0)), Color3.fromRGB(96, 70, 50), nil, Enum.Material.Wood, true)
+		for k = 0, 2 do
+			peca(pai, Vector3.new(6 - k * 1.6, 2.4, 6 - k * 1.6) * s, CFrame.new(pos + Vector3.new(0, (4 + k * 2) * s, 0)) * CFrame.Angles(0, math.rad(45 * k), 0), Color3.fromRGB(40, 92, 70), nil, Enum.Material.Grass)
+		end
+		peca(pai, Vector3.new(2, 1, 2) * s, CFrame.new(pos + Vector3.new(0, 10 * s, 0)), Color3.fromRGB(240, 248, 255), nil, Enum.Material.Snow)
+	elseif tipo == "pedra" then
+		peca(pai, Vector3.new(R.rnd(3, 7), R.rnd(2, 5), R.rnd(3, 7)) * s, CFrame.new(pos + Vector3.new(0, 1.5 * s, 0)) * CFrame.Angles(R.rnd(-0.3, 0.3), R.rnd(0, 6), R.rnd(-0.3, 0.3)), t.det, nil, Enum.Material.Slate, true)
+	elseif tipo == "cacto" then
+		peca(pai, Vector3.new(1.4, 6, 1.4) * s, CFrame.new(pos + Vector3.new(0, 3 * s, 0)), Color3.fromRGB(70, 130, 70), nil, Enum.Material.Grass, true)
+		peca(pai, Vector3.new(1, 3, 1) * s, CFrame.new(pos + Vector3.new(1.2 * s, 4 * s, 0)), Color3.fromRGB(70, 130, 70), nil, Enum.Material.Grass)
+	elseif tipo == "lapide" then
+		peca(pai, Vector3.new(2.4, 3.2, 0.7) * s, CFrame.new(pos + Vector3.new(0, 1.6 * s, 0)) * CFrame.Angles(0, R.rnd(0, 6), R.rnd(-0.15, 0.15)), t.det, nil, Enum.Material.Cobblestone, true)
+	elseif tipo == "cristal" then
+		local c = peca(pai, Vector3.new(1.5, R.rnd(4, 9), 1.5) * s, CFrame.new(pos + Vector3.new(0, 3 * s, 0)) * CFrame.Angles(R.rnd(-0.4, 0.4), R.rnd(0, 6), R.rnd(-0.4, 0.4)), t.mon, nil, Enum.Material.Neon)
+		c.Transparency = 0.15
+	elseif tipo == "junco" then
+		for k = 1, 4 do
+			peca(pai, Vector3.new(0.3, R.rnd(3, 5), 0.3), CFrame.new(pos + Vector3.new(R.rnd(-1, 1), 2, R.rnd(-1, 1))) * CFrame.Angles(R.rnd(-0.2, 0.2), 0, R.rnd(-0.2, 0.2)), Color3.fromRGB(110, 130, 70), nil, Enum.Material.Grass)
+		end
+	end
+end
+
+local function letreiro(pai, pos, texto, cor)
+	local base = peca(pai, Vector3.new(1, 1, 1), CFrame.new(pos), Color3.new(), nil, nil, false)
+	base.Transparency = 1
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, 360, 0, 60)
+	bb.MaxDistance = 220
+	bb.Adornee = base
+	bb.Parent = base
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.new(1, 0, 1, 0)
+	tl.BackgroundTransparency = 1
+	tl.Text = texto
+	tl.TextColor3 = cor or Color3.fromRGB(255, 226, 150)
+	tl.TextStrokeTransparency = 0.2
+	tl.Font = Enum.Font.FredokaOne
+	tl.TextScaled = true
+	tl.Parent = bb
+	return base
+end
+
+for i, z in ipairs(D.ZONES) do
+	local t = TEMAS[i]
+	local c = centro(i)
+	local area = Instance.new("Folder")
+	area.Name = z.name
+	area.Parent = mundo
+	local chao = peca(area, Vector3.new(TAM, 4, TAM), CFrame.new(c - Vector3.new(0, 2, 0)), t.chao, nil, (i == 5 and Enum.Material.Sand) or (i == 7 and Enum.Material.Snow) or Enum.Material.Grass, true)
+	chao.Name = "Chao"
+	-- muros invisíveis para ninguém cair
+	for _, lado in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+		local w = peca(area, Vector3.new(lado[1] ~= 0 and 2 or TAM, 40, lado[2] ~= 0 and 2 or TAM), CFrame.new(c + Vector3.new(lado[1] * TAM / 2, 20, lado[2] * TAM / 2)), Color3.new(), nil, nil, true)
+		w.Transparency = 1
+	end
+	-- praça central (lugar seguro, sem monstros)
+	peca(area, Vector3.new(26, 0.4, 26), CFrame.new(c + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, math.rad(45), 0), Color3.fromRGB(176, 160, 132), nil, Enum.Material.Cobblestone, true)
+	letreiro(area, c + Vector3.new(0, 14, 0), z.icon .. " " .. z.name .. "  ·  Nv " .. z.min .. "+")
+	for _ = 1, 34 do
+		local a, d = R.rnd(0, math.pi * 2), R.rnd(24, TAM / 2 - 10)
+		criarProp(area, t.prop, c + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d), t)
+	end
+end
+
+-- ---------- textos flutuantes ----------
+local function flutuar(pos, texto, cor, grande)
+	local base = Instance.new("Part")
+	base.Size = Vector3.new(0.2, 0.2, 0.2)
+	base.Transparency = 1
+	base.Anchored = true
+	base.CanCollide = false
+	base.CFrame = CFrame.new(pos + Vector3.new(R.rnd(-1, 1), 0, R.rnd(-1, 1)))
+	base.Parent = pastaEfeitos
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, grande and 260 or 120, 0, grande and 50 or 34)
+	bb.AlwaysOnTop = true
+	bb.Adornee = base
+	bb.Parent = base
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.new(1, 0, 1, 0)
+	tl.BackgroundTransparency = 1
+	tl.Text = texto
+	tl.TextColor3 = cor
+	tl.TextStrokeTransparency = 0.1
+	tl.Font = Enum.Font.FredokaOne
+	tl.TextScaled = true
+	tl.Parent = bb
+	TweenService:Create(base, TweenInfo.new(1.1), { CFrame = base.CFrame + Vector3.new(0, 4, 0) }):Play()
+	TweenService:Create(tl, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	Debris:AddItem(base, 1.2)
+end
+
+-- ---------- monstros ----------
+local M = {}       -- id -> monstro
+local proximoId = 0
+
+local function criarModeloMonstro(nome, cor, variante, escala, chefe)
+	local m = Instance.new("Model")
+	m.Name = nome
+	local s = escala
+	local raiz = peca(m, Vector3.new(1, 1, 1), CFrame.new(), cor)
+	raiz.Transparency = 1
+	raiz.Name = "Raiz"
+	m.PrimaryPart = raiz
+	local escuro = cor:Lerp(Color3.new(0, 0, 0), 0.35)
+	local olho = function(x, y, z)
+		peca(m, Vector3.new(0.45, 0.45, 0.45) * s, CFrame.new(x * s, y * s, z * s), Color3.new(1, 1, 1), Enum.PartType.Ball)
+		peca(m, Vector3.new(0.22, 0.22, 0.22) * s, CFrame.new(x * s, y * s, (z - 0.18) * s), Color3.new(0.05, 0.05, 0.05), Enum.PartType.Ball)
+	end
+	if variante == 1 then -- quadrúpede
+		peca(m, Vector3.new(1.8, 1.5, 3) * s, CFrame.new(0, 1.6 * s, 0), cor, nil, Enum.Material.Fabric)
+		peca(m, Vector3.new(1.5, 1.5, 1.5) * s, CFrame.new(0, 2.3 * s, -1.8 * s), cor, Enum.PartType.Ball, Enum.Material.Fabric)
+		olho(-0.35, 2.5, -2.45)
+		olho(0.35, 2.5, -2.45)
+		for _, q in ipairs({ { -0.6, -1 }, { 0.6, -1 }, { -0.6, 1 }, { 0.6, 1 } }) do
+			peca(m, Vector3.new(0.45, 1.1, 0.45) * s, CFrame.new(q[1] * s, 0.55 * s, q[2] * s), escuro)
+		end
+		peca(m, Vector3.new(0.3, 0.3, 1) * s, CFrame.new(0, 2 * s, 1.8 * s) * CFrame.Angles(-0.6, 0, 0), escuro)
+	elseif variante == 2 then -- gosma / bicho redondo
+		peca(m, Vector3.new(2.8, 2.3, 2.8) * s, CFrame.new(0, 1.15 * s, 0), cor, Enum.PartType.Ball, Enum.Material.Glass).Transparency = 0.1
+		olho(-0.45, 1.6, -1.2)
+		olho(0.45, 1.6, -1.2)
+		peca(m, Vector3.new(0.25, 1.1, 0.25) * s, CFrame.new(-0.4 * s, 2.6 * s, -0.4 * s) * CFrame.Angles(-0.3, 0, 0.2), escuro)
+		peca(m, Vector3.new(0.25, 1.1, 0.25) * s, CFrame.new(0.4 * s, 2.6 * s, -0.4 * s) * CFrame.Angles(-0.3, 0, -0.2), escuro)
+	else -- bípede
+		peca(m, Vector3.new(1.7, 2, 1.1) * s, CFrame.new(0, 2.6 * s, 0), cor, nil, Enum.Material.Fabric)
+		peca(m, Vector3.new(1.6, 1.6, 1.6) * s, CFrame.new(0, 4.3 * s, 0), cor, Enum.PartType.Ball, Enum.Material.Fabric)
+		olho(-0.35, 4.45, -0.7)
+		olho(0.35, 4.45, -0.7)
+		for _, x in ipairs({ -0.45, 0.45 }) do peca(m, Vector3.new(0.6, 1.6, 0.6) * s, CFrame.new(x * s, 0.8 * s, 0), escuro) end
+		for _, x in ipairs({ -1.15, 1.15 }) do peca(m, Vector3.new(0.5, 1.8, 0.5) * s, CFrame.new(x * s, 2.6 * s, -0.2 * s) * CFrame.Angles(-0.3, 0, 0), escuro) end
+	end
+	if chefe then
+		local altura = (variante == 3 and 5.3 or variante == 1 and 3.2 or 2.6) * s
+		for k = 0, 4 do
+			local a = k / 5 * math.pi * 2
+			peca(m, Vector3.new(0.35, 0.9, 0.35) * s, CFrame.new(math.cos(a) * 0.55 * s, altura, math.sin(a) * 0.55 * s), Color3.fromRGB(255, 210, 70), nil, Enum.Material.Neon)
+		end
+	end
+	-- nome e barra de vida
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Barra"
+	bb.Size = UDim2.new(0, chefe and 220 or 140, 0, 38)
+	bb.StudsOffset = Vector3.new(0, (variante == 3 and 6 or 4) * s, 0)
+	bb.MaxDistance = 120
+	bb.Adornee = raiz
+	bb.Parent = m
+	local nomeL = Instance.new("TextLabel")
+	nomeL.Name = "Nome"
+	nomeL.Size = UDim2.new(1, 0, 0.55, 0)
+	nomeL.BackgroundTransparency = 1
+	nomeL.TextColor3 = chefe and Color3.fromRGB(255, 200, 80) or Color3.new(1, 1, 1)
+	nomeL.TextStrokeTransparency = 0.3
+	nomeL.Font = Enum.Font.FredokaOne
+	nomeL.TextScaled = true
+	nomeL.Parent = bb
+	local fundo = Instance.new("Frame")
+	fundo.Size = UDim2.new(1, 0, 0.3, 0)
+	fundo.Position = UDim2.new(0, 0, 0.62, 0)
+	fundo.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
+	fundo.BorderSizePixel = 0
+	fundo.Parent = bb
+	local cheio = Instance.new("Frame")
+	cheio.Name = "Vida"
+	cheio.Size = UDim2.new(1, 0, 1, 0)
+	cheio.BackgroundColor3 = Color3.fromRGB(220, 50, 40)
+	cheio.BorderSizePixel = 0
+	cheio.Parent = fundo
+	return m, nomeL, cheio
+end
+
+local function criarMonstro(zona, pos, chefe)
+	local z = D.ZONES[zona]
+	local lmin, lmax = R.faixaMapa(zona)
+	local variante = math.random(1, 3)
+	local nome = chefe and z.boss[1] or z.monsters[variante][1]
+	local nivel = chefe and (lmax + 2) or math.random(lmin, lmax)
+	local s = R.monstro(nivel, chefe)
+	proximoId = proximoId + 1
+	local escala = (chefe and 2.2 or 1) * R.rnd(0.9, 1.1)
+	local cor = TEMAS[zona].mon:Lerp(Color3.fromHSV(math.random(), 0.5, 0.9), 0.25)
+	local modelo, nomeL, vida = criarModeloMonstro(nome, cor, variante, escala, chefe)
+	nomeL.Text = "Nv " .. nivel .. "  " .. nome
+	modelo:SetAttribute("MonId", proximoId)
+	modelo:PivotTo(CFrame.new(pos))
+	modelo.Parent = pastaMonstros
+	local mon = {
+		id = proximoId, nome = nome, zona = zona, s = s, pos = pos, casa = pos, chefe = chefe, escala = escala,
+		modelo = modelo, barra = vida, alvo = nil, atkT = R.rnd(0.5, 1.5), stun = 0, slow = 0, danos = {}, dir = Vector3.new(0, 0, -1), passeio = 0,
+	}
+	M[proximoId] = mon
+	return mon
+end
+
+local function vivosNoMapa(zona)
+	local n, chefe = 0, nil
+	for _, m in pairs(M) do
+		if m.zona == zona then
+			n = n + 1
+			if m.chefe then chefe = m end
+		end
+	end
+	return n, chefe
+end
+
+-- ---------- jogadores ----------
+local P = {} -- player -> estado
+local store = nil
+pcall(function() store = DataStoreService:GetDataStore("Valdaria_v1") end)
+
+local function aviso(pl, texto, tipo)
+	evAviso:FireClient(pl, texto, tipo or "")
+end
+
+local function hrp(pl)
+	local c = pl.Character
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function ficha(p) return R.ficha(p.h, p.buffs) end
+
+local function enviarFicha(pl)
+	local p = P[pl]
+	if not p then return end
+	if not p.h then
+		evFicha:FireClient(pl, nil, nil)
+		return
+	end
+	local f = ficha(p)
+	evFicha:FireClient(pl, p.h, { maxHp = f.maxHp, maxMp = f.maxMp, atkMin = f.atkMin, atkMax = f.atkMax, def = f.def, crit = f.crit, critMult = f.critMult, aps = f.aps, evade = f.evade, block = f.block, A = f.A })
+	p.sujo = false
+end
+
+-- arma simples na mão do herói (cabo + cabeça), conforme o tipo de arma equipada
+local function armaNaMao(pl)
+	local p = P[pl]
+	local c = pl.Character
+	if not (p and p.h and c) then return end
+	local mao = c:FindFirstChild("RightHand") or c:FindFirstChild("Right Arm")
+	if not mao then return end
+	local velha = c:FindFirstChild("ArmaValdaria")
+	if velha then velha:Destroy() end
+	local it = p.h.equip.arma
+	local wt = (it and it.wtype) or D.CLASSES[p.h.cls].weapon
+	local info = D.WEAPON_INFO[wt] or {}
+	local rar = it and R.raridade(it) or D.RARITIES[1]
+	local corRar = Color3.fromHex(rar.color)
+	local tier = it and R.limitar(math.floor(it.ilvl / 17), 0, 5) or 0
+	local metal = ({ Color3.fromRGB(160, 106, 56), Color3.fromRGB(162, 170, 180), Color3.fromRGB(226, 231, 239), Color3.fromRGB(90, 130, 230), Color3.fromRGB(196, 48, 60), Color3.fromRGB(255, 240, 196) })[tier + 1]
+	local modelo = Instance.new("Model")
+	modelo.Name = "ArmaValdaria"
+	local longa = (info.hands == 2) and 1.6 or 1
+	local function parte(tam, desloc, cor, forma, neon)
+		local x = Instance.new("Part")
+		x.Size = tam
+		x.Color = cor
+		x.Material = neon and Enum.Material.Neon or Enum.Material.Metal
+		if forma then x.Shape = forma end
+		x.CanCollide = false
+		x.Massless = true
+		x.CFrame = mao.CFrame * desloc
+		x.Parent = modelo
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = mao
+		w.Part1 = x
+		w.Parent = x
+		return x
+	end
+	-- a arma aponta para a frente da mão (eixo -Z)
+	local cabo = 2.6 * longa
+	parte(Vector3.new(0.25, 0.25, cabo), CFrame.new(0, -0.2, -cabo / 2 + 0.6), Color3.fromRGB(70, 50, 40))
+	local ponta = CFrame.new(0, -0.2, -cabo + 0.6)
+	local anim = info.anim
+	if anim == "cast" then
+		parte(Vector3.new(0.8, 0.8, 0.8), ponta, corRar, Enum.PartType.Ball, true)
+	elseif anim == "bow" or anim == "xbow" then
+		parte(Vector3.new(0.2, 2.6 * longa, 0.2), ponta * CFrame.new(0, 0, 0.6), metal)
+	elseif wt == "machado" or wt == "machadao" then
+		parte(Vector3.new(0.15, 1.2 * longa, 1.0 * longa), ponta * CFrame.new(0, 0.5, 0.4), metal)
+	elseif wt == "martelo" or wt == "malho" then
+		parte(Vector3.new(0.9, 0.9, 1.4) * longa, ponta * CFrame.new(0, 0, 0.3), metal)
+	elseif wt == "foice" then
+		parte(Vector3.new(0.12, 0.5, 2.2), ponta * CFrame.new(0, 0.3, 1.0) * CFrame.Angles(0.5, 0, 0), metal)
+	else -- espadas, lanças e dardos: lâmina reta
+		parte(Vector3.new(0.12, 0.4, 2.2 * longa), ponta * CFrame.new(0, 0, -1.0 * longa), metal)
+	end
+	if tier >= 3 then parte(Vector3.new(0.35, 0.35, 0.35), ponta, corRar, Enum.PartType.Ball, true) end
+	modelo.Parent = c
+end
+
+local function posicionar(pl)
+	local p = P[pl]
+	local raiz = hrp(pl)
+	if not (p and p.h and raiz) then return end
+	local c = centro(p.h.zone)
+	pl.Character:PivotTo(CFrame.new(c + Vector3.new(R.rnd(-6, 6), 5, R.rnd(-6, 6))))
+	local hum = pl.Character:FindFirstChildOfClass("Humanoid")
+	if hum then hum.WalkSpeed = 22 end
+end
+
+local function salvar(pl)
+	local p = P[pl]
+	if not (p and p.h and store and p.podeSalvar) then return end
+	p.h.salvo = os.time()
+	local ok, err = pcall(function() store:SetAsync("p_" .. pl.UserId, p.h) end)
+	if not ok then warn("Valdária: falha ao salvar", err) end
+end
+
+local function carregar(pl)
+	local p = { h = nil, buffs = {}, cds = {}, hp = 1, mp = 1, alvo = nil, atkT = 0, morto = 0, furtivo = 0, invocAte = 0, invocMult = 0, reviveCd = 0, potCd = 0, sujo = true, podeSalvar = false }
+	P[pl] = p
+	if store then
+		local ok, dados = pcall(function() return store:GetAsync("p_" .. pl.UserId) end)
+		if ok then
+			p.podeSalvar = true
+			if type(dados) == "table" and dados.cls and D.CLASSES[dados.cls] then p.h = dados end
+		else
+			task.delay(4, function() aviso(pl, "⚠ O progresso não está sendo salvo. No Studio: Arquivo > Configurações do jogo > Segurança > ative \"Acesso do Studio aos serviços de API\". No jogo publicado salva sozinho.", "ruim") end)
+		end
+	end
+	if p.h then
+		local h = p.h
+		h.kills = h.kills or {}
+		h.pots = h.pots or { hp = 20, mp = 20 }
+		h.stats = h.stats or { kills = 0, deaths = 0, bosses = 0 }
+		h.inv = h.inv or {}
+		if not D.ZONES[h.zone] then h.zone = 1 end
+		local f = ficha(p)
+		p.hp, p.mp = f.maxHp, f.maxMp
+	end
+end
+
+local function entrou(pl)
+	if P[pl] then return end
+	carregar(pl)
+	pl.CharacterAdded:Connect(function(char)
+		char:WaitForChild("HumanoidRootPart", 10)
+		task.wait(0.2)
+		posicionar(pl)
+		armaNaMao(pl)
+	end)
+	if pl.Character then
+		posicionar(pl)
+		armaNaMao(pl)
+	end
+	enviarFicha(pl)
+end
+Players.PlayerAdded:Connect(entrou)
+for _, pl in ipairs(Players:GetPlayers()) do task.spawn(entrou, pl) end
+Players.PlayerRemoving:Connect(function(pl)
+	salvar(pl)
+	for _, m in pairs(M) do
+		m.danos[pl] = nil
+		if m.alvo == pl then m.alvo = nil end
+	end
+	P[pl] = nil
+end)
+game:BindToClose(function()
+	for _, pl in ipairs(Players:GetPlayers()) do salvar(pl) end
+end)
+
+evEscolher.OnServerEvent:Connect(function(pl, cls)
+	local p = P[pl]
+	if not p or p.h or type(cls) ~= "string" or not D.CLASSES[cls] then return end
+	p.h = R.novoHeroi(cls)
+	local f = ficha(p)
+	p.hp, p.mp = f.maxHp, f.maxMp
+	posicionar(pl)
+	armaNaMao(pl)
+	enviarFicha(pl)
+	aviso(pl, "Bem-vindo(a) a Valdária, " .. D.CLASSES[cls].name .. "! O modo Auto já está ligado: o herói caça sozinho.", "nivel")
+	salvar(pl)
+end)
+
+-- ---------- progresso ----------
+local function ganharXp(pl, xp)
+	local p = P[pl]
+	local h = p.h
+	if h.lvl >= R.MAX_LEVEL then return end
+	h.xp = h.xp + xp
+	local subiu = false
+	while h.lvl < R.MAX_LEVEL and h.xp >= R.xpNeed(h.lvl) do
+		h.xp = h.xp - R.xpNeed(h.lvl)
+		h.lvl = h.lvl + 1
+		h.pts = h.pts + R.PONTOS_POR_NIVEL
+		subiu = true
+	end
+	if h.lvl >= R.MAX_LEVEL then h.xp = 0 end
+	if subiu then
+		R.distribuir(h)
+		local f = ficha(p)
+		p.hp, p.mp = f.maxHp, f.maxMp
+		local raiz = hrp(pl)
+		if raiz then flutuar(raiz.Position + Vector3.new(0, 4, 0), "NÍVEL " .. h.lvl .. "!", Color3.fromRGB(255, 220, 90), true) end
+		aviso(pl, "⭐ Você subiu para o nível " .. h.lvl .. "!", "grande")
+		for _, sk in ipairs(D.CLASSES[h.cls].skills) do
+			if sk.lvl == h.lvl then aviso(pl, "✨ Nova habilidade: " .. sk.name .. "!", "nivel") end
+		end
+		local prox = D.ZONES[h.zone + 1]
+		if prox and h.lvl == prox.min then aviso(pl, "🗺️ Novo mapa liberado: " .. prox.name .. ". Abra Mapas para ir.", "nivel") end
+		p.sujo = true
+	end
+end
+
+local function receberItem(pl, it)
+	local p = P[pl]
+	local h = p.h
+	local rar = R.raridade(it)
+	local atual = h.equip[it.slot]
+	local podeEscudo = it.slot ~= "escudo" or not h.equip.arma or R.maoes(h.equip.arma.wtype) == 1
+	if R.podeUsar(h.cls, it) and h.lvl >= it.req and podeEscudo and (not atual or R.pontuacao(it) > R.pontuacao(atual)) then
+		h.equip[it.slot] = it
+		if atual then
+			if #h.inv < 40 then table.insert(h.inv, atual) else h.gold = h.gold + R.valor(atual) end
+		end
+		if it.slot == "arma" and R.maoes(it.wtype) == 2 and h.equip.escudo then
+			local e = h.equip.escudo
+			h.equip.escudo = nil
+			if #h.inv < 40 then table.insert(h.inv, e) else h.gold = h.gold + R.valor(e) end
+		end
+		aviso(pl, "🎁 Equipado: " .. it.name .. " (" .. rar.name .. ")", "item:" .. rar.color)
+		if it.slot == "arma" then armaNaMao(pl) end
+	elseif #h.inv < 40 then
+		table.insert(h.inv, it)
+		aviso(pl, "🎁 Drop: " .. it.name .. " (" .. rar.name .. ")", "item:" .. rar.color)
+	else
+		h.gold = h.gold + R.valor(it)
+		aviso(pl, "Mochila cheia: " .. it.name .. " vendido.", "")
+	end
+	p.sujo = true
+end
+
+local function matar(mon)
+	M[mon.id] = nil
+	local raizM = mon.modelo.PrimaryPart
+	local pos = raizM and raizM.Position or mon.pos
+	-- encolhe e some
+	for _, x in ipairs(mon.modelo:GetDescendants()) do
+		if x:IsA("BasePart") then TweenService:Create(x, TweenInfo.new(0.4), { Transparency = 1 }):Play() end
+	end
+	Debris:AddItem(mon.modelo, 0.45)
+	for pl in pairs(mon.danos) do
+		local p = P[pl]
+		if p and p.h then
+			local h = p.h
+			local f = ficha(p)
+			local xp = math.floor(mon.s.xp * (1 + (f.xpb or 0) / 100) + 0.5)
+			local ouro = math.floor(mon.s.ouro * (1 + (f.goldb or 0) / 100) + 0.5)
+			h.gold = h.gold + ouro
+			h.stats.kills = h.stats.kills + 1
+			local k = tostring(mon.zona)
+			if mon.chefe then
+				h.stats.bosses = h.stats.bosses + 1
+				h.kills[k] = 0
+				aviso(pl, "👑 " .. mon.nome .. " derrotado! +" .. xp .. " XP, +" .. ouro .. " ouro.", "grande")
+			else
+				h.kills[k] = math.min(R.ABATES_CHEFE, (h.kills[k] or 0) + 1)
+			end
+			flutuar(pos + Vector3.new(0, 3, 0), "+" .. xp .. " XP", Color3.fromRGB(150, 230, 255))
+			ganharXp(pl, xp)
+			-- cada um tem o seu próprio drop
+			local n = mon.chefe and 2 or ((math.random() < 0.16) and 1 or 0)
+			for _ = 1, n do receberItem(pl, R.gerarItem(h.cls, mon.s.lvl, mon.chefe and 4 or 1)) end
+			if math.random() < (mon.chefe and 1 or 0.05) then
+				h.pots.hp = h.pots.hp + 2
+				h.pots.mp = h.pots.mp + 2
+			end
+			p.sujo = true
+		end
+		if p and p.alvo == mon.id then p.alvo = nil end
+	end
+end
+
+local function monstrosPerto(zona, pos, raio)
+	local lista = {}
+	for _, m in pairs(M) do
+		if m.zona == zona and (m.pos - pos).Magnitude <= raio then table.insert(lista, m) end
+	end
+	table.sort(lista, function(a, b) return (a.pos - pos).Magnitude < (b.pos - pos).Magnitude end)
+	return lista
+end
+
+-- golpe do herói (ataque normal ou habilidade de dano)
+local function golpe(pl, mult, sk)
+	local p = P[pl]
+	local alvo = p.alvo and M[p.alvo]
+	if not alvo then return end
+	local f = ficha(p)
+	local furtivo = p.furtivo > 0
+	if not sk and not furtivo then
+		local acerto = R.limitar(0.85 + (f.A.des - alvo.s.lvl * 2.5) * 0.003, 0.6, 0.98)
+		if math.random() > acerto then
+			flutuar(alvo.pos + Vector3.new(0, 4 * alvo.escala, 0), "Errou", Color3.fromRGB(200, 200, 200))
+			return
+		end
+	end
+	if furtivo then p.furtivo = 0 end
+	local alvos = { alvo }
+	if sk and sk.type == "aoe" then alvos = monstrosPerto(alvo.zona, alvo.pos, 13) end
+	local limite = (sk and sk.targets) or 99
+	local golpes = (sk and sk.hits) or 1
+	local total = 0
+	for i, t in ipairs(alvos) do
+		if i > limite then break end
+		local dano = 0
+		local critou = false
+		for _ = 1, golpes do
+			local d = R.rnd(f.atkMin, f.atkMax) * mult / golpes
+			if furtivo or math.random() * 100 < f.crit then
+				d = d * f.critMult * (furtivo and 1.5 or 1)
+				critou = true
+			end
+			if sk and sk.boss and t.chefe then d = d * (1 + sk.boss) end
+			dano = dano + math.max(1, math.floor(d * 100 / (100 + t.s.def) + 0.5))
+		end
+		-- aliado invocado (falcão, autômato, torreta...) bate junto
+		if p.invocAte > os.clock() then dano = dano + math.floor(R.rnd(f.atkMin, f.atkMax) * p.invocMult * 100 / (100 + t.s.def)) end
+		t.s.hp = t.s.hp - dano
+		t.danos[pl] = true
+		if not t.alvo then t.alvo = pl end
+		if sk and sk.stun then t.stun = math.max(t.stun, sk.stun) end
+		if sk and sk.slow then t.slow = math.max(t.slow, sk.slow) end
+		total = total + dano
+		flutuar(t.pos + Vector3.new(0, 4 * t.escala, 0), (critou and "CRÍTICO " or "") .. dano, critou and Color3.fromRGB(255, 200, 60) or Color3.new(1, 1, 1), critou)
+		if t.s.hp <= 0 then matar(t) end
+	end
+	if sk and sk.lifesteal and total > 0 then p.hp = math.min(f.maxHp, p.hp + total * sk.lifesteal) end
+end
+
+local function buffAtivo(p, id)
+	for _, b in ipairs(p.buffs) do if b.id == id then return b end end
+	return nil
+end
+local function addBuff(p, id, stat, val, dur, nome)
+	for i = #p.buffs, 1, -1 do
+		if p.buffs[i].id == id and p.buffs[i].stat == stat then table.remove(p.buffs, i) end
+	end
+	table.insert(p.buffs, { id = id, stat = stat, val = val, t = dur, nome = nome })
+end
+
+local function habilidade(pl, id, auto)
+	local p = P[pl]
+	if not (p and p.h) or p.morto > 0 then return false end
+	local h = p.h
+	local sk = nil
+	for _, s in ipairs(D.CLASSES[h.cls].skills) do if s.id == id then sk = s end end
+	if not sk or sk.type == "passive" then return false end
+	if h.lvl < sk.lvl then
+		if not auto then aviso(pl, sk.name .. " libera no nível " .. sk.lvl .. ".", "") end
+		return false
+	end
+	if (p.cds[id] or 0) > 0 then return false end
+	if p.mp < sk.mp then
+		if not auto then aviso(pl, "Mana insuficiente.", "") end
+		return false
+	end
+	local raiz = hrp(pl)
+	if not raiz then return false end
+	local f = ficha(p)
+	if sk.type == "dmg" or sk.type == "aoe" then
+		local alvo = p.alvo and M[p.alvo]
+		if not alvo then
+			local perto = monstrosPerto(h.zone, raiz.Position, f.alcance + 6)
+			if perto[1] then p.alvo = perto[1].id alvo = perto[1] end
+		end
+		if not alvo or (alvo.pos - raiz.Position).Magnitude > f.alcance + 6 then
+			if not auto then aviso(pl, "Nenhum monstro ao alcance.", "") end
+			return false
+		end
+	end
+	p.mp = p.mp - sk.mp
+	p.cds[id] = sk.cd or 0
+	flutuar(raiz.Position + Vector3.new(0, 5, 0), sk.name, Color3.fromRGB(190, 160, 255))
+	if sk.type == "dmg" or sk.type == "aoe" then
+		golpe(pl, sk.mult, sk)
+	elseif sk.type == "heal" then
+		for outro, q in pairs(P) do
+			local r2 = hrp(outro)
+			if q.h and q.morto <= 0 and r2 and (r2.Position - raiz.Position).Magnitude < 35 then
+				local fq = ficha(q)
+				local cura = math.floor(fq.maxHp * sk.mult)
+				q.hp = math.min(fq.maxHp, q.hp + cura)
+				flutuar(r2.Position + Vector3.new(0, 3, 0), "+" .. cura, Color3.fromRGB(110, 255, 140))
+			end
+		end
+	elseif sk.type == "buff" then
+		addBuff(p, sk.id, sk.stat, sk.val, sk.dur, sk.name)
+		if sk.also then addBuff(p, sk.id, sk.also.stat, sk.also.val, sk.dur, sk.name) end
+	elseif sk.type == "summon" or sk.type == "turret" then
+		p.invocAte = os.clock() + sk.dur
+		p.invocMult = sk.mult
+	elseif sk.type == "stealth" then
+		p.furtivo = sk.dur
+	end
+	return true
+end
+
+local function usarPocao(pl, tipo)
+	local p = P[pl]
+	if not (p and p.h) or p.morto > 0 or p.potCd > 0 then return end
+	local h = p.h
+	if (h.pots[tipo] or 0) <= 0 then
+		local preco = 10 + h.lvl * 4
+		if h.gold < preco * 5 then return end
+		h.gold = h.gold - preco * 5
+		h.pots[tipo] = 5
+		aviso(pl, "🧪 Comprou 5 poções de " .. (tipo == "hp" and "vida" or "mana") .. " (" .. preco * 5 .. " ouro).", "")
+	end
+	local f = ficha(p)
+	h.pots[tipo] = h.pots[tipo] - 1
+	p.potCd = 1.5
+	if tipo == "hp" then p.hp = math.min(f.maxHp, p.hp + f.maxHp * 0.35) else p.mp = math.min(f.maxMp, p.mp + f.maxMp * 0.4) end
+end
+
+evAcao.OnServerEvent:Connect(function(pl, tipo, arg)
+	local p = P[pl]
+	if not p then return end
+	if tipo == "pronto" then enviarFicha(pl) return end
+	if not p.h then return end
+	local h = p.h
+	if tipo == "alvo" and type(arg) == "number" and M[arg] and M[arg].zona == h.zone then
+		p.alvo = arg
+	elseif tipo == "habilidade" and type(arg) == "string" then
+		habilidade(pl, arg, false)
+	elseif tipo == "auto" then
+		h.auto = not h.auto
+		if not h.auto then p.alvo = nil end
+		p.sujo = true
+	elseif tipo == "pocao" and (arg == "hp" or arg == "mp") then
+		usarPocao(pl, arg)
+	elseif tipo == "mapa" and type(arg) == "number" and D.ZONES[arg] then
+		if h.lvl < D.ZONES[arg].min then
+			aviso(pl, D.ZONES[arg].name .. " libera no nível " .. D.ZONES[arg].min .. ".", "")
+			return
+		end
+		h.zone = arg
+		p.alvo = nil
+		posicionar(pl)
+		aviso(pl, "🗺️ Você chegou a " .. D.ZONES[arg].name .. ".", "nivel")
+		p.sujo = true
+	elseif tipo == "chefe" then
+		local k = tostring(h.zone)
+		local _, vivo = vivosNoMapa(h.zone)
+		if vivo then aviso(pl, "O chefe já está no mapa!", "") return end
+		if (h.kills[k] or 0) < R.ABATES_CHEFE then
+			aviso(pl, "Derrote " .. R.ABATES_CHEFE .. " monstros deste mapa para chamar o chefe.", "")
+			return
+		end
+		local raiz = hrp(pl)
+		local base = raiz and raiz.Position or centro(h.zone)
+		local mon = criarMonstro(h.zone, Vector3.new(base.X + 14, 0, base.Z), true)
+		mon.alvo = pl
+		p.alvo = mon.id
+		h.kills[k] = 0
+		aviso(pl, "👑 " .. mon.nome .. " apareceu!", "grande")
+		p.sujo = true
+	elseif tipo == "equipar" and type(arg) == "string" then
+		for i, it in ipairs(h.inv) do
+			if it.uid == arg then
+				if not R.podeUsar(h.cls, it) then aviso(pl, "Sua classe não usa esse item.", "") return end
+				if h.lvl < it.req then aviso(pl, "Requer nível " .. it.req .. ".", "") return end
+				if it.slot == "escudo" and h.equip.arma and R.maoes(h.equip.arma.wtype) == 2 then aviso(pl, "Escudo só com arma de uma mão.", "") return end
+				table.remove(h.inv, i)
+				local velho = h.equip[it.slot]
+				h.equip[it.slot] = it
+				if velho then table.insert(h.inv, velho) end
+				if it.slot == "arma" and R.maoes(it.wtype) == 2 and h.equip.escudo then
+					table.insert(h.inv, h.equip.escudo)
+					h.equip.escudo = nil
+				end
+				if it.slot == "arma" then armaNaMao(pl) end
+				p.sujo = true
+				return
+			end
+		end
+	elseif tipo == "vender" and type(arg) == "string" then
+		for i, it in ipairs(h.inv) do
+			if it.uid == arg then
+				table.remove(h.inv, i)
+				h.gold = h.gold + R.valor(it)
+				p.sujo = true
+				return
+			end
+		end
+	elseif tipo == "vendercomuns" then
+		local total = 0
+		for i = #h.inv, 1, -1 do
+			local it = h.inv[i]
+			if it.rarity == "comum" or it.rarity == "magico" then
+				total = total + R.valor(it)
+				table.remove(h.inv, i)
+			end
+		end
+		h.gold = h.gold + total
+		aviso(pl, "Itens vendidos por " .. total .. " ouro.", "")
+		p.sujo = true
+	end
+end)
+
+-- ---------- ciclo do jogo (10 vezes por segundo) ----------
+local function ataqueDoMonstro(mon, pl)
+	local p = P[pl]
+	local raiz = hrp(pl)
+	if not (p and p.h and raiz) then return end
+	local f = ficha(p)
+	local acima = raiz.Position + Vector3.new(0, 3, 0)
+	if p.furtivo > 0 or math.random() < f.evade then
+		flutuar(acima, "Esquiva", Color3.fromRGB(200, 200, 200))
+		return
+	end
+	if math.random() < f.block then
+		flutuar(acima, "Bloqueio", Color3.fromRGB(150, 200, 255))
+		return
+	end
+	local dano = math.max(1, math.floor(mon.s.atk * R.rnd(0.85, 1.15) * 150 / (150 + f.def) * (1 - f.absorb) + 0.5))
+	if f.mshield > 0 then
+		local daMana = math.min(p.mp, dano * f.mshield)
+		p.mp = p.mp - daMana
+		dano = math.floor(dano - daMana)
+	end
+	if f.reflect > 0 then
+		mon.s.hp = mon.s.hp - math.floor(dano * f.reflect)
+		mon.danos[pl] = true
+	end
+	p.hp = p.hp - dano
+	flutuar(acima, "-" .. dano, Color3.fromRGB(255, 90, 80))
+	if mon.s.hp <= 0 then matar(mon) end
+	if p.hp <= 0 then
+		local h = p.h
+		local revive = nil
+		for _, sk in ipairs(D.CLASSES[h.cls].skills) do if sk.revive and h.lvl >= sk.lvl then revive = sk end end
+		if revive and p.reviveCd <= 0 then
+			p.hp = f.maxHp * 0.6
+			p.reviveCd = revive.revive
+			flutuar(acima, "RESSURREIÇÃO!", Color3.fromRGB(255, 240, 150), true)
+			return
+		end
+		p.hp = 0
+		p.morto = 4
+		p.alvo = nil
+		h.stats.deaths = h.stats.deaths + 1
+		aviso(pl, "💀 Você caiu! Volta em 4 segundos (sem perder nada).", "ruim")
+		for _, m in pairs(M) do if m.alvo == pl then m.alvo = nil end end
+	end
+end
+
+local function tickMonstro(mon, dt)
+	if mon.stun > 0 then mon.stun = mon.stun - dt return end
+	if mon.slow > 0 then mon.slow = mon.slow - dt end
+	-- alvo
+	local pl = mon.alvo
+	local p = pl and P[pl]
+	local raiz = pl and hrp(pl)
+	if not (p and p.h and p.morto <= 0 and raiz and p.h.zone == mon.zona and (raiz.Position - mon.pos).Magnitude < 50) then
+		mon.alvo = nil
+		pl, raiz = nil, nil
+		local visao = mon.chefe and 32 or 14
+		for outro, q in pairs(P) do
+			local r2 = hrp(outro)
+			if q.h and q.morto <= 0 and r2 and q.h.zone == mon.zona and q.furtivo <= 0 and (r2.Position - mon.pos).Magnitude < visao then
+				mon.alvo, pl, raiz = outro, outro, r2
+				break
+			end
+		end
+	end
+	local vel = (mon.chefe and 9 or 8) * (mon.slow > 0 and 0.5 or 1)
+	if raiz then
+		local alvoPos = Vector3.new(raiz.Position.X, 0, raiz.Position.Z)
+		local delta = alvoPos - mon.pos
+		local dist = delta.Magnitude
+		if dist > 0.1 then mon.dir = delta.Unit end
+		local alcance = 3.5 * mon.escala
+		if dist > alcance then
+			mon.pos = mon.pos + mon.dir * math.min(dist - alcance + 0.1, vel * dt)
+		else
+			mon.atkT = mon.atkT - dt
+			if mon.atkT <= 0 then
+				mon.atkT = mon.chefe and 1.4 or 1.8
+				ataqueDoMonstro(mon, pl)
+				if not M[mon.id] then return end
+			end
+		end
+	else
+		-- passeia perto de onde nasceu
+		mon.passeio = mon.passeio - dt
+		if mon.passeio <= 0 then
+			mon.passeio = R.rnd(2, 5)
+			local a = R.rnd(0, math.pi * 2)
+			mon.destino = mon.casa + Vector3.new(math.cos(a) * R.rnd(0, 10), 0, math.sin(a) * R.rnd(0, 10))
+		end
+		if mon.destino then
+			local delta = mon.destino - mon.pos
+			if delta.Magnitude > 0.5 then
+				mon.dir = delta.Unit
+				mon.pos = mon.pos + mon.dir * math.min(delta.Magnitude, 3 * dt)
+			end
+		end
+	end
+	mon.modelo:PivotTo(CFrame.lookAt(mon.pos, mon.pos + mon.dir))
+	mon.barra.Size = UDim2.new(math.max(0, mon.s.hp / mon.s.maxHp), 0, 1, 0)
+end
+
+local function autoHabilidades(pl, p, f)
+	local h = p.h
+	local hpPct = p.hp / f.maxHp
+	for _, sk in ipairs(D.CLASSES[h.cls].skills) do
+		if h.lvl >= sk.lvl and sk.type ~= "passive" and (p.cds[sk.id] or 0) <= 0 and p.mp >= sk.mp then
+			local usar = false
+			if sk.type == "heal" then usar = hpPct < 0.6
+			elseif sk.type == "buff" then usar = p.alvo ~= nil and not buffAtivo(p, sk.id)
+			elseif sk.type == "summon" or sk.type == "turret" then usar = p.alvo ~= nil and p.invocAte <= os.clock()
+			elseif sk.type == "stealth" then usar = hpPct < 0.4
+			else usar = p.alvo ~= nil and (p.mp - sk.mp) > f.maxMp * 0.15 end
+			if usar and habilidade(pl, sk.id, true) then return end
+		end
+	end
+end
+
+local function tickJogador(pl, p, dt)
+	local h = p.h
+	local f = ficha(p)
+	for k, v in pairs(p.cds) do p.cds[k] = math.max(0, v - dt) end
+	for i = #p.buffs, 1, -1 do
+		p.buffs[i].t = p.buffs[i].t - dt
+		if p.buffs[i].t <= 0 then table.remove(p.buffs, i) end
+	end
+	if p.potCd > 0 then p.potCd = p.potCd - dt end
+	if p.reviveCd > 0 then p.reviveCd = p.reviveCd - dt end
+	if p.furtivo > 0 then p.furtivo = p.furtivo - dt end
+	if p.morto > 0 then
+		p.morto = p.morto - dt
+		if p.morto <= 0 then
+			p.hp, p.mp = f.maxHp, f.maxMp
+			posicionar(pl)
+		end
+		return
+	end
+	p.hp = math.min(f.maxHp, p.hp + f.hpRegen * dt)
+	p.mp = math.min(f.maxMp, p.mp + f.mpRegen * dt)
+	local raiz = hrp(pl)
+	local hum = pl.Character and pl.Character:FindFirstChildOfClass("Humanoid")
+	if not (raiz and hum) then return end
+	-- poções automáticas
+	if p.hp < f.maxHp * 0.45 then usarPocao(pl, "hp") end
+	if p.mp < f.maxMp * 0.25 then usarPocao(pl, "mp") end
+	-- alvo
+	local alvo = p.alvo and M[p.alvo]
+	if alvo and (alvo.zona ~= h.zone or (alvo.pos - raiz.Position).Magnitude > 80) then
+		p.alvo, alvo = nil, nil
+	end
+	if not alvo and h.auto then
+		local perto = monstrosPerto(h.zone, raiz.Position, 90)
+		if perto[1] then p.alvo, alvo = perto[1].id, perto[1] end
+	end
+	if not alvo then return end
+	-- quem anda até o alvo é a interface (o personagem pertence ao jogador); aqui só se ataca quando está perto
+	local plano = Vector3.new(raiz.Position.X, 0, raiz.Position.Z)
+	local dist = (alvo.pos - plano).Magnitude
+	if dist <= f.alcance + 2 then
+		if h.auto then autoHabilidades(pl, p, f) end
+		if not M[alvo.id] then return end
+		p.atkT = p.atkT - dt
+		if p.atkT <= 0 then
+			p.atkT = 1 / f.aps
+			golpe(pl, 1, nil)
+		end
+	end
+end
+
+local function enviarEstado(pl, p)
+	local h = p.h
+	local f = ficha(p)
+	local alvo = p.alvo and M[p.alvo]
+	local buffs = {}
+	for _, b in ipairs(p.buffs) do table.insert(buffs, { nome = b.nome, t = math.ceil(b.t) }) end
+	local _, chefe = vivosNoMapa(h.zone)
+	evEstado:FireClient(pl, {
+		hp = math.floor(p.hp), maxHp = f.maxHp, mp = math.floor(p.mp), maxMp = f.maxMp,
+		xp = h.xp, need = R.xpNeed(h.lvl), lvl = h.lvl, gold = h.gold, zone = h.zone, auto = h.auto,
+		cds = p.cds, buffs = buffs, pots = h.pots, morto = p.morto, kills = h.kills[tostring(h.zone)] or 0,
+		chefeVivo = chefe ~= nil, invoc = math.max(0, math.ceil(p.invocAte - os.clock())),
+		alcance = f.alcance,
+		alvo = alvo and { nome = alvo.nome, lvl = alvo.s.lvl, hp = math.max(0, alvo.s.hp), maxHp = alvo.s.maxHp, chefe = alvo.chefe, x = alvo.pos.X, z = alvo.pos.Z } or nil,
+	})
+end
+
+local acum, envio, salvarT, nasceT = 0, 0, 0, 0
+game:GetService("RunService").Heartbeat:Connect(function(passo)
+	acum = acum + passo
+	if acum < 0.1 then return end
+	local dt = math.min(acum, 0.3)
+	acum = 0
+	-- monstros nascem só nos mapas com jogadores
+	nasceT = nasceT - dt
+	if nasceT <= 0 then
+		nasceT = 0.8
+		local mapas = {}
+		for _, p in pairs(P) do if p.h then mapas[p.h.zone] = true end end
+		for zona in pairs(mapas) do
+			if vivosNoMapa(zona) < 12 then
+				local a, d = R.rnd(0, math.pi * 2), R.rnd(22, TAM / 2 - 14)
+				criarMonstro(zona, centro(zona) + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d), false)
+			end
+		end
+	end
+	for _, mon in pairs(M) do
+		if M[mon.id] then tickMonstro(mon, dt) end
+	end
+	for pl, p in pairs(P) do
+		if p.h then tickJogador(pl, p, dt) end
+	end
+	envio = envio + dt
+	if envio >= 0.2 then
+		envio = 0
+		for pl, p in pairs(P) do
+			if p.h then
+				enviarEstado(pl, p)
+				if p.sujo then enviarFicha(pl) end
+			end
+		end
+	end
+	salvarT = salvarT + dt
+	if salvarT >= 60 then
+		salvarT = 0
+		for pl in pairs(P) do task.spawn(salvar, pl) end
+	end
+end)
+
+print("Crônicas de Valdária: servidor pronto.")
+]]></ProtectedString></Properties></Item></Item><Item class="StarterPlayer" referent="RBX00000008"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000007"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000006"><Properties><string name="Name">Interface</string><ProtectedString name="Source"><![CDATA[-- Crônicas de Valdária (Roblox) — interface: escolha de classe, barras, habilidades, alvo, mapas, herói e mochila.
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+
+local pl = Players.LocalPlayer
+local D = require(RS:WaitForChild("Dados"))
+local R = require(RS:WaitForChild("Regras"))
+local rem = RS:WaitForChild("Remotos")
+local evEscolher = rem:WaitForChild("Escolher")
+local evAcao = rem:WaitForChild("Acao")
+local evEstado = rem:WaitForChild("Estado")
+local evFicha = rem:WaitForChild("Ficha")
+local evAviso = rem:WaitForChild("Aviso")
+
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)
+
+-- ---------- tema "Lendas": madeira e ouro ----------
+local COR = {
+	madeira = Color3.fromRGB(64, 42, 26), madeira2 = Color3.fromRGB(34, 22, 14),
+	ouro = Color3.fromRGB(236, 194, 98), ouroEsc = Color3.fromRGB(140, 100, 42),
+	texto = Color3.fromRGB(242, 228, 192), apagado = Color3.fromRGB(170, 152, 120),
+	vida = Color3.fromRGB(214, 52, 44), mana = Color3.fromRGB(60, 120, 230), xp = Color3.fromRGB(240, 200, 70),
+}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "Valdaria"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = pl:WaitForChild("PlayerGui")
+
+local function novo(classe, props, pai)
+	local o = Instance.new(classe)
+	for k, v in pairs(props) do o[k] = v end
+	if pai then o.Parent = pai end
+	return o
+end
+local function cantos(o, r) novo("UICorner", { CornerRadius = UDim.new(0, r or 8) }, o) end
+local function borda(o, cor, esp) novo("UIStroke", { Color = cor or COR.ouroEsc, Thickness = esp or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, o) end
+local function painel(pai, tam, pos, anc)
+	local f = novo("Frame", { Size = tam, Position = pos, AnchorPoint = anc or Vector2.new(0, 0), BackgroundColor3 = COR.madeira, BorderSizePixel = 0 }, pai)
+	cantos(f, 10)
+	borda(f, COR.ouroEsc, 2)
+	novo("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 140, 130)), Rotation = 90 }, f)
+	return f
+end
+local function texto(pai, props)
+	props.BackgroundTransparency = 1
+	props.Font = props.Font or Enum.Font.GothamMedium
+	props.TextColor3 = props.TextColor3 or COR.texto
+	if props.TextScaled == nil and not props.TextSize then props.TextSize = 14 end
+	local t = novo("TextLabel", props, pai)
+	return t
+end
+local function botao(pai, txt, tam, pos, cb, dourado)
+	local b = novo("TextButton", {
+		Size = tam, Position = pos, Text = txt, Font = Enum.Font.FredokaOne, TextScaled = true,
+		TextColor3 = dourado and Color3.fromRGB(46, 26, 8) or COR.texto,
+		BackgroundColor3 = dourado and COR.ouro or Color3.fromRGB(104, 70, 38), AutoButtonColor = true, BorderSizePixel = 0,
+	}, pai)
+	cantos(b, 8)
+	borda(b, dourado and Color3.fromRGB(255, 238, 172) or COR.ouroEsc, 2)
+	novo("UITextSizeConstraint", { MaxTextSize = 20 }, b)
+	novo("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, b)
+	if cb then b.Activated:Connect(cb) end
+	return b
+end
+local function barra(pai, pos, tam, cor)
+	local f = novo("Frame", { Position = pos, Size = tam, BackgroundColor3 = Color3.fromRGB(22, 12, 8), BorderSizePixel = 0 }, pai)
+	cantos(f, 6)
+	borda(f, COR.ouroEsc, 1)
+	local c = novo("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = cor, BorderSizePixel = 0 }, f)
+	cantos(c, 6)
+	novo("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)), Rotation = 90 }, c)
+	local t = texto(f, { Size = UDim2.new(1, 0, 1, 0), Text = "", TextScaled = true, Font = Enum.Font.GothamBold, ZIndex = 3, TextStrokeTransparency = 0.4 })
+	novo("UITextSizeConstraint", { MaxTextSize = 13 }, t)
+	return { cheio = c, txt = t }
+end
+local function setBarra(b, v, max, txt)
+	b.cheio.Size = UDim2.new(math.clamp(v / math.max(1, max), 0, 1), 0, 1, 0)
+	b.txt.Text = txt
+end
+local function fmt(n)
+	n = math.floor(n)
+	if n >= 1e6 then return string.format("%.1fM", n / 1e6) end
+	if n >= 1e4 then return string.format("%.1fK", n / 1e3) end
+	return tostring(n)
+end
+local function limpar(f)
+	for _, c in ipairs(f:GetChildren()) do
+		if c:IsA("GuiObject") then c:Destroy() end
+	end
+end
+
+-- ---------- estado recebido do servidor ----------
+local H, F, E = nil, nil, nil -- herói, ficha (atributos), estado rápido
+
+-- =====================================================================
+-- Tela de escolha de classe (com a história, armas e habilidades de cada uma)
+-- =====================================================================
+local escolha = novo("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = Color3.fromRGB(20, 12, 8), Visible = false, ZIndex = 20 }, gui)
+novo("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(110, 50, 24), Color3.fromRGB(16, 10, 6)), Rotation = 90 }, escolha)
+texto(escolha, { Size = UDim2.new(1, 0, 0, 50), Position = UDim2.new(0, 0, 0, 12), Text = "Crônicas de Valdária", Font = Enum.Font.FredokaOne, TextScaled = true, TextColor3 = COR.ouro, ZIndex = 21 })
+local listaClasses = novo("Frame", { Size = UDim2.new(1, -24, 0, 132), Position = UDim2.new(0, 12, 0, 70), BackgroundTransparency = 1, ZIndex = 21 }, escolha)
+novo("UIGridLayout", { CellSize = UDim2.new(0.25, -6, 0, 62), CellPadding = UDim2.new(0, 6, 0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, listaClasses)
+local detalhe = painel(escolha, UDim2.new(1, -24, 1, -290), UDim2.new(0, 12, 0, 212))
+detalhe.ZIndex = 21
+local rolagem = novo("ScrollingFrame", { Size = UDim2.new(1, -16, 1, -16), Position = UDim2.new(0, 8, 0, 8), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), ZIndex = 22 }, detalhe)
+novo("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, rolagem)
+local botaoComecar = botao(escolha, "Começar", UDim2.new(0.6, 0, 0, 52), UDim2.new(0.2, 0, 1, -66), nil, true)
+botaoComecar.ZIndex = 22
+local clsEscolhida = D.ORDEM_CLASSES[1]
+
+local function linhaTexto(txt, tam, cor, fonte, ordem)
+	local t = texto(rolagem, { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = txt, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextSize = tam, TextColor3 = cor or COR.texto, Font = fonte or Enum.Font.Gotham, RichText = true, LayoutOrder = ordem, ZIndex = 23 })
+	return t
+end
+
+local function mostrarClasse(cls)
+	clsEscolhida = cls
+	local c = D.CLASSES[cls]
+	local fac = D.FACTIONS[c.faction]
+	for _, b in ipairs(listaClasses:GetChildren()) do
+		if b:IsA("TextButton") then
+			local st = b:FindFirstChildOfClass("UIStroke")
+			if st then st.Color = (b.Name == cls) and Color3.fromRGB(255, 236, 160) or COR.ouroEsc st.Thickness = (b.Name == cls) and 3 or 2 end
+		end
+	end
+	limpar(rolagem)
+	local o = 0
+	local function prox() o = o + 1 return o end
+	linhaTexto(c.icon .. "  " .. c.name, 30, COR.ouro, Enum.Font.FredokaOne, prox())
+	linhaTexto((c.role or "") .. "  ·  " .. fac.name, 15, COR.apagado, Enum.Font.GothamMedium, prox())
+	linhaTexto("📜 <b>História</b>", 18, COR.ouro, Enum.Font.GothamBold, prox())
+	linhaTexto(D.CLASS_LORE[cls] or c.desc, 15, nil, nil, prox())
+	linhaTexto("<i>" .. (fac.lore or fac.desc) .. "</i>", 13, COR.apagado, nil, prox())
+	linhaTexto("⚔️ <b>Como joga</b>", 18, COR.ouro, Enum.Font.GothamBold, prox())
+	linhaTexto(c.desc, 15, nil, nil, prox())
+	local attr = {}
+	for _, k in ipairs(R.ATRIBUTOS) do table.insert(attr, R.NOME_ATRIBUTO[k] .. " " .. c.base[k]) end
+	linhaTexto(table.concat(attr, "  ·  "), 13, COR.apagado, nil, prox())
+	local a1, a2 = D.WEAPON_INFO[c.weapon], D.WEAPON_INFO[c.weapon2]
+	linhaTexto("🎒 <b>Armas:</b> " .. a1.plural .. (a1.hands == 1 and " (com escudo)" or " (duas mãos)") .. (a2 and (" e " .. a2.plural .. (a2.hands == 1 and " (com escudo)" or " (duas mãos)")) or ""), 15, nil, nil, prox())
+	linhaTexto("✨ <b>Habilidades</b>", 18, COR.ouro, Enum.Font.GothamBold, prox())
+	for _, sk in ipairs(c.skills) do
+		linhaTexto("<font color=\"#ecc262\">Nv " .. sk.lvl .. "  " .. sk.name .. "</font>  " .. R.textoHabilidade(sk), 14, nil, nil, prox())
+	end
+	botaoComecar.Text = "Começar como " .. c.name
+end
+
+for i, cls in ipairs(D.ORDEM_CLASSES) do
+	local c = D.CLASSES[cls]
+	local b = botao(listaClasses, c.icon .. " " .. c.name, UDim2.new(), UDim2.new(), function() mostrarClasse(cls) end)
+	b.Name = cls
+	b.LayoutOrder = i
+	b.ZIndex = 22
+	b.BackgroundColor3 = Color3.fromHex(D.FACTIONS[c.faction].color):Lerp(Color3.fromRGB(60, 40, 24), 0.65)
+end
+botaoComecar.Activated:Connect(function()
+	evEscolher:FireServer(clsEscolhida)
+	botaoComecar.Text = "Entrando..."
+end)
+
+-- =====================================================================
+-- HUD
+-- =====================================================================
+local hud = novo("Frame", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Visible = false }, gui)
+
+-- herói (canto superior esquerdo)
+local cartao = painel(hud, UDim2.new(0, 290, 0, 104), UDim2.new(0, 10, 0, 44))
+local nomeL = texto(cartao, { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.new(0, 8, 0, 4), Text = "", Font = Enum.Font.FredokaOne, TextSize = 18, TextColor3 = COR.ouro, TextXAlignment = Enum.TextXAlignment.Left })
+local bVida = barra(cartao, UDim2.new(0, 8, 0, 30), UDim2.new(1, -16, 0, 18), COR.vida)
+local bMana = barra(cartao, UDim2.new(0, 8, 0, 52), UDim2.new(1, -16, 0, 14), COR.mana)
+local ouroL = texto(cartao, { Size = UDim2.new(1, -16, 0, 20), Position = UDim2.new(0, 8, 0, 72), Text = "", TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, RichText = true })
+local buffsL = texto(hud, { Size = UDim2.new(0, 290, 0, 18), Position = UDim2.new(0, 12, 0, 150), Text = "", TextSize = 12, TextColor3 = Color3.fromRGB(190, 240, 170), TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 0.5 })
+
+-- alvo (topo, centro)
+local alvoP = painel(hud, UDim2.new(0, 300, 0, 50), UDim2.new(0.5, 0, 0, 44), Vector2.new(0.5, 0))
+local alvoNome = texto(alvoP, { Size = UDim2.new(1, -12, 0, 20), Position = UDim2.new(0, 6, 0, 3), Text = "", Font = Enum.Font.FredokaOne, TextSize = 16 })
+local bAlvo = barra(alvoP, UDim2.new(0, 8, 0, 26), UDim2.new(1, -16, 0, 16), COR.vida)
+
+-- XP (rodapé inteiro)
+local bXp = barra(hud, UDim2.new(0, 0, 1, -16), UDim2.new(1, 0, 0, 16), COR.xp)
+
+-- habilidades e poções (rodapé, centro)
+local barraHab = novo("Frame", { Size = UDim2.new(0, 8 * 66, 0, 70), Position = UDim2.new(0.5, 0, 1, -24), AnchorPoint = Vector2.new(0.5, 1), BackgroundTransparency = 1 }, hud)
+novo("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center }, barraHab)
+novo("UIScale", { Name = "Escala" }, barraHab)
+local slots = {}
+local function criarSlot(i)
+	local b = novo("TextButton", { Size = UDim2.new(0, 62, 0, 62), BackgroundColor3 = Color3.fromRGB(46, 30, 18), Text = "", AutoButtonColor = true, LayoutOrder = i }, barraHab)
+	cantos(b, 8)
+	borda(b, COR.ouroEsc, 2)
+	local nome = texto(b, { Size = UDim2.new(1, -4, 1, -16), Position = UDim2.new(0, 2, 0, 2), Text = "", TextScaled = true, TextWrapped = true, Font = Enum.Font.GothamBold, TextStrokeTransparency = 0.5 })
+	novo("UITextSizeConstraint", { MaxTextSize = 12 }, nome)
+	local tecla = texto(b, { Size = UDim2.new(1, -4, 0, 14), Position = UDim2.new(0, 2, 1, -15), Text = "", TextSize = 11, TextColor3 = COR.ouro, TextXAlignment = Enum.TextXAlignment.Left })
+	local cd = texto(b, { Size = UDim2.new(1, 0, 1, 0), Text = "", Font = Enum.Font.FredokaOne, TextSize = 24, BackgroundTransparency = 0.45, BackgroundColor3 = Color3.new(0, 0, 0), ZIndex = 3, Visible = false })
+	cd.BackgroundTransparency = 0.45
+	cantos(cd, 8)
+	slots[i] = { b = b, nome = nome, tecla = tecla, cd = cd }
+	return slots[i]
+end
+for i = 1, 8 do criarSlot(i) end
+for i = 1, 6 do
+	slots[i].tecla.Text = tostring(i)
+	slots[i].b.Activated:Connect(function()
+		local sk = H and D.CLASSES[H.cls].skills[i]
+		if sk then evAcao:FireServer("habilidade", sk.id) end
+	end)
+end
+slots[7].tecla.Text = "Q"
+slots[8].tecla.Text = "E"
+slots[7].b.BackgroundColor3 = Color3.fromRGB(110, 26, 24)
+slots[8].b.BackgroundColor3 = Color3.fromRGB(26, 44, 110)
+slots[7].b.Activated:Connect(function() evAcao:FireServer("pocao", "hp") end)
+slots[8].b.Activated:Connect(function() evAcao:FireServer("pocao", "mp") end)
+
+-- botões da direita
+local colDir = novo("Frame", { Size = UDim2.new(0, 130, 0, 4 * 46), Position = UDim2.new(1, -10, 0, 44), AnchorPoint = Vector2.new(1, 0), BackgroundTransparency = 1 }, hud)
+novo("UIListLayout", { Padding = UDim.new(0, 6) }, colDir)
+local bAuto = botao(colDir, "🤖 Auto: ON", UDim2.new(1, 0, 0, 40), UDim2.new(), function() evAcao:FireServer("auto") end)
+local janelaAberta = nil
+local abrirJanela -- definida abaixo
+local bMapas = botao(colDir, "🗺️ Mapas", UDim2.new(1, 0, 0, 40), UDim2.new(), function() abrirJanela("mapas") end)
+local bChefe = botao(colDir, "👑 Chefe", UDim2.new(1, 0, 0, 40), UDim2.new(), function() evAcao:FireServer("chefe") end)
+local bHeroi = botao(colDir, "🧙 Herói", UDim2.new(1, 0, 0, 40), UDim2.new(), function() abrirJanela("heroi") end)
+
+-- registro (canto inferior esquerdo)
+local registro = novo("Frame", { Size = UDim2.new(0, 360, 0, 120), Position = UDim2.new(0, 10, 1, -24), AnchorPoint = Vector2.new(0, 1), BackgroundTransparency = 1 }, hud)
+novo("UIListLayout", { VerticalAlignment = Enum.VerticalAlignment.Bottom, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1) }, registro)
+local nLog = 0
+local function addLog(txt, cor)
+	nLog = nLog + 1
+	local t = texto(registro, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = txt, RichText = true, TextWrapped = true, TextSize = 13, TextColor3 = cor or COR.texto, TextXAlignment = Enum.TextXAlignment.Left, TextStrokeTransparency = 0.35, LayoutOrder = nLog })
+	local filhos = {}
+	for _, c in ipairs(registro:GetChildren()) do if c:IsA("TextLabel") then table.insert(filhos, c) end end
+	if #filhos > 6 then
+		table.sort(filhos, function(a, b) return a.LayoutOrder < b.LayoutOrder end)
+		for i = 1, #filhos - 6 do filhos[i]:Destroy() end
+	end
+	return t
+end
+
+-- aviso grande no centro
+local aviso = texto(hud, { Size = UDim2.new(0.8, 0, 0, 50), Position = UDim2.new(0.1, 0, 0.26, 0), Text = "", Font = Enum.Font.FredokaOne, TextScaled = true, TextColor3 = COR.ouro, TextStrokeTransparency = 0.2, Visible = false })
+local avisoN = 0
+local function avisoGrande(txt)
+	avisoN = avisoN + 1
+	local n = avisoN
+	aviso.Text = txt
+	aviso.Visible = true
+	task.delay(2.6, function() if avisoN == n then aviso.Visible = false end end)
+end
+
+-- tela de morte
+local mortoL = texto(hud, { Size = UDim2.new(1, 0, 0, 60), Position = UDim2.new(0, 0, 0.4, 0), Text = "", Font = Enum.Font.FredokaOne, TextScaled = true, TextColor3 = Color3.fromRGB(255, 90, 80), TextStrokeTransparency = 0.2, Visible = false })
+
+-- =====================================================================
+-- Janelas (Mapas e Herói)
+-- =====================================================================
+local janela = painel(hud, UDim2.new(0, 520, 0, 420), UDim2.new(0.5, 0, 0.5, 0), Vector2.new(0.5, 0.5))
+janela.Visible = false
+janela.ZIndex = 10
+novo("UISizeConstraint", { MaxSize = Vector2.new(560, 460) }, janela)
+local tituloJ = novo("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = Color3.fromRGB(150, 34, 28), BorderSizePixel = 0, ZIndex = 11 }, janela)
+cantos(tituloJ, 10)
+local tituloL = texto(tituloJ, { Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 12, 0, 0), Text = "", Font = Enum.Font.FredokaOne, TextSize = 20, TextColor3 = Color3.fromRGB(255, 236, 190), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 12 })
+local fechar = botao(tituloJ, "✕", UDim2.new(0, 32, 0, 32), UDim2.new(1, -38, 0, 4), function() janela.Visible = false janelaAberta = nil end)
+fechar.ZIndex = 12
+local corpo = novo("ScrollingFrame", { Size = UDim2.new(1, -16, 1, -52), Position = UDim2.new(0, 8, 0, 46), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), ZIndex = 11 }, janela)
+novo("UIListLayout", { Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder }, corpo)
+
+local function linha(txt, tam, cor, ordem)
+	return texto(corpo, { Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Text = txt, RichText = true, TextWrapped = true, TextSize = tam or 14, TextColor3 = cor or COR.texto, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = ordem, ZIndex = 12 })
+end
+local function linhaBotao(txt, rotulo, cb, ordem, ativo, rotulo2, cb2)
+	local f = novo("Frame", { Size = UDim2.new(1, -8, 0, 40), BackgroundColor3 = Color3.fromRGB(40, 26, 16), BorderSizePixel = 0, LayoutOrder = ordem, ZIndex = 12 }, corpo)
+	cantos(f, 6)
+	local larg = rotulo2 and 190 or 100
+	texto(f, { Size = UDim2.new(1, -larg - 12, 1, 0), Position = UDim2.new(0, 8, 0, 0), Text = txt, RichText = true, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13 })
+	local b = botao(f, rotulo, UDim2.new(0, 90, 0, 30), UDim2.new(1, -(rotulo2 and 186 or 96), 0, 5), cb, ativo)
+	b.ZIndex = 13
+	if rotulo2 then
+		local b2 = botao(f, rotulo2, UDim2.new(0, 84, 0, 30), UDim2.new(1, -90, 0, 5), cb2)
+		b2.ZIndex = 13
+	end
+	return f
+end
+
+local function corRaridade(it) return R.raridade(it).color end
+local function nomeItem(it)
+	return "<font color=\"" .. corRaridade(it) .. "\">" .. it.name .. (it.refine and it.refine > 0 and (" +" .. it.refine) or "") .. "</font>"
+end
+local function resumoItem(it)
+	local t = it.slot == "arma" and ("Dano " .. it.min .. "-" .. it.max) or (it.def > 0 and ("Defesa " .. it.def) or "")
+	local afx = {}
+	for _, a in ipairs(it.affixes) do
+		for _, ad in ipairs(D.AFFIXES) do if ad.stat == a.stat then table.insert(afx, "+" .. a.val .. " " .. ad.label) end end
+	end
+	if #afx > 0 then t = t .. "  ·  " .. table.concat(afx, ", ") end
+	return t
+end
+
+local function desenharJanela()
+	if not janelaAberta or not H then return end
+	limpar(corpo)
+	local o = 0
+	local function prox() o = o + 1 return o end
+	if janelaAberta == "mapas" then
+		tituloL.Text = "🗺️ Mapas"
+		for i, z in ipairs(D.ZONES) do
+			local lmin, lmax = R.faixaMapa(i)
+			local livre = H.lvl >= z.min
+			local atual = H.zone == i
+			linhaBotao(z.icon .. "  <b>" .. z.name .. "</b>  <font color=\"#aa9878\">Nv " .. lmin .. "-" .. lmax .. "</font>", atual and "Aqui" or (livre and "Ir" or ("🔒 " .. z.min)), function()
+				if livre and not atual then evAcao:FireServer("mapa", i) janela.Visible = false janelaAberta = nil end
+			end, prox(), livre and not atual)
+		end
+	elseif janelaAberta == "heroi" then
+		local c = D.CLASSES[H.cls]
+		tituloL.Text = "🧙 " .. pl.DisplayName .. " · Nv " .. H.lvl .. " " .. c.name
+		if F then
+			local attr = {}
+			for _, k in ipairs(R.ATRIBUTOS) do table.insert(attr, R.NOME_ATRIBUTO[k] .. " <b>" .. math.floor(F.A[k]) .. "</b>") end
+			linha(table.concat(attr, "  ·  "), 14, nil, prox())
+			linha("Vida <b>" .. fmt(F.maxHp) .. "</b>  ·  Mana <b>" .. fmt(F.maxMp) .. "</b>  ·  Ataque <b>" .. F.atkMin .. "-" .. F.atkMax .. "</b>  ·  Defesa <b>" .. F.def .. "</b>", 14, nil, prox())
+			linha(string.format("Crítico <b>%.1f%%</b> (x%.2f)  ·  Ataques/s <b>%.2f</b>  ·  Esquiva <b>%d%%</b>  ·  Bloqueio <b>%d%%</b>", F.crit, F.critMult, F.aps, math.floor(F.evade * 100), math.floor(F.block * 100)), 13, COR.apagado, prox())
+			linha("<i>Os pontos de atributo são distribuídos sozinhos a cada nível.</i>", 12, COR.apagado, prox())
+		end
+		linha("⚔️ <b>Equipamento</b>", 17, COR.ouro, prox())
+		for _, sl in ipairs(D.SLOT_ORDER) do
+			local it = H.equip[sl]
+			local rot = sl == "arma" and "Arma" or D.ARMOR_SLOTS[sl].label
+			linha("<font color=\"#aa9878\">" .. rot .. ":</font> " .. (it and (nomeItem(it) .. " <font color=\"#aa9878\">(nv " .. it.ilvl .. ")  " .. resumoItem(it) .. "</font>") or "<font color=\"#776a55\">vazio</font>"), 13, nil, prox())
+		end
+		linha("🎒 <b>Mochila</b> " .. #H.inv .. "/40", 17, COR.ouro, prox())
+		if #H.inv > 0 then
+			local vb = linhaBotao("Vender todos os comuns e mágicos", "Vender", function() evAcao:FireServer("vendercomuns") end, prox(), false)
+			vb.BackgroundTransparency = 1
+		end
+		for _, it in ipairs(H.inv) do
+			local atual = H.equip[it.slot]
+			local usa = R.podeUsar(H.cls, it) and H.lvl >= it.req
+			local melhor = usa and (not atual or R.pontuacao(it) > R.pontuacao(atual))
+			local info = (melhor and "<font color=\"#7dff8a\">▲</font> " or "") .. nomeItem(it) .. " <font color=\"#aa9878\">nv " .. it.req .. " · " .. resumoItem(it) .. "</font>"
+			local uid = it.uid
+			linhaBotao(info, usa and "Equipar" or "—", function() if usa then evAcao:FireServer("equipar", uid) end end, prox(), melhor, "Vender " .. fmt(R.valor(it)), function() evAcao:FireServer("vender", uid) end)
+		end
+	end
+end
+abrirJanela = function(qual)
+	if janelaAberta == qual then
+		janela.Visible = false
+		janelaAberta = nil
+		return
+	end
+	janelaAberta = qual
+	janela.Visible = true
+	desenharJanela()
+end
+
+-- tamanho para celular
+local function ajustar()
+	local cam = workspace.CurrentCamera
+	if not cam then return end
+	local larg = cam.ViewportSize.X
+	local esc = math.clamp((larg - 20) / (8 * 66), 0.62, 1.15)
+	barraHab.Escala.Scale = esc
+	local pequeno = larg < 700
+	cartao.Size = UDim2.new(0, pequeno and 230 or 290, 0, 104)
+	registro.Size = UDim2.new(0, pequeno and math.floor(larg * 0.6) or 360, 0, 120)
+	registro.Position = UDim2.new(0, 10, 1, -24 - (pequeno and math.floor(76 * esc) or 0))
+	janela.Size = UDim2.new(pequeno and 0.96 or 0, pequeno and 0 or 520, pequeno and 0.8 or 0, pequeno and 0 or 420)
+end
+ajustar()
+if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(ajustar) end
+
+-- =====================================================================
+-- Eventos do servidor
+-- =====================================================================
+evFicha.OnClientEvent:Connect(function(h, f)
+	if not h then
+		hud.Visible = false
+		escolha.Visible = true
+		mostrarClasse(clsEscolhida)
+		return
+	end
+	H, F = h, f
+	escolha.Visible = false
+	hud.Visible = true
+	local c = D.CLASSES[h.cls]
+	for i = 1, 6 do
+		local sk = c.skills[i]
+		local s = slots[i]
+		if sk then
+			local livre = h.lvl >= sk.lvl
+			s.nome.Text = sk.name .. (sk.type == "passive" and "\n(passiva)" or "")
+			s.nome.TextColor3 = livre and COR.texto or Color3.fromRGB(120, 108, 90)
+			s.tecla.Text = livre and tostring(i) or ("🔒" .. sk.lvl)
+		end
+	end
+	desenharJanela()
+end)
+
+-- o herói anda até o alvo e vira para ele (se o jogador não estiver andando com o teclado ou o analógico)
+local ultimoManual = 0
+local andando = false
+local function andarAteAlvo(e)
+	local char = pl.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local raiz = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hum and raiz) or e.morto > 0 then return end
+	if os.clock() - ultimoManual < 1.5 then andando = false return end
+	if not e.alvo then
+		if andando then hum:MoveTo(raiz.Position) andando = false end
+		return
+	end
+	local alvo = Vector3.new(e.alvo.x, raiz.Position.Y, e.alvo.z)
+	local delta = alvo - raiz.Position
+	local dist = Vector3.new(delta.X, 0, delta.Z).Magnitude
+	if dist > e.alcance then
+		hum:MoveTo(alvo - Vector3.new(delta.X, 0, delta.Z).Unit * (e.alcance * 0.7))
+		andando = true
+	else
+		if andando then hum:MoveTo(raiz.Position) andando = false end
+		if dist > 0.5 then raiz.CFrame = CFrame.lookAt(raiz.Position, alvo) end
+	end
+end
+UIS.InputBegan:Connect(function(inp)
+	local k = inp.KeyCode
+	if k == Enum.KeyCode.W or k == Enum.KeyCode.A or k == Enum.KeyCode.S or k == Enum.KeyCode.D or k == Enum.KeyCode.Up or k == Enum.KeyCode.Down or k == Enum.KeyCode.Left or k == Enum.KeyCode.Right or k == Enum.KeyCode.Space or k == Enum.KeyCode.Thumbstick1 then
+		ultimoManual = os.clock()
+	end
+end)
+UIS.InputChanged:Connect(function(inp)
+	if inp.KeyCode == Enum.KeyCode.Thumbstick1 and inp.Position.Magnitude > 0.3 then ultimoManual = os.clock() end
+end)
+game:GetService("RunService").Heartbeat:Connect(function()
+	local char = pl.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum and hum.MoveDirection.Magnitude > 0.1 and not andando then ultimoManual = os.clock() end
+end)
+
+evEstado.OnClientEvent:Connect(function(e)
+	E = e
+	if not H then return end
+	local c = D.CLASSES[H.cls]
+	nomeL.Text = "Nv " .. e.lvl .. "  " .. pl.DisplayName .. "  ·  " .. c.name
+	setBarra(bVida, e.hp, e.maxHp, fmt(e.hp) .. " / " .. fmt(e.maxHp))
+	setBarra(bMana, e.mp, e.maxMp, fmt(e.mp) .. " / " .. fmt(e.maxMp))
+	local pct = e.lvl >= R.MAX_LEVEL and 1 or e.xp / e.need
+	setBarra(bXp, pct, 1, e.lvl >= R.MAX_LEVEL and "NÍVEL MÁXIMO" or string.format("Nível %d  ·  XP %s / %s (%.1f%%)", e.lvl, fmt(e.xp), fmt(e.need), pct * 100))
+	ouroL.Text = "💰 <b>" .. fmt(e.gold) .. "</b>    🧪 " .. (e.pots.hp or 0) .. "  💧 " .. (e.pots.mp or 0) .. (e.invoc > 0 and ("    🐾 " .. e.invoc .. "s") or "")
+	local bs = {}
+	for _, b in ipairs(e.buffs) do table.insert(bs, b.nome .. " " .. b.t .. "s") end
+	buffsL.Text = table.concat(bs, "  ·  ")
+	bAuto.Text = e.auto and "🤖 Auto: ON" or "🖐️ Auto: OFF"
+	bAuto.BackgroundColor3 = e.auto and Color3.fromRGB(46, 120, 60) or Color3.fromRGB(104, 70, 38)
+	bChefe.Text = e.chefeVivo and "👑 Chefe!" or ("👑 " .. e.kills .. "/" .. R.ABATES_CHEFE)
+	bChefe.BackgroundColor3 = (e.kills >= R.ABATES_CHEFE and not e.chefeVivo) and Color3.fromRGB(170, 40, 30) or Color3.fromRGB(104, 70, 38)
+	if e.alvo then
+		alvoP.Visible = true
+		alvoNome.Text = (e.alvo.chefe and "👑 " or "") .. "Nv " .. e.alvo.lvl .. "  " .. e.alvo.nome
+		setBarra(bAlvo, e.alvo.hp, e.alvo.maxHp, fmt(e.alvo.hp) .. " / " .. fmt(e.alvo.maxHp))
+	else
+		alvoP.Visible = false
+	end
+	for i = 1, 6 do
+		local sk = c.skills[i]
+		local s = slots[i]
+		local resta = sk and e.cds[sk.id] or 0
+		if resta and resta > 0.05 then
+			s.cd.Visible = true
+			s.cd.Text = tostring(math.ceil(resta))
+		else
+			s.cd.Visible = false
+		end
+	end
+	slots[7].nome.Text = "Vida\n" .. (e.pots.hp or 0)
+	slots[8].nome.Text = "Mana\n" .. (e.pots.mp or 0)
+	andarAteAlvo(e)
+	if e.morto > 0 then
+		mortoL.Visible = true
+		mortoL.Text = "💀 Você caiu! Volta em " .. math.ceil(e.morto) .. "s"
+	else
+		mortoL.Visible = false
+	end
+end)
+
+evAviso.OnClientEvent:Connect(function(txt, tipo)
+	if tipo == "grande" then
+		avisoGrande(txt)
+		addLog(txt, COR.ouro)
+	elseif tipo == "nivel" then
+		addLog(txt, COR.ouro)
+	elseif tipo == "ruim" then
+		addLog(txt, Color3.fromRGB(255, 120, 100))
+	elseif type(tipo) == "string" and string.sub(tipo, 1, 5) == "item:" then
+		addLog(txt, Color3.fromHex(string.sub(tipo, 6)))
+	else
+		addLog(txt, COR.apagado)
+	end
+end)
+
+-- =====================================================================
+-- Controles: clicar/tocar no monstro, teclas 1-6, Q/E, R (auto)
+-- =====================================================================
+local pastaMonstros = workspace:WaitForChild("Monstros")
+UIS.InputBegan:Connect(function(inp, ocupado)
+	if ocupado then return end
+	if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+		local cam = workspace.CurrentCamera
+		local raio = cam:ScreenPointToRay(inp.Position.X, inp.Position.Y)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = { pastaMonstros }
+		local res = workspace:Raycast(raio.Origin, raio.Direction * 400, params)
+		if res then
+			local m = res.Instance:FindFirstAncestorOfClass("Model")
+			if m and m:GetAttribute("MonId") then evAcao:FireServer("alvo", m:GetAttribute("MonId")) end
+		end
+		return
+	end
+	if not H then return end
+	local teclas = { [Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3, [Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6 }
+	local n = teclas[inp.KeyCode]
+	if n then
+		local sk = D.CLASSES[H.cls].skills[n]
+		if sk then evAcao:FireServer("habilidade", sk.id) end
+	elseif inp.KeyCode == Enum.KeyCode.Q then
+		evAcao:FireServer("pocao", "hp")
+	elseif inp.KeyCode == Enum.KeyCode.E then
+		evAcao:FireServer("pocao", "mp")
+	elseif inp.KeyCode == Enum.KeyCode.R then
+		evAcao:FireServer("auto")
+	elseif inp.KeyCode == Enum.KeyCode.M then
+		abrirJanela("mapas")
+	elseif inp.KeyCode == Enum.KeyCode.C or inp.KeyCode == Enum.KeyCode.I then
+		abrirJanela("heroi")
+	end
+end)
+
+evAcao:FireServer("pronto")
+]]></ProtectedString></Properties></Item></Item></Item></roblox>
