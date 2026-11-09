@@ -218,7 +218,7 @@ const startServer = require('./server.cjs');
     $('#char-name').value = 'Testadora'; document.getElementById('create-full').click(); stopLoop();
     ok('Criar no nível 100 (teste) no 5º espaço', slot === 4 && S.lvl === 100 && S.cls === 'cleriga' && !!loadSlot(4) && loadSlot(4).lvl === 100);
     ok('Herói de teste já vem com capa 13 e Rosário 9', S.cape.lvl === 13 && rosaryF() === 1 && S.insig > 0);
-    ok('Herói de teste já vem renascido (Vale da Fênix aberto)', S.rebirths === 1 && S.feathers > 0);
+    ok('Herói de teste já vem renascido (Vale da Fênix aberto)', S.rebirths === 3 && S.feathers > 0);
     // pets, montarias e itens no chão
     novo('arcanista', 40, { tut: 99 }); S.settings.auto = false; petsState(); S.pets = null; S.owned = { pet2: true, mount2: true }; S.companion = 'pet2'; S.mount = 'mount2';
     petsState(); ok('Mascote e montaria antigos migram', activePet().sp === 'fada' && activeMount().sp === 'grifo' && S.companion === null);
@@ -242,6 +242,13 @@ const startServer = require('./server.cjs');
     S.feathers = 10; const in0 = (S.insig || 0); featherBuy('insig'); ok('Trocar Penas de Fênix', S.insig === in0 + 5 && S.feathers === 7);
     const b0 = spawnBoss(); ok('Chefe Fênix Ancestral no nível do herói', !!b0 && b0.name === 'Fênix Ancestral' && b0.lvl <= S.lvl + 3);
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
+    { R.mons = []; const r0 = S.rebirths; S.rebirths = 0; const m0 = makeMonster('Lobo', '🐺', 50, false, 2); S.rebirths = 2; const m2 = makeMonster('Lobo', '🐺', 50, false, 2); const dm0 = dropMult(); S.rebirths = 0; const dmA = dropMult(); S.rebirths = r0;
+      ok('Renascido enfrenta monstros mais fortes e ganha mais', m2.maxHp > m0.maxHp * 1.5 && m2.atk > m0.atk * 1.3 && m2.xp > m0.xp * 1.2 && dm0 > dmA, `${m0.maxHp}→${m2.maxHp}`); }
+    S.rebirths = 1; S.rbDiff = 3; ok('Lendário trancado com ★1', rbDiff() === 1 && tabTower().includes('🔒★3'));
+    S.rebirths = 3; const n0 = (initWorld(), R.mons.reduce((a, m) => a + m.lvl, 0) / R.mons.length); S.rbDiff = 1; initWorld(); const n1 = R.mons.reduce((a, m) => a + m.lvl, 0) / R.mons.length;
+    ok('Lendário: monstros +10 níveis', n0 - n1 > 7 && rbDiff() === 1, `${n1.toFixed(1)} → ${n0.toFixed(1)}`);
+    { S.rbDiff = 3; R.mons = []; const b = spawnBoss(); const hOld = hatch; let hc = 0; hatch = (k) => { if (k === 'raro') hc++; return hOld(k); }; S.feathers = 0; b.x = 0; b.z = 0; killMonster(b); flushLoot();
+      ok('Chefe Lendário: penas ×3 e ovo garantido', b.legend && S.feathers === 15 && hc >= 1, `${S.feathers} penas, ${hc} ovos`); hatch = hOld; S.rbDiff = 1; }
     return out;
   });
   const pwa = await p.evaluate(async () => { try { const m = await (await fetch('manifest.webmanifest')).json(); const sw = await fetch('sw.js'); return m.icons.length === 3 && sw.ok; } catch (e) { return false; } });

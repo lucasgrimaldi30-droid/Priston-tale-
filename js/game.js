@@ -405,7 +405,7 @@ const zoneIdx = (zid) => ALL_ZONES.findIndex((z) => z.id === zid);
 function makeMonster(name, icon, lvl, boss, groupN) {
   const g = boss ? 1 : (groupN > 1 ? 0.55 : 1);
   const hp = Math.round((30 + Math.pow(lvl, 1.5) * 10) * (boss ? 10 : 1) * g);
-  return {
+  const m = {
     sid: uid(), name, icon, lvl, boss, hp, maxHp: hp, type: MON_TYPE[name] || 'beast',
     atk: Math.round((4 + lvl * 3.2) * (boss ? 1.8 : 1) * (groupN > 1 ? 0.5 : 1)),
     def: Math.round(lvl * 1.5 * (boss ? 1.5 : 1)),
@@ -413,6 +413,29 @@ function makeMonster(name, icon, lvl, boss, groupN) {
     gold: Math.round((2 + lvl * 1.5) * (boss ? 15 : 1) * rnd(0.8, 1.2) * (groupN > 1 ? 0.6 : 1)),
     timer: 1.0 + Math.random() * 0.8, stun: 0, slow: 0,
   };
+  return rbScale(m);
+}
+// ---------- ameaça dos renascidos: cada ★ deixa os monstros mais fortes para aquele herói, e os prêmios maiores ----------
+const RB_THREAT = { hp: 0.3, atk: 0.2, rw: 0.15, max: 10 };
+function rbThreat() { return Math.min((typeof S !== 'undefined' && S && S.rebirths) || 0, RB_THREAT.max); }
+function rbScale(m) {
+  const t = rbThreat(); if (!t) return m;
+  m.maxHp = m.hp = Math.round(m.maxHp * (1 + RB_THREAT.hp * t)); m.atk = Math.round(m.atk * (1 + RB_THREAT.atk * t));
+  m.xp = Math.round(m.xp * (1 + RB_THREAT.rw * t)); m.gold = Math.round(m.gold * (1 + RB_THREAT.rw * t));
+  return m;
+}
+// dificuldades do Vale da Fênix (abrem com ★2 e ★3)
+const RB_DIFF = [null,
+  { n: 'Normal', icon: '🔥', need: 1, lv: 0, hp: 1, atk: 1, xp: 1, pena: 1 },
+  { n: 'Heroico', icon: '🔥🔥', need: 2, lv: 5, hp: 1.5, atk: 1.25, xp: 1.3, pena: 2 },
+  { n: 'Lendário', icon: '🔥🔥🔥', need: 3, lv: 10, hp: 2, atk: 1.5, xp: 1.6, pena: 3 },
+];
+function rbDiff() { const d = clamp(S.rbDiff || 1, 1, 3); return (S.rebirths || 0) >= RB_DIFF[d].need ? d : 1; }
+function rbDiffApply(m) {
+  const D = RB_DIFF[rbDiff()]; if (D.hp === 1) return m;
+  m.maxHp = m.hp = Math.round(m.maxHp * D.hp); m.atk = Math.round(m.atk * D.atk); m.xp = Math.round(m.xp * D.xp); m.gold = Math.round(m.gold * D.xp);
+  if (rbDiff() === 3) m.legend = true;
+  return m;
 }
 // cria um grupo de monstros (chefe vem sozinho)
 // ---------- mundo aberto ----------
@@ -475,7 +498,7 @@ const ROAM_CHANCE = 0.015, BORDER_CHANCE = 0.16;
 const DANGER = { hp: 3, atk: 9, xp: 2.4, bossHp: 4, bossAtk: 4 };
 function spawnSource() {
   const z = zoneById(S.zone), span = zoneSpan(z), exits = zoneExits(S.zone);
-  if (z.special) { const cr = z.id === 'gw' && Math.random() < 0.25, camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)]; return { mon: cr ? z.boss : z.monsters[rint(0, 2)], lvl: clamp(S.lvl + rint(-2, 2), z.min, 100), center: c, spread: 3.5, crystal: cr }; }
+  if (z.special) { const cr = z.id === 'gw' && Math.random() < 0.25, camps = zoneCamps(S.zone), c = camps[rint(0, camps.length - 1)]; return { mon: cr ? z.boss : z.monsters[rint(0, 2)], lvl: z.id === 'rb' ? clamp(S.lvl + rint(-2, 2) + RB_DIFF[rbDiff()].lv, z.min, 112) : clamp(S.lvl + rint(-2, 2), z.min, 100), center: c, spread: 3.5, crystal: cr }; }
   if (exits.length && Math.random() < BORDER_CHANCE) {
     const ex = exits[rint(0, exits.length - 1)], nz = zoneById(ex.to), ns = zoneSpan(nz), mi = rint(0, 2);
     const lvl = ex.side === 'prev' ? nz.min + ns - rint(1, 3) : nz.min + rint(0, 2);
@@ -512,6 +535,7 @@ function spawnWorldMonster(initial = false) {
     const m = makeMonster(src.mon[0], src.mon[1], Math.max(1, src.lvl), false, 2);
     Object.assign(m, { x: pos.x, z: pos.z, home: { x: c.x, z: c.z }, wp: null, wait: Math.random() * 3 });
     if (src.border) m.border = src.border;
+    if (S.zone === 'rb' && !R.dungeon) rbDiffApply(m);
     if (src.crystal) { m.crystal = true; m.static = true; m.atk = 0; m.maxHp = m.hp = Math.round(m.maxHp * 6); m.xp *= 3; m.gold *= 2; }
     if (zoneById(S.zone).danger && !src.border) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.hp); m.atk = Math.round(m.atk * DANGER.atk); m.def = Math.round(m.def * 1.3); m.xp = Math.round(m.xp * DANGER.xp); m.gold = Math.round(m.gold * 1.6); m.danger = true; }
     if (!initial && !R.dungeon && Math.random() < ROAM_CHANCE && !R.mons.some((o) => o.roamer)) { // errante raro: elite forte que cruza o mapa
@@ -534,8 +558,9 @@ function spawnWorldMonster(initial = false) {
 function spawnBoss() {
   if (R.mons.some((m) => m.boss)) return null;
   const z = zoneById(S.zone);
-  const m = makeMonster(z.boss[0], z.boss[1], z.special ? Math.min(110, S.lvl + 3) : z.min + zoneSpan(z) + 2, true, 1);
+  const m = makeMonster(z.boss[0], z.boss[1], z.special ? Math.min(z.id === 'rb' ? 115 : 110, S.lvl + 3 + (z.id === 'rb' ? RB_DIFF[rbDiff()].lv : 0)) : z.min + zoneSpan(z) + 2, true, 1);
   Object.assign(m, { x: WORLD.arena.x, z: WORLD.arena.z, home: { ...WORLD.arena }, wp: null, wait: 2 });
+  if (z.id === 'rb') rbDiffApply(m);
   if (z.danger) { m.maxHp = m.hp = Math.round(m.maxHp * DANGER.bossHp); m.atk = Math.round(m.atk * DANGER.bossAtk); m.xp *= 3; m.danger = true; }
   R.mons.push(m);
   log(`👑 O chefe <b>${esc(m.name)}</b> apareceu na arena ao norte!`, 'boss'); Sfx.play('boss');
@@ -944,7 +969,7 @@ function killMonster(m) {
   petGainXp(m.boss ? 25 : m.elite ? 5 : 1);
   { const M = meter(); M.kills++; M.xp += xp; }
   const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1) * (S.zone === 'rb' && !m.dun ? 1.3 : 1));
-  if (S.zone === 'rb' && !m.dun) { const pf = m.boss ? 5 : m.elite ? (Math.random() < 0.6 ? 1 : 0) : (Math.random() < 0.12 ? 1 : 0); if (pf) { S.feathers = (S.feathers || 0) + pf; if (m.boss || Math.random() < 0.3) log(`🪶 +${pf} Pena${pf > 1 ? 's' : ''} de Fênix.`, 'loot'); } }
+  if (S.zone === 'rb' && !m.dun) { const pf = (m.boss ? 5 : m.elite ? (Math.random() < 0.6 ? 1 : 0) : (Math.random() < 0.12 ? 1 : 0)) * RB_DIFF[rbDiff()].pena; if (m.boss && m.legend) { log('🥚 A Fênix Ancestral (Lendário) deixou um <b>Ovo Raro</b>!', 'boss'); hatch('raro'); } if (pf) { S.feathers = (S.feathers || 0) + pf; if (m.boss || Math.random() < 0.3) log(`🪶 +${pf} Pena${pf > 1 ? 's' : ''} de Fênix.`, 'loot'); } }
   if (online() && Net.st.party && !R.coop) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
   S.gold += gold; S.stats.goldEarned += gold; S.stats.kills++; meter().gold += gold;
   dailyProgress('kills'); dailyProgress('gold', gold); if (m.elite) dailyProgress('elites'); if (m.boss) dailyProgress('bosses');
@@ -1242,7 +1267,7 @@ function bossMechanics(m, dt) {
   }
   m.skillT = (m.skillT == null ? 4 : m.skillT) - dt;
   if (m.skillT <= 0) {
-    m.skillT = m.enraged ? 4.5 : 7;
+    m.skillT = (m.enraged ? 4.5 : 7) * (m.legend ? 0.7 : 1);
     const slam = Math.random() < 0.6;
     const t = { id: uid(), kind: slam ? 'slam' : 'nova', x: slam ? R.pos.x : m.x, z: slam ? R.pos.z : m.z, r: slam ? 2.6 : 4.8, t: slam ? 1.4 : 1.7, dmg: Math.round(m.atk * (slam ? 1.5 : 1.25)), src: m.sid };
     t.max = t.t;
@@ -1474,7 +1499,7 @@ function makeFullChar(name, cls, wtype) {
   S.cape = { lvl: CAPE_MAX, ref: CAPE_REF, vis: true }; S.insig = 300; S.perg = 60; S.fios = 20;
   S.rep = { pts: 4000, seals: 30 };
   S.awk = {}; awkAuto(); // pontos de Despertar já distribuídos (sugestão da classe)
-  S.rebirths = 1; S.feathers = 60; // herói de teste já renascido: abre o Vale da Fênix
+  S.rebirths = 3; S.feathers = 60; S.rbDiff = 1; // herói de teste já renascido 3×: abre o Vale da Fênix e todas as dificuldades
   if (S.equip.amuleto) { const am = S.equip.amuleto; am.rosary = { lvl: ROSARY_MAX, elem: cls }; am.name = `Rosário de ${CLASS_ELEM[cls].el}`; }
   S.spec = SPECS[cls][cls === 'engenheiro' ? 0 : 0].id;
   S.settings.autoPts = true; S.settings.autoBoss = true;
@@ -1946,7 +1971,7 @@ function pkBox() {
 // ============================================================
 const wk = () => (online() && Net.st.wk) || null;
 function wkBonus() { const w = wk(); return w ? (w.gwB || 0) + (w.sod || 0) : 0; } // % de XP e drop da semana
-function dropMult() { return 1 + wkBonus() / 100; }
+function dropMult() { return (1 + wkBonus() / 100) * (1 + RB_THREAT.rw * rbThreat()); }
 const gwOpen = () => !!(wk() && wk().gw);
 function myGuildName() { return online() && Net.st.guild ? Net.st.guild.name : ''; }
 function nextSundayText() {
@@ -3078,10 +3103,12 @@ const FEATHER_SHOP = [
 ];
 function featherBuy(id) { const f = FEATHER_SHOP.find((x) => x.id === id); if (!f || (S.feathers || 0) < f.cost) return toast('Penas de Fênix insuficientes.', 'bad'); S.feathers -= f.cost; f.give(); Sfx.play('coin'); renderTab(); }
 function rbBox() {
-  const ok = S.rebirths > 0;
+  const ok = S.rebirths > 0, cur = ok ? rbDiff() : 1;
   return `<div class="ev-box rb-box"><b>🪶 Vale da Fênix ${ok ? '' : '🔒'}</b>
     <small>Só para quem já renasceu. Os monstros acompanham o seu nível, rendem <b>+50% de XP e +30% de ouro</b> e deixam <b>Penas de Fênix</b>. O chefe é a Fênix Ancestral.</small>
-    ${ok ? `<small>🪶 Penas de Fênix: <b>${S.feathers || 0}</b></small><div class="row-btns"><button class="btn small primary" data-zone="rb">Ir para o Vale da Fênix</button>${FEATHER_SHOP.map((f) => `<button class="btn small" data-pena="${f.id}" ${(S.feathers || 0) >= f.cost ? '' : 'disabled'}>${f.name} (${f.cost} 🪶)</button>`).join('')}</div>` : '<small>Chegue ao nível 100 e renasça (janela do Herói) para abrir.</small>'}</div>`;
+    ${ok ? `<small>Dificuldade: ${RB_DIFF.slice(1).map((D, i) => `<button class="btn small ${cur === i + 1 ? 'primary' : ''}" data-rbdiff="${i + 1}" ${(S.rebirths || 0) >= D.need ? '' : 'disabled'} title="${D.lv ? `Monstros +${D.lv} níveis e mais fortes, penas ×${D.pena}${i === 2 ? ', chefe mais rápido e ovo garantido' : ''}` : 'Como sempre'}">${D.icon} ${D.n}${(S.rebirths || 0) >= D.need ? '' : ` 🔒★${D.need}`}</button>`).join(' ')}</small>
+    <small>⚠️ Ameaça ★${rbThreat()}: monstros com +${Math.round(RB_THREAT.hp * rbThreat() * 100)}% de vida e +${Math.round(RB_THREAT.atk * rbThreat() * 100)}% de ataque em todos os mapas, mas +${Math.round(RB_THREAT.rw * rbThreat() * 100)}% de XP, ouro e drop.</small>
+    <small>🪶 Penas de Fênix: <b>${S.feathers || 0}</b></small><div class="row-btns"><button class="btn small primary" data-zone="rb">Ir para o Vale da Fênix</button>${FEATHER_SHOP.map((f) => `<button class="btn small" data-pena="${f.id}" ${(S.feathers || 0) >= f.cost ? '' : 'disabled'}>${f.name} (${f.cost} 🪶)</button>`).join('')}</div>` : '<small>Chegue ao nível 100 e renasça (janela do Herói) para abrir.</small>'}</div>`;
 }
 
 // ---------- missões diárias e prêmio de login ----------
@@ -3841,6 +3868,7 @@ document.addEventListener('click', (e) => {
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
   if (ds.pena) { featherBuy(ds.pena); return; }
+  if (ds.rbdiff) { const v = +ds.rbdiff; if ((S.rebirths || 0) < RB_DIFF[v].need) return; S.rbDiff = v; if (S.zone === 'rb' && !R.inTown && !R.dungeon) initWorld(); log(`🪶 Vale da Fênix: dificuldade <b>${RB_DIFF[v].icon} ${RB_DIFF[v].n}</b>.`, 'lvl'); renderTab(); return; }
   if (ds.ptab) { R.petTab = ds.ptab; return renderTab(); }
   if (ds.pet) { const [a, u] = ds.pet.split(':'); if (a === 'feed') feedPet(); else { petsState().active = a === 'off' ? null : u; R.petPos = null; R.dirty.all = true; renderTab(); } return; }
   if (ds.mnt) { const [a, u] = ds.mnt.split(':'); if (a === 'up') mountUp(u); else { petsState(); S.mounts.active = a === 'off' ? null : u; R.dirty.all = true; renderTab(); } return; }
