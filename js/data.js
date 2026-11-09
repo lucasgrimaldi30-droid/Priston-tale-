@@ -3,8 +3,22 @@
 // ============================================================
 
 const FACTIONS = {
-  ferro: { name: 'Clã de Ferrovale', desc: 'Povo das forjas e das máquinas. Confia no aço e na força bruta.', color: '#e0a050' },
-  luz:   { name: 'Ordem de Lumínia', desc: 'Povo dos santuários. Domina a fé, o vento e as artes arcanas.', color: '#70b8ff' },
+  ferro: { name: 'Clã de Ferrovale', desc: 'Povo das forjas e das máquinas. Confia no aço e na força bruta.', color: '#e0a050', icon: '⚒️',
+    lore: 'Nas montanhas de Ferrovale o fogo das forjas nunca apaga. Quando a Marca do Vazio começou a corroer o reino, o clã não esperou por milagre: fechou os portões, afiou o aço e desceu para a guerra. Aqui o respeito se ganha com calo na mão.' },
+  luz:   { name: 'Ordem de Lumínia', desc: 'Povo dos santuários. Domina a fé, o vento e as artes arcanas.', color: '#70b8ff', icon: '🕊️',
+    lore: 'Lumínia nasceu ao redor dos santuários brancos do leste, onde a primeira luz do dia toca a terra. A Ordem guarda os livros, os votos e as estrelas, e acredita que o Vazio só avança onde a esperança já se apagou. Por isso carrega a luz para onde ninguém mais vai.' },
+};
+
+// História de cada classe (tela de criação)
+const CLASS_LORE = {
+  gladiador:  'Criado nas arenas de pedra de Ferrovale, o Gladiador aprendeu cedo que a dor é combustível. Cada golpe que leva só o deixa mais perigoso. Quando a Fúria transborda, nem os chefes do Vazio ficam de pé.',
+  engenheiro: 'Enquanto outros rezam, o Engenheiro aperta parafusos. Mestre das oficinas a vapor, ele entra em batalha com torretas, um autômato fiel e uma armadura que ele mesmo forjou. Se algo pode ser consertado, pode ser melhorado.',
+  cacadora:   'As Caçadoras patrulham as trilhas altas da montanha com um falcão no ombro. Paciência é a arma delas: escolhem um alvo, respiram fundo e não erram duas vezes. Dizem que enxergam a Marca do Vazio antes de ela aparecer.',
+  lanceiro:   'Ninguém sabe ao certo de onde vêm os Lanceiros da Foice. Andam nas sombras das minas abandonadas e colhem as almas inquietas que o Vazio deixa para trás. O clã os teme um pouco, e precisa deles muito.',
+  paladino:   'O Paladino fez um voto diante do Santuário do Alvorecer: ser o escudo de quem não tem um. Cada golpe que ele bloqueia fortalece a sua Fé, e a Fé, quando desce em forma de martelo, julga sem piedade.',
+  valquiria:  'Escolhidas pelos ventos do leste, as Valquírias lutam num ritmo que só elas escutam. Dardo, escudo, passo, salto. No quarto compasso, asas de luz se abrem e o céu inteiro cai sobre o inimigo.',
+  arcanista:  'Nas torres de Lumínia, o Arcanista estudou o que a maioria teme: fogo, gelo e raio numa mesma mão. Sozinhos, são perigosos. Combinados, reescrevem o campo de batalha. Ele é frágil como vidro e forte como uma tempestade.',
+  cleriga:    'A Clériga caminha onde a batalha é pior, porque é lá que precisam dela. Sua luz fecha feridas, levanta os caídos e, quando sobra, vira um escudo dourado. Um grupo com uma Clériga não desiste.',
 };
 
 // Atributos: for (Força), int (Intelecto), des (Destreza), agi (Agilidade), vit (Vitalidade)

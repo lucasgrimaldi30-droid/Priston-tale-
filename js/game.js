@@ -1526,20 +1526,80 @@ async function createFullAccount() {
   toast('Conta Full criada: Engenheiro, Lanceiro e Arcanista no nível 100!', 'good');
   renderSelect();
 }
+// equipamento lendário completo só para a prévia da tela de criação (não entra no save)
+function previewGear(cls) {
+  const keep = S, wt = CLASSES[cls].weapon, eq = {};
+  try {
+    S = newCharacter('prévia', cls);
+    eq.arma = makeLegendary('arma', wt);
+    for (const sl of ['armadura', 'elmo', 'luvas', 'botas', 'amuleto', 'anel']) eq[sl] = makeLegendary(sl);
+    if (classShield(cls)) eq.escudo = makeLegendary('escudo');
+    eq._capa = { lvl: CAPE_MAX, vis: true };
+  } finally { S = keep; }
+  return eq;
+}
+const classShield = (cls) => !['foice', 'cajado', 'arco'].includes(CLASSES[cls].weapon);
+const WEAPON_LBL = { machado: 'Machados', martelo: 'Martelos', arco: 'Arcos', foice: 'Foices de duas mãos', espada: 'Espadas', dardo: 'Dardos', cajado: 'Cajados', cetro: 'Cetros' };
+const createShots = {};
+function createShot(cls, look) {
+  const k = cls + ':' + look;
+  if (createShots[k] !== undefined) return;
+  createShots[k] = null; // carregando
+  let eq = null; try { eq = look === 'full' ? previewGear(cls) : { _capa: null }; } catch (e) { eq = { _capa: null }; }
+  Scene.classShot(cls, eq, 360, 460).then((url) => {
+    createShots[k] = url || '';
+    if (createState.cls === cls && (createState.look || 'full') === look && !$('#screen-create').classList.contains('hidden')) renderCreate();
+  });
+}
+function createSkillDesc(cls, sk) {
+  let t = skillDescBase(sk);
+  if (sk.elem) t += ` ${ELEM[sk.elem].icon} Elemento ${sk.elem}.`;
+  if (sk.soul) t += sk.soul.gain ? ' 👻 Enche as almas mais rápido.' : ' 👻 Gasta almas para bater mais forte.';
+  else if (sk.res) { const m = MECH[CLASSES[cls].mech]; if (m) t += sk.res.gain ? ` ${m.icon} Enche ${m.name} mais rápido.` : ` ${m.icon} Gasta ${m.name} para bater mais forte.`; }
+  return t;
+}
 function renderCreate() {
   showScreen('screen-create');
-  const f = createState.faction;
-  $('#faction-tabs').innerHTML = Object.entries(FACTIONS).map(([k, v]) =>
-    `<button class="faction-btn ${k === f ? 'active' : ''}" data-faction="${k}" style="--fc:${v.color}"><b>${v.name}</b><span>${v.desc}</span></button>`).join('');
-  $('#class-grid').innerHTML = Object.entries(CLASSES).filter(([, c]) => c.faction === f).map(([k, c]) => `
-    <button class="class-card ${createState.cls === k ? 'active' : ''}" data-cls="${k}">
-      <div class="class-icon">${c.icon}</div>
-      <b>${c.name}</b>
-      <span class="muted">${c.role || ''}</span>
-      <span class="muted">Arma: ${c.anyWeapon ? 'qualquer (' + c.weapon + ')' : c.weapon}</span>
-      <p>${c.desc}</p>
-      <div class="mini-stats">${['for', 'int', 'des', 'agi', 'vit'].map((s) => `<span>${s.toUpperCase()} ${c.base[s]}</span>`).join('')}</div>
-    </button>`).join('');
+  const f = createState.faction, fac = FACTIONS[f];
+  const list = Object.entries(CLASSES).filter(([, c]) => c.faction === f);
+  if (!createState.cls || CLASSES[createState.cls].faction !== f) createState.cls = list[0][0];
+  const k = createState.cls, c = CLASSES[k], look = createState.look || 'full';
+  $('#faction-tabs').innerHTML = Object.entries(FACTIONS).map(([id, v]) =>
+    `<button class="faction-btn ${id === f ? 'active' : ''}" data-faction="${id}" style="--fc:${v.color}"><b>${v.icon || ''} ${v.name}</b><span>${v.desc}</span></button>`).join('');
+  createShot(k, look);
+  const shot = createShots[k + ':' + look];
+  const mech = c.mech === 'souls' ? { name: 'Almas', icon: '👻', tip: 'O dano que você causa colhe almas (até ' + SOUL_MAX + '). Os golpes finais gastam todas de uma vez para um dano enorme.' } : MECH[c.mech];
+  const el = CLASS_ELEM[k], specs = SPECS[k] || [];
+  const maxAttr = 30, attrLbl = { for: 'Força', int: 'Intelecto', des: 'Destreza', agi: 'Agilidade', vit: 'Vitalidade' };
+  const wearSlots = ['elmo', 'armadura', 'luvas', 'botas', 'amuleto', 'anel'].map((sl) => `<span class="cr-chip">${ARMOR_SLOTS[sl].icon} ${ARMOR_SLOTS[sl].label}</span>`).join('');
+  $('#class-grid').innerHTML = `
+    <div class="cr-classes">${list.map(([id, cc]) => `<button class="class-card ${id === k ? 'active' : ''}" data-cls="${id}"><span class="class-icon">${cc.icon}</span><b>${cc.name}</b></button>`).join('')}</div>
+    <div class="cr-main" style="--fc:${fac.color}">
+      <div class="cr-stage">
+        <div class="cr-name"><b>${c.name}</b><span>${c.role || ''}</span></div>
+        <div class="cr-portrait ${look}">${shot ? `<img src="${shot}" alt="${c.name}">` : `<div class="cr-ico">${c.icon}</div>${shot === null ? '<small class="muted">carregando…</small>' : ''}`}</div>
+        <div class="cr-look">
+          <button class="btn ${look === 'ini' ? 'primary' : ''}" data-crlook="ini">Início</button>
+          <button class="btn ${look === 'full' ? 'primary' : ''}" data-crlook="full">⭐ Completo</button>
+        </div>
+        <small class="muted cr-hint">${look === 'full' ? 'Como ele fica no nível 100, com equipamento lendário.' : 'Como ele começa a jornada.'}</small>
+      </div>
+      <div class="cr-info">
+        <div class="cr-sec"><h4>📜 História</h4><p>${CLASS_LORE[k] || c.desc}</p><p class="cr-fac"><b>${fac.icon || ''} ${fac.name}.</b> ${fac.lore || fac.desc}</p></div>
+        <div class="cr-sec"><h4>⚔️ Como joga</h4><p>${c.desc}</p>
+          ${mech ? `<p class="cr-mech"><b>${mech.icon} ${mech.name}:</b> ${mech.tip}</p>` : ''}
+          <div class="cr-attrs">${['for', 'int', 'des', 'agi', 'vit'].map((a) => `<div class="cr-attr ${c.main === a ? 'main' : ''}"><span>${attrLbl[a]}</span><i><em style="width:${Math.min(100, c.base[a] / maxAttr * 100)}%"></em></i><b>${c.base[a]}</b></div>`).join('')}</div>
+        </div>
+        <div class="cr-sec"><h4>🎒 O que pode usar</h4>
+          <div class="cr-chips"><span class="cr-chip gold">${c.icon} ${c.anyWeapon ? 'Qualquer arma (preferida: ' + WEAPON_LBL[c.weapon].toLowerCase() + ')' : WEAPON_LBL[c.weapon]}</span>${classShield(k) ? `<span class="cr-chip">🛡️ Escudo</span>` : `<span class="cr-chip off">Sem escudo (arma de duas mãos)</span>`}${wearSlots}<span class="cr-chip">🧥 Capa de Guerra</span></div>
+          <p class="cr-small">${el ? `${el.icon} Rosário de <b>${el.el}</b> (nível ${ROSARY_LVL}): ${el.txt(1)}.` : ''}</p>
+          ${specs.length ? `<p class="cr-small"><b>Especializações no nível ${SPEC_LVL}:</b></p>${specs.map((sp) => `<p class="cr-small cr-spec">${sp.icon} <b>${sp.name}</b>: ${sp.desc}</p>`).join('')}` : ''}
+        </div>
+        <div class="cr-sec"><h4>✨ Habilidades</h4>
+          ${c.skills.map((sk) => `<div class="cr-skill"><span class="cr-lv">Nv ${sk.lvl}</span><div><b>${sk.name}</b><p>${createSkillDesc(k, sk)}</p></div></div>`).join('')}
+        </div>
+      </div>
+    </div>`;
   $('#create-btn').disabled = !createState.cls; { const fb = $('#create-full'); if (fb) fb.disabled = !createState.cls; }
 }
 
@@ -2504,7 +2564,7 @@ function skillDescBase(s) {
     case 'heal': return `Cura ${Math.round(s.mult * 100)}% da vida máxima.` + cost;
     case 'summon': return `Invoca ${PETS[s.pet].icon} ${PETS[s.pet].name} por ${s.dur}s${PETS[s.pet].taunt ? ', que atrai os ataques dos monstros' : ''}${PETS[s.pet].spd ? ' e aumenta sua velocidade' : ''}.` + cost;
     case 'turret': return `Monta uma torreta no chão por ${s.dur}s que dá choques em até 2 monstros (${Math.round(s.mult * 100)}% do seu dano). Até 2 torretas ao mesmo tempo.` + cost;
-    case 'stealth': return `Fica invisível por ${s.dur}s: os monstros erram e o próximo golpe é um crítico reforçado${CLASSES[S.cls].mech === 'souls' ? ' que rende +1 alma' : ''}.` + cost;
+    case 'stealth': return `Fica invisível por ${s.dur}s: os monstros erram e o próximo golpe é um crítico reforçado${S && CLASSES[S.cls].mech === 'souls' ? ' que rende +1 alma' : ''}.` + cost;
     case 'passive': return s.revive ? `Passiva: ao morrer, volta com 60% da vida sem perder XP (a cada ${s.revive}s).` : `Passiva: +${Math.round(s.val * 100)}% de ${lbl[s.stat]} permanente.`;
     default: return `+${Math.round(s.val * 100)}% de ${lbl[s.stat]}${extra} por ${s.dur}s.` + cost;
   }
@@ -3878,7 +3938,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-pena],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-pena],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],[data-crlook],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3889,6 +3949,7 @@ document.addEventListener('click', (e) => {
   if (ds.new !== undefined) { createState = { slot: +ds.new, faction: 'ferro', cls: null }; $('#char-name').value = ''; return renderCreate(); }
   if (ds.faction) { createState.faction = ds.faction; createState.cls = null; return renderCreate(); }
   if (ds.cls) { createState.cls = ds.cls; return renderCreate(); }
+  if (ds.crlook) { createState.look = ds.crlook; return renderCreate(); }
   if (t.id === 'create-back') return renderSelect();
   if (t.id === 'create-btn' || t.id === 'create-full') {
     const name = $('#char-name').value.trim().slice(0, 16);

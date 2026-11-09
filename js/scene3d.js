@@ -2933,9 +2933,49 @@ const Scene3D = (() => {
     root.rotation.y = ry0;
     return url;
   }
+  // prévia de uma classe na tela de criação: renderizador próprio (o do jogo ainda não existe), devolve uma imagem
+  let pv = null;
+  function classShot(cls, eq, w = 360, h = 460) {
+    return new Promise((res) => {
+      try {
+        if (!GLOW) GLOW = glowTex();
+        loadAssets();
+        let tries = 0;
+        const go = () => {
+          if (Assets.state === 'loading' && tries++ < 300) return setTimeout(go, 100);
+          if (Assets.state !== 'ready') return res(null);
+          try {
+            if (!pv) {
+              const c = document.createElement('canvas');
+              const r = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true });
+              r.setClearColor(0x000000, 0);
+              const sc = new THREE.Scene();
+              const key = new THREE.DirectionalLight(0xfff0d8, 0.55); key.position.set(2.5, 5, 6); sc.add(key);
+              const rim = new THREE.DirectionalLight(0xffa860, 0.45); rim.position.set(-4, 3, -4); sc.add(rim);
+              sc.add(new THREE.AmbientLight(0xffffff, 0.32));
+              pv = { r, sc, cam: new THREE.PerspectiveCamera(30, 1, 0.1, 50) };
+            }
+            pv.r.setPixelRatio(1); pv.r.setSize(w, h, false);
+            const hm = buildHeroModel(cls, eq || { _capa: null });
+            if (!hm) return res(null);
+            hm.root.rotation.y = -0.95; // de frente para a câmera, levemente de lado
+            pv.sc.add(hm.root);
+            hm.model.mixer.update(0.4); hm.root.updateMatrixWorld(true);
+            pv.cam.aspect = w / h; pv.cam.updateProjectionMatrix();
+            pv.cam.position.set(0, 1.5, 5.1); pv.cam.lookAt(0, 1.08, 0);
+            pv.r.render(pv.sc, pv.cam);
+            const url = pv.r.domElement.toDataURL('image/png');
+            pv.sc.remove(hm.root); disposeObj(hm.root);
+            res(url);
+          } catch (e) { console.warn('prévia da classe', e && e.message); res(null); }
+        };
+        go();
+      } catch (e) { res(null); }
+    });
+  }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, heroShot, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, heroShot, classShot, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2958,6 +2998,7 @@ const Scene = (() => {
     petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), mechFx: fwd('mechFx'), turretZap: fwd('turretZap'), lootPick: fwd('lootPick'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     heroShot: (w, h) => (impl === Scene3D ? Scene3D.heroShot(w, h) : null),
+    classShot: (cls, eq, w, h) => (Scene3D.ok && Scene3D.classShot ? Scene3D.classShot(cls, eq, w, h) : Promise.resolve(null)),
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };
 })();
