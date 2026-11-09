@@ -19,8 +19,8 @@ const startServer = require('./server.cjs');
     novo('arcanista', 60, { tut: 99 }); S.settings.autoSkill = false; S.skillLv = {};
     const p0 = skillPointsFree(); upgradeSkill('a1'); ok('Subir habilidade', skLv('a1') === 2 && skillPointsFree() === p0 - 1 && classSkills()[0].mult > CLASSES.arcanista.skills[0].mult);
     // loja
-    S.gold = 5e6; buyShop('mount1', 1); buyShop('pet1', 1); buyShop('xp1', 1); buyShop('gembag', 5);
-    ok('Loja: montaria, mascote, pergaminho, gemas', S.mount === 'mount1' && S.companion === 'pet1' && xpBoostOn() && Object.values(gemBag()).flat().reduce((a, v) => a + v, 0) >= 5);
+    S.gold = 5e6; buyShop('mount1', 1); buyShop('ovo1', 1); buyShop('xp1', 1); buyShop('gembag', 5);
+    ok('Loja: montaria, ovo de pet, pergaminho, gemas', activeMount() && activeMount().sp === 'lobo' && !!activePet() && xpBoostOn() && Object.values(gemBag()).flat().reduce((a, v) => a + v, 0) >= 5);
     // forja e gemas
     S.stones = 100; forgeItem('armadura'); const it = S.inv[S.inv.length - 1]; it.rarity = 'lendario';
     for (const k in GEMS) if (gemBag()[k].some((n) => n)) socketGem(it.uid, k);
@@ -50,7 +50,7 @@ const startServer = require('./server.cjs');
     ok('Especialização no nível 50', S.spec === 'berserker' && derived().atkMin > atk0);
     S.best = {}; for (let i = 0; i < 50; i++) { const m = makeMonster('Lobo Filhote', '🐺', 5, false, 2); Object.assign(m, { x: 0, z: 0, home: { x: 0, z: 0 } }); R.mons.push(m); killMonster(m); }
     ok('Bestiário conta e dá marco', S.best['Lobo Filhote'] === 50 && bestTiers() === 1);
-    S.owned = { pet1: true }; S.companion = 'pet1'; S.petXp = { pet1: 6000 }; ok('Mascote evolui', petLevel('pet1') === 10);
+    petsState(); S.pets.list = []; S.pets.active = null; addPet('fada'); petGainXp(5000); ok('Pet evolui', activePet().lvl >= 10);
     ok('Medidor de dano registra', meter().kills >= 50 && meter().dmg >= 0 && tabStats().includes('por hora'));
     // bloco 2: torre, eventos, chefe mundial, clima, coleta e artesanato
     novo('lanceiro', 40, { tut: 99 }); enterTower('1'); ok('Entrar na Torre Infinita', !!R.dungeon && R.dungeon.tower && R.mons.length > 0);
@@ -80,7 +80,7 @@ const startServer = require('./server.cjs');
     S.settings.autoTravel = false; S.zone = 'z5'; S.lvl = 40; initWorld(); let border = 0; for (let i = 0; i < 300; i++) { const m = spawnWorldMonster(); if (m && m.border) border++; R.mons = []; }
     ok('Monstros dos mapas vizinhos aparecem', border > 15, `${border}/300`);
     let ro = null; for (let i = 0; i < 2000 && !ro; i++) { R.mons = []; const m = spawnWorldMonster(); if (m && m.roamer) ro = m; }
-    const sr = S.stones; if (ro) { ro.hp = 0; killMonster(ro); }
+    const sr = S.stones; if (ro) { ro.hp = 0; killMonster(ro); flushLoot(); }
     ok('Errante raro dá prêmio', !!ro && ro.name.endsWith('Errante') && S.stones >= sr + 2);
     // mapas escondidos (desvios)
     novo('gladiador', 25, { tut: 99 }); S.settings.auto = false; S.zone = 'z4'; initWorld();
@@ -218,6 +218,19 @@ const startServer = require('./server.cjs');
     $('#char-name').value = 'Testadora'; document.getElementById('create-full').click(); stopLoop();
     ok('Criar no nível 100 (teste) no 5º espaço', slot === 4 && S.lvl === 100 && S.cls === 'cleriga' && !!loadSlot(4) && loadSlot(4).lvl === 100);
     ok('Herói de teste já vem com capa 13 e Rosário 9', S.cape.lvl === 13 && rosaryF() === 1 && S.insig > 0);
+    // pets, montarias e itens no chão
+    novo('arcanista', 40, { tut: 99 }); S.settings.auto = false; petsState(); S.pets = null; S.owned = { pet2: true, mount2: true }; S.companion = 'pet2'; S.mount = 'mount2';
+    petsState(); ok('Mascote e montaria antigos migram', activePet().sp === 'fada' && activeMount().sp === 'grifo' && S.companion === null);
+    const atkP0 = derived().atkMin; S.pets.list = []; S.pets.active = null; addPet('dragao', 30); ok('Pet dá atributos em % (igual para todos)', derived().atkMin > atkP0 && companionBonus().atkp === 0.27 * 30);
+    initWorld(); R.mons = []; R.pos = { x: 0, z: 10 }; const m0 = makeMonster('Ent Jovem', '🌳', 10, true, 1); Object.assign(m0, { x: 3, z: 10, home: { x: 3, z: 10 } }); R.mons.push(m0);
+    const inv0 = S.inv.length; m0.hp = 0; killMonster(m0); ok('Prêmios caem no chão', (R.loot || []).length >= 2 && S.inv.length === inv0, `${(R.loot || []).length} no chão`);
+    for (let i = 0; i < 30; i++) lootTick(0.1); ok('Pet busca os prêmios', (R.loot || []).length === 0 && S.inv.length > inv0);
+    S.lootF.comum = false; S.lootF.magico = false; R.lootCtx = { x: 0, z: 0 }; const gP0 = S.gold; const itP = genItem(10); itP.rarity = 'comum'; dropItem(itP); R.lootCtx = null;
+    ok('Filtro: item desmarcado vira ouro', !(R.loot || []).length && S.gold > gP0);
+    S.pets.active = null; R.lootCtx = { x: 20, z: 20 }; giveStones(1); R.lootCtx = null; const stP0 = S.stones; for (let i = 0; i < 210; i++) lootTick(0.1);
+    ok('Sem pet, os prêmios chegam sozinhos depois', S.stones === stP0 + 1);
+    S.gold = 1e7; S.mats = { minerio: 500 }; const mm = activeMount() || addMountSp('lobo'); const ml = mm.lvl; mountUp(mm.uid); ok('Subir nível da montaria', mm.lvl === ml + 1);
+    ok('Janela de pets abre', tabPets().includes('Pets') && (R.petTab = 'filtro', tabPets().includes('data-lootf')) && (R.petTab = 'mount', tabPets().includes('Montaria')));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
   });

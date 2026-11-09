@@ -236,10 +236,11 @@ const SHOP = [
   { id: 'pedra', name: 'Pedra de Refino',    icon: '💎', type: 'mat', price: 250 },
   { id: 'xp1',   name: 'Pergaminho de Experiência', icon: '📜', type: 'scroll', price: 6000, desc: '+50% de experiência por 30 minutos' },
   { id: 'gembag', name: 'Saco de Gemas',     icon: '💠', type: 'gembag', price: 9000, desc: 'Uma gema aleatória de nível 1' },
-  { id: 'mount1', name: 'Lobo de Montaria',  icon: '🐺', type: 'mount', price: 60000, speed: 0.35, desc: '+35% de velocidade ao viajar' },
-  { id: 'mount2', name: 'Grifo Dourado',     icon: '🦅', type: 'mount', price: 450000, speed: 0.6, desc: '+60% de velocidade ao viajar' },
-  { id: 'pet1',  name: 'Mascote Gosminha',   icon: '🟢', type: 'pet', price: 35000, gold: 10, desc: '+10% de ouro' },
-  { id: 'pet2',  name: 'Fada Luminosa',      icon: '🧚', type: 'pet', price: 300000, xp: 10, gold: 5, desc: '+10% de experiência e +5% de ouro' },
+  { id: 'mount3', name: 'Cavalo de Guerra',  icon: '🐎', type: 'mount', mountSp: 'cavalo', price: 25000, desc: 'Montaria: +33% de velocidade e vida' },
+  { id: 'mount1', name: 'Lobo de Montaria',  icon: '🐺', type: 'mount', mountSp: 'lobo', price: 60000, desc: 'Montaria: +38% de velocidade e ataque' },
+  { id: 'mount2', name: 'Grifo Dourado',     icon: '🦅', type: 'mount', mountSp: 'grifo', price: 450000, desc: 'Montaria: +63% de velocidade e XP' },
+  { id: 'ovo1',  name: 'Ovo Comum',          icon: '🥚', type: 'egg', egg: 'comum', price: 35000, desc: 'Nasce Gosminha, Fada Luminosa ou Raposa de Fogo' },
+  { id: 'ovo2',  name: 'Ovo Raro',           icon: '🪺', type: 'egg', egg: 'raro', price: 300000, desc: 'Nasce Dragãozinho, Coruja Sábia ou Raposa de Fogo' },
 ];
 
 // Gemas: encaixe nos equipamentos (1 encaixe por nível de raridade). Combine 3 iguais para subir o nível (1–5).

@@ -1193,7 +1193,7 @@ const Scene3D = (() => {
     else if (md.curName === 'Death_A') playAnim(h, 'Idle', { fade: 0.3 });
     else if (now() >= (md.busyUntil || 0)) {
       if (R.inTown) playAnim(h, h.walk ? 'Walking_A' : 'Idle', { fade: 0.2 });
-      else if (st.run) playAnim(h, R.mounted && S.mount ? 'Idle' : 'Running_A', { fade: 0.15 });
+      else if (st.run) playAnim(h, R.mounted && activeMount() ? 'Idle' : 'Running_A', { fade: 0.15 });
       else if (R.gathering) playAnim(h, 'Interact', { fade: 0.2 });
       else playAnim(h, st.mon ? 'Idle_Combat' : 'Idle', { fade: 0.2 });
     }
@@ -1533,11 +1533,13 @@ const Scene3D = (() => {
     const h = st.hero; if (!h) return;
     const hp = h.root.position;
     // montaria aparece enquanto o herói viaja
-    const wantMount = !R.inTown && R.mounted && R.moving && S.mount;
-    if (wantMount && (!st.mount || st.mount.id !== S.mount)) {
+    const am = typeof activeMount === 'function' ? activeMount() : null, msp = am && MOUNT_SP[am.sp];
+    const wantMount = !R.inTown && R.mounted && R.moving && !!am;
+    if (wantMount && (!st.mount || st.mount.id !== am.uid)) {
       if (st.mount) { scene.remove(st.mount.e.root); disposeObj(st.mount.e.root); }
-      const e = buildMonster(S.mount === 'mount2' ? 'Grifo' : 'Lobo Filhote', false);
-      e.root.scale.setScalar(S.mount === 'mount2' ? 1.5 : 1.7); e.P.float = 0; scene.add(e.root); st.mount = { id: S.mount, e };
+      const e = buildMonster(msp.look, false);
+      e.root.scale.setScalar(am.sp === 'grifo' ? 1.3 : am.sp === 'urso' ? 0.95 : 1.25); e.P.float = 0; scene.add(e.root); st.mount = { id: am.uid, e };
+      if (am.lvl >= 10) { const gl = glowSprite(am.sp === 'tigre' ? '#ff7030' : '#ffe080', 2.2, 0.35); gl.position.y = 0.5; e.root.add(gl); }
     }
     if (st.mount) {
       const e = st.mount.e, show = wantMount;
@@ -1548,25 +1550,59 @@ const Scene3D = (() => {
         e.body.position.y = 0; animMonster(e, t * 2, dt);
         h.root.position.y = Math.max(h.root.position.y, 0.55);
         if (Math.random() < 0.5) spawnP({ x: hp.x + rand(-0.4, 0.4), y: 0.1, z: hp.z + rand(-0.4, 0.4), vx: 0, vy: 0.4, vz: 0, life: 0.5, r: 0.6, gg: 0.55, b: 0.45, size: 0.18 });
+        if (am && am.sp === 'tigre' && Math.random() < 0.6) spawnP({ x: hp.x + rand(-0.4, 0.4), y: 0.3, z: hp.z + rand(-0.4, 0.4), vx: 0, vy: 1, vz: 0, life: 0.4, r: 1, gg: 0.45, b: 0.1, size: 0.14 });
       } else if (!h.motion) h.root.position.y = 0;
     }
-    // mascote segue o herói
-    const pid = !R.inTown && S.companion;
-    if (pid && (!st.comp || st.comp.id !== pid)) {
+    // pet: segue o herói e corre até os itens do chão (posição vem do jogo, R.petPos)
+    const ap = !R.inTown && typeof activePet === 'function' ? activePet() : null;
+    if (ap && (!st.comp || st.comp.id !== ap.uid)) {
       if (st.comp) { scene.remove(st.comp.e.root); disposeObj(st.comp.e.root); }
-      const e = buildMonster(pid === 'pet2' ? 'Elemental de Gelo' : 'Lesma Verde', false);
-      e.root.scale.setScalar(pid === 'pet2' ? 0.35 : 0.45);
-      if (pid === 'pet2') { e.P.float = 2.6; const gl = glowSprite('#c0f0ff', 2, 0.8); gl.position.y = 2.8; e.root.add(gl); }
-      e.root.position.set(hp.x - 1, 0, hp.z + 0.6); scene.add(e.root); st.comp = { id: pid, e };
+      const sp = PET_SP[ap.sp], e = buildMonster(sp.look, false);
+      e.root.scale.setScalar(ap.sp === 'dragao' ? 0.42 : ap.sp === 'fada' || ap.sp === 'espirito' ? 0.38 : 0.45);
+      if (ap.sp === 'fada' || ap.sp === 'espirito') { e.P.float = 2.4; const gl = glowSprite(ap.sp === 'fada' ? '#ffc0f0' : '#a0f0ff', 2, 0.8); gl.position.y = 2.6; e.root.add(gl); }
+      e.root.position.set(hp.x - 1, 0, hp.z + 0.6); scene.add(e.root); st.comp = { id: ap.uid, e };
     }
-    if (!pid && st.comp) { scene.remove(st.comp.e.root); disposeObj(st.comp.e.root); st.comp = null; }
+    if (!ap && st.comp) { scene.remove(st.comp.e.root); disposeObj(st.comp.e.root); st.comp = null; }
     if (st.comp) {
-      const e = st.comp.e, f = R.face || 0, tx = hp.x - Math.cos(f) * 1.1 + Math.sin(f) * 0.6, tz = hp.z - Math.sin(f) * 1.1 - Math.cos(f) * 0.6;
-      e.root.position.x = lerp(e.root.position.x, tx, Math.min(1, dt * 4)); e.root.position.z = lerp(e.root.position.z, tz, Math.min(1, dt * 4));
-      e.inner.rotation.y = h.inner.rotation.y + Math.PI;
-      animMonster(e, t, dt);
+      const e = st.comp.e, f = R.face || 0, pp = R.petPos;
+      const tx = pp ? pp.x : hp.x - Math.cos(f) * 1.1 + Math.sin(f) * 0.6, tz = pp ? pp.z : hp.z - Math.sin(f) * 1.1 - Math.cos(f) * 0.6;
+      const ox = e.root.position.x, oz = e.root.position.z;
+      e.root.position.x = lerp(ox, tx, Math.min(1, dt * 8)); e.root.position.z = lerp(oz, tz, Math.min(1, dt * 8));
+      const mv = Math.hypot(e.root.position.x - ox, e.root.position.z - oz);
+      e.inner.rotation.y = mv > 0.002 ? -Math.atan2(e.root.position.z - oz, e.root.position.x - ox) + Math.PI / 2 - Math.PI / 2 : h.inner.rotation.y + Math.PI;
+      animMonster(e, t * (R.petFetching ? 2 : 1), dt);
+    }
+    updateLoot(t);
+  }
+  // saquinhos de prêmio no chão (cor da raridade; épico ou melhor tem coluna de luz)
+  const lootObjs = new Map();
+  const LOOT_COL = ['#c8c8c8', '#5aa0ff', '#ffd84a', '#c070ff', '#ff8a30', '#ff4060'];
+  function updateLoot(t) {
+    const list = (!R.inTown && R.loot) || [], ids = new Set(list.map((l) => l.id));
+    for (const [id, o] of lootObjs) if (!ids.has(id)) { scene.remove(o); disposeObj(o); lootObjs.delete(id); }
+    for (const l of list) {
+      let o = lootObjs.get(l.id);
+      if (!o) {
+        const col = l.kind === 'gem' ? GEMS[l.data.t].color : l.kind === 'soul' ? SOUL[l.data.t].color : l.kind === 'stone' ? '#80d0ff' : l.kind === 'mat' ? '#a0ff90' : LOOT_COL[Math.min(5, l.rar)];
+        o = new THREE.Group(); const M = matFactory(null);
+        if (l.kind === 'item') { mk(G.box(0.26, 0.22, 0.26), M('#8a6a40'), o, 0, 0.11, 0); mk(G.box(0.28, 0.06, 0.28), M(col, { e: col, ei: 0.6 }), o, 0, 0.2, 0); }
+        else mk(G.oct(0.14), M(col, { e: col, ei: 0.9 }), o, 0, 0.25, 0);
+        const gl = glowSprite(col, l.rar >= 3 ? 1.4 : 0.8, 0.7); gl.position.y = 0.25; o.add(gl);
+        if (l.kind === 'item' && l.rar >= 3) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 3, 8, 1, true), fxMat(col, 0.45)); b.position.y = 1.5; o.add(b); }
+        o.position.set(l.x, 0, l.z); o.userData.spin = o.children[0]; scene.add(o); lootObjs.set(l.id, o);
+        burst(V3(l.x, 0.5, l.z), col, 6, 2, 0.1, 2);
+      }
+      o.children[0].rotation.y = t * 2; o.position.y = Math.sin(t * 3 + l.x) * 0.04;
     }
   }
+  function lootPick(id, by) {
+    const o = lootObjs.get(id); if (!o) return;
+    const to = by === 'pet' && st.comp ? st.comp.e.root.position : (st.hero ? st.hero.root.position : o.position);
+    burst(V3(o.position.x, 0.4, o.position.z), '#ffe8a0', 8, 2.5, 0.1, 2);
+    scene.remove(o); disposeObj(o); lootObjs.delete(id);
+    if (to) spawnP({ x: to.x, y: 0.8, z: to.z, vx: 0, vy: 1, vz: 0, life: 0.4, r: 1, gg: 0.9, b: 0.5, size: 0.25 });
+  }
+
 
   function moveMarker(x, z) {
     const m = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.32, 24), fxMat('#80ff9a', 0.9));
@@ -2869,7 +2905,7 @@ const Scene3D = (() => {
   }
   function stop() { running = false; cancelAnimationFrame(raf); for (const id of [...others.keys()]) removeOther(id); if (layer) layer.innerHTML = ''; for (const el of barEls.values()) el.remove(); barEls.clear(); const lab = document.getElementById('npc-labels'); if (lab) lab.innerHTML = ''; }
 
-  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
+  return { ok: true, start, stop, resize, playerAttack, monsterAttack, petAttack, otherHit, soulBurst, mechFx, turretZap, lootPick, float, heal, buff, levelUp, walkToNpc, teleBoom, bossRage, setQuality, _st: st };
 })();
 
 // ---------- fachada: escolhe 3D ou 2D ----------
@@ -2889,7 +2925,7 @@ const Scene = (() => {
     },
     stop() { Scene2D.stop(); Scene3D.stop(); },
     resize: fwd('resize'), playerAttack: fwd('playerAttack'), monsterAttack: fwd('monsterAttack'),
-    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), mechFx: fwd('mechFx'), turretZap: fwd('turretZap'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
+    petAttack: fwd('petAttack'), otherHit: fwd('otherHit'), soulBurst: fwd('soulBurst'), mechFx: fwd('mechFx'), turretZap: fwd('turretZap'), lootPick: fwd('lootPick'), teleBoom: fwd('teleBoom'), bossRage: fwd('bossRage'), setQuality: (q) => Scene3D.ok && Scene3D.setQuality(q), float: fwd('float'), heal: fwd('heal'), buff: fwd('buff'), levelUp: fwd('levelUp'),
     is3D: () => impl === Scene3D,
     walkToNpc: (id) => impl === Scene3D && Scene3D.walkToNpc(id),
   };

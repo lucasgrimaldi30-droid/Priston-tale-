@@ -271,6 +271,7 @@ function dropGem(chance, lvl) {
   if (Math.random() >= chance * (chance < 1 ? dropMult() : 1)) return;
   const types = Object.keys(GEMS), t = types[rint(0, types.length - 1)];
   const l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 40)));
+  if (R && R.lootCtx) return lootSpawn('gem', { t, l }, 2 + l);
   gemBag()[t][l]++;
   log(`${GEMS[t].icon} Você encontrou ${GEMS[t].name} nível ${l + 1}!`, 'loot'); Sfx.play('loot', { rarity: 2 + l, gap: 100 });
 }
@@ -312,24 +313,21 @@ function forgeItem(slotName) {
 function allItems() { return [...SLOT_ORDER.map((sl) => S.equip[sl]).filter(Boolean), ...S.inv]; }
 function buyShop(id, n) {
   const p = SHOP.find((x) => x.id === id); if (!p) return;
-  S.owned = S.owned || {};
-  if ((p.type === 'mount' || p.type === 'pet') && S.owned[id]) { // usar/guardar
-    if (p.type === 'mount') S.mount = S.mount === id ? null : id; else S.companion = S.companion === id ? null : id;
-    Sfx.play('click'); return renderTab();
-  }
-  const cost = p.price * (p.type === 'mount' || p.type === 'pet' ? 1 : n);
+  S.owned = S.owned || {}; petsState();
+  if (p.type === 'mount') { const m = S.mounts.list.find((x) => x.sp === p.mountSp); if (m) { S.mounts.active = S.mounts.active === m.uid ? null : m.uid; Sfx.play('click'); R.dirty.all = true; return renderTab(); } } // usar/guardar
+  const cost = p.price * (p.type === 'mount' || p.type === 'egg' ? 1 : n);
   if (S.gold < cost) return;
   S.gold -= cost; Sfx.play('coin');
   if (p.type === 'mat') S.stones += n;
   else if (p.type === 'scroll') { S.xpBoostUntil = Math.max(Date.now(), S.xpBoostUntil || 0) + n * 30 * 60000; toast('Experiência +50% ativada!', 'good'); }
   else if (p.type === 'gembag') for (let i = 0; i < n; i++) { const types = Object.keys(GEMS), t = types[rint(0, types.length - 1)]; gemBag()[t][0]++; }
-  else if (p.type === 'mount') { S.owned[id] = true; S.mount = id; toast(`${p.name} é seu!`, 'good'); }
-  else if (p.type === 'pet') { S.owned[id] = true; S.companion = id; toast(`${p.name} agora te acompanha!`, 'good'); }
+  else if (p.type === 'mount') { S.owned[id] = true; const m = addMountSp(p.mountSp); if (m) S.mounts.active = m.uid; }
+  else if (p.type === 'egg') hatch(p.egg);
   else S.pots[p.id] = (S.pots[p.id] || 0) + n;
   renderTab();
 }
 function xpBoostOn() { return (S.xpBoostUntil || 0) > Date.now(); }
-function mountSpeed() { const m = S.mount && SHOP.find((x) => x.id === S.mount); return m ? m.speed : 0; }
+function mountSpeed() { const m = activeMount(); return m ? MOUNT_SP[m.sp].speed + m.lvl * 0.03 : 0; }
 
 // ---------- atributos derivados ----------
 function derived() {
@@ -354,12 +352,13 @@ function derived() {
   for (const [k, n] of Object.entries(S.awk || {})) if (AWK[k] && n) SO[AWK[k].k] = (SO[AWK[k].k] || 0) + AWK[k].per * n;
   const TB = titleBonus(); for (const k of ['atkp', 'defp', 'hpp', 'crit', 'spd', 'absorb']) if (TB[k]) SO[k] = (SO[k] || 0) + TB[k];
   if (S.cape && S.cape.lvl) { const CS = capeStats(); for (const k in CS) SO[k] = (SO[k] || 0) + CS[k]; }
+  { const PB = R._pb || companionBonus(); for (const k of ['defp', 'hpp']) if (PB[k]) SO[k] = (SO[k] || 0) + PB[k]; }
   bonus.xpb += (TB.xpb || 0) + wkBonus() + (rosaryEq() ? rosaryEq().rosary.lvl : 0); bonus.gold += TB.goldb || 0; bonus.evadep += TB.evadep || 0;
   for (const k of ['atkp', 'defp', 'hpp', 'crit', 'critdmg', 'spd', 'block']) if (SO[k]) SB[k] = (SB[k] || 0) + SO[k];
   const bt = bestTiers() * 0.25; bonus.xpb += bt; bonus.atkp += bt;
   const rb = S.rebirths || 0;
   bonus.xpb += (SB.xpb || 0) + rb * 10; bonus.gold += rb * 10; bonus.crit += SB.crit || 0; bonus.atkp += (SB.atkp || 0) + rb * 10;
-  { const pc = S.companion && SHOP.find((x) => x.id === S.companion); if (pc) { const pm = petMult(pc.id); bonus.gold += (pc.gold || 0) * pm; bonus.xpb += (pc.xp || 0) * pm; } }
+  { const PB = companionBonus(); bonus.gold += PB.goldb || 0; bonus.xpb += PB.xpb || 0; bonus.crit += PB.crit || 0; bonus.atkp += PB.atkp || 0; bonus.hp += 0; R._pb = PB; }
   const A = {};
   for (const k of ['for', 'int', 'des', 'agi', 'vit']) A[k] = S.attr[k] + bonus[k];
   const main = A[c.main];
@@ -544,6 +543,7 @@ function spawnBoss() {
   return m;
 }
 function initWorld() {
+  if (R.loot && R.loot.length) flushLoot();
   R.worldZone = S.zone; R.mons = []; R.mon = null; R.move = null; R.spawnT = 0; R.playerTimer = 0.3; R.tele = []; R.gather = null; R.travel = null; R.turrets = [];
   R.nodes = zoneNodes(S.zone).map((n, i) => ({ ...n, id: i, cd: 0 }));
   R.pos = R.arrive ? { ...R.arrive } : { ...WORLD.entry }; R.arrive = null;
@@ -732,6 +732,7 @@ function dungeonReward() {
 }
 function exitDungeon(failed) {
   if (!R.dungeon) return;
+  if (R.loot && R.loot.length) flushLoot();
   if (R.dungeon.arena && R.coop && !R.coop.lead) { /* colega: o resultado vem do líder */ }
   else if (R.dungeon.arena && !R.dungeon.ended) { R.dungeon.ended = true; arenaFinish(); }
   if (R.coop) { Net.soc('crelay', { k: R.coop.lead ? 'end' : 'leave', d: { done: !!R.dungeon.done, arena: R.dungeon.arena ? (R.dungeon.cleared || 0) : null } }); R.coop = null; }
@@ -788,7 +789,7 @@ function towerClear() {
   S.gold += gold;
   let msg = `✅ Andar ${f} vencido! +${fmt(gold)} ouro`;
   if (first) {
-    S.towerBest = f;
+    S.towerBest = f; if (f >= 30) addMountSp('urso');
     if (f % 5 === 0) { const st = 1 + Math.floor(f / 10); S.stones += st; if (S.lvl >= CAPE_LVL) addInsig(1, 'guardião da Torre'); dropItem(genItem(Math.min(MAX_LEVEL, towerMonLvl(f)), 5)); dropGem(1, towerMonLvl(f)); dropSoul(1, towerMonLvl(f)); msg += `, +${st} 💎, um item e uma gema`; }
     msg += ' (novo recorde!)';
   }
@@ -940,7 +941,7 @@ function killMonster(m) {
   const xp = Math.round(m.xp * xpMul * (1 + d.xpb / 100) * (xpBoostOn() ? 1.5 : 1) * (sky.isNight ? 1.1 : 1) * (ev.id === 'xp' ? 1.5 : 1) * socialXp());
   S.best = S.best || {}; const bk = S.best[m.name] || 0; S.best[m.name] = bk + 1;
   if (BEST_TIERS.includes(bk + 1)) log(`📖 Bestiário: ${m.icon} ${esc(m.name)} chegou a ${bk + 1} derrotados! (+0,25% dano e XP)`, 'lvl');
-  if (S.companion) { S.petXp = S.petXp || {}; const pl = petLevel(S.companion); S.petXp[S.companion] = (S.petXp[S.companion] || 0) + 1; if (petLevel(S.companion) > pl) log(`🐾 Seu mascote evoluiu para o nível ${petLevel(S.companion)}!`, 'lvl'); }
+  petGainXp(m.boss ? 25 : m.elite ? 5 : 1);
   { const M = meter(); M.kills++; M.xp += xp; }
   const gold = Math.round(m.gold * (1 + d.goldb / 100) * (sky.rain ? 1.1 : 1) * (ev.id === 'gold' ? 1.5 : 1));
   if (online() && Net.st.party && !R.coop) Net.shareKill(Math.round(xp * 0.15), Math.round(gold * 0.1));
@@ -954,30 +955,32 @@ function killMonster(m) {
   else if (m.boss && !m.tower && !m.wboss && !m.dun) storyProgress('boss', S.zone);
   Sfx.play('kill'); Sfx.play('coin', { gap: 150 });
   log(`${m.icon} <b>${m.elite ? '⭐ ' : ''}${esc(m.name)}</b> derrotado! +${fmt(xp)} XP, +${fmt(gold)} ouro.`, m.boss ? 'boss' : '');
+  R.lootCtx = !R.inTown && m.x != null && !m.coopKill ? { x: m.x, z: m.z } : null; // os prêmios caem no chão (o pet busca)
   if (m.boss) {
     if (m.wboss) { worldBossReward(m); R.wbJust = true; }
     if (S.lvl >= CAPE_LVL) addInsig(m.wboss ? 5 : 1, m.wboss ? 'Chefe Mundial' : 'chefe');
     if (!m.tower && !m.wboss) { S.bosses[S.zone] = (S.bosses[S.zone] || 0) + 1; S.zoneKills[S.zone] = 0; }
     S.stats.bosses++;
     for (let i = 0; i < 2; i++) dropItem(genItem(m.lvl, 4));
-    S.stones += rint(1, 3); dropGem(1, m.lvl); dropSoul(0.6, m.lvl, m.wboss ? 3 : 1);
-    log(`👑 Chefe derrotado! Você recebeu Pedras de Refino.`, 'boss');
+    giveStones(rint(1, 3)); dropGem(1, m.lvl); dropSoul(0.6, m.lvl, m.wboss ? 3 : 1); maybeEgg(m);
+    log(`👑 Chefe derrotado!`, 'boss');
   } else if (m.roamer) {
     S.stats.elites = (S.stats.elites || 0) + 1; S.stats.roamers = (S.stats.roamers || 0) + 1;
-    dropItem(genItem(m.lvl, 5)); S.stones += 2; dropGem(1, m.lvl); addMat('essencia', 2);
+    dropItem(genItem(m.lvl, 5)); giveStones(2); dropGem(1, m.lvl); giveMat('essencia', 2);
     log(`👣 <b>Errante derrotado!</b> +2 💎, um item raro, uma gema e 2 essências.`, 'boss'); toast('Errante derrotado!', 'good');
   } else if (m.elite) {
     S.stats.elites = (S.stats.elites || 0) + 1;
     log(`⭐ Monstro elite derrotado!`, 'boss');
     if (Math.random() < 0.6) dropItem(genItem(m.lvl, 3));
-    if (Math.random() < 0.3) { S.stones++; log('💎 O elite deixou uma Pedra de Refino!', 'loot'); }
+    if (Math.random() < 0.3) giveStones(1);
     dropGem(0.35, m.lvl); dropSoul(0.06, m.lvl);
-    if (Math.random() < 0.25) { addMat('essencia', 1); log('✨ O elite deixou uma Essência!', 'loot'); }
+    if (Math.random() < 0.25) giveMat('essencia', 1);
   } else {
     if (Math.random() < 0.09 * dropMult()) dropItem(genItem(m.lvl));
     dropGem(0.025, m.lvl); dropSoul(m.danger ? 0.03 : 0.004, m.lvl);
-    if (Math.random() < 0.012) { S.stones++; log('💎 Você encontrou uma Pedra de Refino!', 'loot'); }
+    if (Math.random() < 0.012) giveStones(1);
   }
+  R.lootCtx = null;
   gainXp(xp);
   questProgress(m);
   R.mons = (R.mons || []).filter((x) => x.hp > 0);
@@ -986,6 +989,7 @@ function killMonster(m) {
 }
 
 function dropItem(it) {
+  if (R && R.lootCtx) return lootSpawn('item', it, RARITIES.findIndex((r) => r.id === it.rarity));
   const ri = RARITIES.findIndex((r) => r.id === it.rarity);
   const sellIdx = RARITIES.findIndex((r) => r.id === S.settings.autoSell);
   if (sellIdx >= 0 && ri <= sellIdx) {
@@ -1143,6 +1147,7 @@ function tick() {
   R.evT = (R.evT || 0) - dt; if (R.evT <= 0) { R.evT = 1; eventTick(); checkTitles(); }
   if (!R.dead) { titleState(); S.streak.alive += dt; }
   soulTick(dt); mechTick(dt, d);
+  if (!R.inTown && !R.dead) lootTick(dt);
   if (!R.inTown && !R.dead) turretTick(dt, d);
 
   if (!R.inTown && !R.dead && S.hp > 0) { const tb = teamBond(); if (tb.regen) S.hp = Math.min(d.maxHp, S.hp + d.maxHp * tb.regen * dt); }
@@ -1186,7 +1191,7 @@ function playerAI(dt, d) {
   retarget();
   const traveling = !R.mon || dist2(R.pos, R.mon) > weaponRange() + 2;
   const speed = 4.4 * (1 + Math.min(0.5, d.aps / 4 - 0.25)) * (traveling ? 1 + mountSpeed() : 1);
-  R.mounted = !!S.mount && traveling;
+  R.mounted = !!activeMount() && traveling;
   R.moving = false;
   autoDodge();
   if (R.nodes && !R.dungeon) for (const nd of R.nodes) if (nd.cd > 0) nd.cd -= dt;
@@ -1458,7 +1463,8 @@ function makeFullChar(name, cls, wtype) {
   S.skillLv = {}; for (const sk of CLASSES[cls].skills) S.skillLv[sk.id] = SKILL_MAX;
   const gemOrder = ['rubi', 'ametista', 'esmeralda', 'safira'];
   for (const sl of SLOT_ORDER) if (S.equip[sl]) S.equip[sl].gems = gemOrder.slice(0, sockets(S.equip[sl])).map((t) => ({ t, l: 5 }));
-  S.owned = { mount2: true, pet2: true }; S.mount = 'mount2'; S.companion = 'pet2'; S.petXp = { pet2: 6000 };
+  S.owned = {}; S.pets = { list: [{ uid: uid(), sp: 'espirito', lvl: PET_MAX, xp: 0 }, { uid: uid(), sp: 'coruja', lvl: 20, xp: 0 }], active: null }; S.pets.active = S.pets.list[0].uid;
+  S.mounts = { list: [{ uid: uid(), sp: 'tigre', lvl: MOUNT_MAX }, { uid: uid(), sp: 'grifo', lvl: 6 }], active: null }; S.mounts.active = S.mounts.list[0].uid;
   // artefatos (cruz completa com ressonância) e alma completa (quadrado latino: toda linha e coluna em Harmonia)
   S.arts = []; S.artCross = {};
   ['luvas', 'luvas', 'arma', 'armadura', 'luvas'].forEach((sl, k) => { const a = { uid: uid(), name: (sl === 'arma' ? 'Relíquia' : ARMOR_SLOTS[sl].names[5]) + ' Consagrada', slot: sl, rarity: 'lendario', ilvl: 100, set: null, wtype: null }; S.arts.push(a); S.artCross[ART_SPOTS[k]] = a.uid; });
@@ -1507,6 +1513,7 @@ function startGame(i) {
   S = loadSlot(i);
   if (!S) return renderSelect();
   S.skillOff = S.skillOff || {}; S.skillLv = S.skillLv || {}; S.stats.elites = S.stats.elites || 0;
+  petsState(); // mascotes e montarias antigos viram o sistema novo
   if (!S.settings.quality) S.settings.quality = matchMedia('(max-width: 760px)').matches ? 'media' : 'alta';
   // migração: lança virou foice
   for (const it of [...Object.values(S.equip), ...S.inv]) if (it && it.wtype === 'lanca') { it.wtype = 'foice'; it.name = WEAPON_NAMES.foice[clamp(Math.floor(it.ilvl / 17), 0, 5)]; }
@@ -2010,7 +2017,7 @@ function arenaClear() {
 }
 function arenaFinish() { // chamado ao sair da Arena (tempo acabou, morte ou saída)
   const D = R.dungeon, rounds = D.cleared || 0, W = arenaWeek();
-  W.best = Math.max(W.best || 0, rounds); S.stats.arenaBest = Math.max(S.stats.arenaBest || 0, rounds);
+  W.best = Math.max(W.best || 0, rounds); S.stats.arenaBest = Math.max(S.stats.arenaBest || 0, rounds); if (rounds >= 20) addMountSp('tigre');
   const st = Math.floor(rounds / 4); if (st) dropSoul(1, S.lvl + rounds, st);
   if (rounds >= 5) addSeals(Math.min(5, Math.floor(rounds / 5)), 'Arena');
   addInsig(Math.floor(rounds / (D.group ? 2 : 4)), 'Arena');
@@ -2258,7 +2265,7 @@ function renderChar() {
     ${S.rebirths ? `<p class="muted">Renascimentos: <b>${S.rebirths}</b> · +${S.rebirths * 10}% ataque, XP e ouro · +${S.rebirths * 5}% vida</p>` : ''}
     ${Object.entries(setCounts()).map(([id, n]) => `<p class="set-mini" style="--sc:${SETS[id].color}">◆ ${SETS[id].name}: ${n}/4 ${n >= 2 ? '(2 peças ativo)' : ''}${n >= 4 ? ' (4 peças ativo)' : ''}</p>`).join('')}
     ${specOf() ? `<p class="set-mini" style="--sc:#ffd060">${specOf().icon} Especialização: ${specOf().name}</p>` : (S.lvl >= SPEC_LVL ? '<p class="good">✨ Escolha sua especialização na janela Skills!</p>' : '')}
-    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button><button class="btn small" data-win="capa">🧥 Capa</button></div>
+    <div class="row-btns"><button class="btn small" data-win="stats">📊 Estatísticas</button><button class="btn small" data-win="bestiario">📖 Bestiário</button><button class="btn small" data-win="ordem">📿 Ordem</button><button class="btn small" data-win="capa">🧥 Capa</button><button class="btn small" data-win="pets">🐾 Pets</button></div>
     <h3>Status</h3>
     <div class="stat-grid">
       <span>Ataque</span><b>${fmt(d.atkMin)} - ${fmt(d.atkMax)}</b>
@@ -2540,6 +2547,7 @@ function dropSoul(chance, lvl, n = 1) {
   const b = soulState().bag, ts = Object.keys(SOUL);
   for (let i = 0; i < n; i++) {
     const t = ts[rint(0, ts.length - 1)], l = Math.min(4, Math.floor(Math.random() * (1 + lvl / 45)));
+    if (R && R.lootCtx) { lootSpawn('soul', { t, l }, 3); continue; }
     b[t][l]++;
     log(`🔮 Pedra da Alma: ${SOUL[t].icon} ${SOUL[t].name} nível ${l + 1}!`, 'loot');
   }
@@ -2910,6 +2918,146 @@ function tabCape() {
     ${c.lvl ? `<div class="row-btns"><button class="btn small" data-cape="fio" ${S.insig >= FIO_COST ? '' : 'disabled'}>Comprar 1 Fio Dourado (${FIO_COST} 🎗️)</button>${c.ref < CAPE_REF ? `<button class="btn small" data-cape="ref" ${S.fios >= c.ref + 1 ? '' : 'disabled'}>Refinar para +${c.ref + 1} (${c.ref + 1} 🧵 · ${c.ref < 5 ? 100 : 100 - (c.ref - 4) * 12}% de chance)</button>` : '<small class="good">Refino máximo!</small>'}</div>` : ''}</div>`;
 }
 
+// ============================================================
+//  🐾 PETS, 🐎 MONTARIAS e ITENS NO CHÃO
+//  Os prêmios dos monstros caem no chão; o pet corre e pega (alcance e velocidade crescem com o nível) e
+//  só pega o que estiver marcado no filtro. Sem pet, o herói pega ao passar perto e o resto vem sozinho depois de um tempo.
+//  Pets e montarias dão atributos em porcentagem, iguais para todas as classes (moderados).
+// ============================================================
+const PET_SP = {
+  gosma:    { name: 'Gosminha',           icon: '🟢', look: 'Pet Gosma',    b: { hpp: 0.27, goldb: 0.33 } },
+  fada:     { name: 'Fada Luminosa',      icon: '🧚', look: 'Pet Fada',     b: { xpb: 0.27, goldb: 0.2 } },
+  raposa:   { name: 'Raposa de Fogo',     icon: '🦊', look: 'Pet Raposa',   b: { crit: 0.1, xpb: 0.2 } },
+  dragao:   { name: 'Dragãozinho',        icon: '🐉', look: 'Pet Dragão',   b: { atkp: 0.27, defp: 0.27 } },
+  coruja:   { name: 'Coruja Sábia',       icon: '🦉', look: 'Pet Coruja',   b: { xpb: 0.2 }, range: 1.6 },
+  espirito: { name: 'Espírito Ancestral', icon: '✨', look: 'Pet Espírito', b: { atkp: 0.15, defp: 0.15, hpp: 0.15, xpb: 0.15, goldb: 0.15 }, rare: true },
+};
+const MOUNT_SP = {
+  cavalo: { name: 'Cavalo de Guerra', icon: '🐎', look: 'Montaria Cavalo', speed: 0.3,  b: { hpp: 0.3 } },
+  lobo:   { name: 'Lobo de Montaria', icon: '🐺', look: 'Montaria Lobo',   speed: 0.35, b: { atkp: 0.3 } },
+  urso:   { name: 'Urso de Batalha',  icon: '🐻', look: 'Montaria Urso',   speed: 0.4,  b: { defp: 0.4 }, how: 'Torre Infinita: andar 30 pela primeira vez' },
+  grifo:  { name: 'Grifo Dourado',    icon: '🦅', look: 'Montaria Grifo',  speed: 0.6,  b: { xpb: 0.3 } },
+  tigre:  { name: 'Tigre de Fogo',    icon: '🐅', look: 'Montaria Tigre',  speed: 0.55, b: { crit: 0.15 }, how: 'Arena da Sobrevivência: chegar à rodada 20' },
+};
+const PET_MAX = 30, MOUNT_MAX = 10, BLABEL = { atkp: 'ataque', defp: 'defesa', hpp: 'vida', crit: 'crítico', xpb: 'XP', goldb: 'ouro' };
+const bText = (b, L) => Object.entries(b).map(([k, v]) => `+${+(v * L).toFixed(1)}% ${BLABEL[k]}`).join(' · ');
+function petsState() {
+  if (!S.pets) { // migra os mascotes e montarias antigos da loja
+    S.pets = { list: [], active: null }; S.mounts = { list: [], active: null }; const ow = S.owned || {};
+    if (ow.pet1) S.pets.list.push({ uid: uid(), sp: 'gosma', lvl: Math.min(PET_MAX, petLevel('pet1') * 3), xp: 0 });
+    if (ow.pet2) S.pets.list.push({ uid: uid(), sp: 'fada', lvl: Math.min(PET_MAX, petLevel('pet2') * 3), xp: 0 });
+    if (S.companion) { const p = S.pets.list.find((x) => x.sp === (S.companion === 'pet2' ? 'fada' : 'gosma')); S.pets.active = p ? p.uid : null; }
+    if (ow.mount1) S.mounts.list.push({ uid: uid(), sp: 'lobo', lvl: 1 });
+    if (ow.mount2) S.mounts.list.push({ uid: uid(), sp: 'grifo', lvl: 1 });
+    if (S.mount) { const m = S.mounts.list.find((x) => x.sp === (S.mount === 'mount2' ? 'grifo' : 'lobo')); S.mounts.active = m ? m.uid : null; }
+    S.companion = null; S.mount = null;
+  }
+  S.mounts = S.mounts || { list: [], active: null };
+  S.lootF = S.lootF || { comum: true, magico: true, raro: true, epico: true, lendario: true, gema: true, pedra: true, alma: true, mat: true, vender: true };
+  return S.pets;
+}
+function activePet() { const P = petsState(); return P.list.find((p) => p.uid === P.active) || null; }
+function activeMount() { petsState(); return S.mounts.list.find((m) => m.uid === S.mounts.active) || null; }
+function companionBonus() {
+  const B = {}, p = activePet(), m = activeMount();
+  if (p) for (const [k, v] of Object.entries(PET_SP[p.sp].b)) B[k] = (B[k] || 0) + v * p.lvl;
+  if (m) for (const [k, v] of Object.entries(MOUNT_SP[m.sp].b)) B[k] = (B[k] || 0) + v * m.lvl;
+  return B;
+}
+const petNeed = (L) => Math.round(25 * Math.pow(L, 1.6));
+function petGainXp(n) {
+  const p = activePet(); if (!p || p.lvl >= PET_MAX) return;
+  p.xp += n; while (p.lvl < PET_MAX && p.xp >= petNeed(p.lvl)) { p.xp -= petNeed(p.lvl); p.lvl++; log(`🐾 <b>${PET_SP[p.sp].name}</b> subiu para o nível ${p.lvl}!`, 'lvl'); R.dirty.all = true; }
+}
+function addPet(sp, lvl = 1) {
+  const P = petsState(), have = P.list.find((p) => p.sp === sp);
+  if (have) { const x = 200 * (PET_SP[sp].rare ? 5 : 1); const keep = P.active; P.active = have.uid; petGainXp(x); P.active = keep; log(`🐾 Você já tinha ${PET_SP[sp].name}: o ovo virou ${x} de XP para ele.`, 'loot'); return have; }
+  const p = { uid: uid(), sp, lvl, xp: 0 }; P.list.push(p); if (!P.active) P.active = p.uid;
+  log(`🥚 Nasceu um pet: <b>${PET_SP[sp].icon} ${PET_SP[sp].name}</b>!`, 'lvl'); toast(`🐾 ${PET_SP[sp].name}!`, 'good'); Sfx.play('levelup'); R.dirty.all = true;
+  return p;
+}
+function hatch(kind) { const pool = kind === 'raro' ? ['dragao', 'coruja', 'raposa'] : kind === 'espirito' ? ['espirito'] : ['gosma', 'fada', 'raposa']; return addPet(pool[rint(0, pool.length - 1)]); }
+function maybeEgg(m) { // chefes podem deixar ovos
+  if (m.wboss && Math.random() < 0.04) { log('🥚✨ O Chefe Mundial deixou um <b>Ovo Ancestral</b>!', 'boss'); hatch('espirito'); }
+  else if (Math.random() < (m.wboss ? 0.2 : 0.03)) { log('🥚 O chefe deixou um <b>Ovo Raro</b>!', 'boss'); hatch('raro'); }
+}
+function addMountSp(sp) {
+  petsState(); if (S.mounts.list.some((m) => m.sp === sp)) return null;
+  const m = { uid: uid(), sp, lvl: 1 }; S.mounts.list.push(m); if (!S.mounts.active) S.mounts.active = m.uid;
+  log(`🐎 Nova montaria: <b>${MOUNT_SP[sp].icon} ${MOUNT_SP[sp].name}</b>!`, 'lvl'); toast(`🐎 ${MOUNT_SP[sp].name}!`, 'good'); Sfx.play('levelup'); R.dirty.all = true;
+  return m;
+}
+const mountCost = (L) => ({ gold: Math.round(20000 * Math.pow(L, 1.5)), minerio: 10 * L });
+function mountUp(uid0) {
+  const m = S.mounts.list.find((x) => x.uid === uid0); if (!m || m.lvl >= MOUNT_MAX) return;
+  const c = mountCost(m.lvl), mt = S.mats || {}; if (S.gold < c.gold || (mt.minerio || 0) < c.minerio) return toast('Faltam ouro ou minério.', 'bad');
+  S.gold -= c.gold; mt.minerio -= c.minerio; m.lvl++; log(`🐎 ${MOUNT_SP[m.sp].name} subiu para o nível ${m.lvl}!`, 'lvl'); Sfx.play('refineOk'); R.dirty.all = true; renderTab();
+}
+function feedPet() { const p = activePet(), mt = S.mats || {}; if (!p) return; if ((mt.erva || 0) < 6 || (mt.essencia || 0) < 2) return toast('Petisco: 6 🌿 + 2 ✨.', 'bad'); mt.erva -= 6; mt.essencia -= 2; petGainXp(150); log(`🍖 ${PET_SP[p.sp].name} comeu um petisco (+150 XP).`, 'loot'); Sfx.play('heal'); renderTab(); }
+// ---------- itens no chão ----------
+const LOOT_KIND_F = { gem: 'gema', stone: 'pedra', soul: 'alma', mat: 'mat' };
+function lootWanted(kind, rar) { const f = petsState() && S.lootF; if (kind === 'item') return !!f[RARITIES[Math.max(0, rar)].id]; return f[LOOT_KIND_F[kind]] !== false; }
+function lootSpawn(kind, data, rar) {
+  const c = R.lootCtx;
+  if (!lootWanted(kind, rar)) { if (kind === 'item' && S.lootF.vender) { const v = itemValue(data); S.gold += v; } return; }
+  (R.loot = R.loot || []).push({ id: uid(), kind, data, rar: Math.max(0, rar), x: c.x + rnd(-0.9, 0.9), z: c.z + rnd(-0.9, 0.9), t: 0 });
+}
+function giveStones(n) { if (R && R.lootCtx) { if (lootWanted('stone')) lootSpawn('stone', n, 2); return; } S.stones += n; log(`💎 +${n} Pedra${n > 1 ? 's' : ''} de Refino!`, 'loot'); }
+function giveMat(k, n) { if (R && R.lootCtx) { if (lootWanted('mat')) lootSpawn('mat', { k, n }, 1); return; } addMat(k, n); log(`${MATS[k].icon} +${n} ${MATS[k].name}!`, 'loot'); }
+function collectLoot(l) {
+  const ctx = R.lootCtx; R.lootCtx = null;
+  if (l.kind === 'item') dropItem(l.data);
+  else if (l.kind === 'gem') { gemBag()[l.data.t][l.data.l]++; log(`${GEMS[l.data.t].icon} Você pegou ${GEMS[l.data.t].name} nível ${l.data.l + 1}!`, 'loot'); Sfx.play('loot', { rarity: 2 + l.data.l, gap: 100 }); }
+  else if (l.kind === 'soul') { soulState().bag[l.data.t][l.data.l]++; log(`🔮 Pedra da Alma: ${SOUL[l.data.t].icon} ${SOUL[l.data.t].name} nível ${l.data.l + 1}!`, 'loot'); autoAlmaMaybe(); }
+  else if (l.kind === 'stone') giveStones(l.data);
+  else if (l.kind === 'mat') giveMat(l.data.k, l.data.n);
+  R.lootCtx = ctx; R.dirty.inv = true;
+}
+function flushLoot() { for (const l of R.loot || []) collectLoot(l); R.loot = []; } // trocou de mapa: nada se perde
+function lootTick(dt) {
+  const L = R.loot || []; if (!R.pos) return;
+  const p = activePet(), sp = p && PET_SP[p.sp];
+  if (p) { R.petPos = R.petPos || { x: R.pos.x - 1, z: R.pos.z + 0.6 }; } else R.petPos = null;
+  const range = p ? (3 + p.lvl * 0.15) * (sp.range || 1) : 0, pspeed = p ? 4.5 + p.lvl * 0.12 : 0;
+  // o pet escolhe o item mais perto dentro do alcance (medido a partir do herói)
+  let tgt = null;
+  if (p) { let best = 1e9; for (const l of L) { const dh = dist2(l, R.pos); if (dh <= range) { const dp = dist2(l, R.petPos); if (dp < best) { best = dp; tgt = l; } } } }
+  if (p) {
+    const dest = tgt || { x: R.pos.x - Math.cos(R.face || 0) * 1.1, z: R.pos.z - Math.sin(R.face || 0) * 1.1 };
+    stepTo(R.petPos, dest, pspeed * dt * (tgt ? 1 : 0.9)); R.petFetching = !!tgt;
+    if (dist2(R.petPos, R.pos) > 12) R.petPos = { x: R.pos.x - 1, z: R.pos.z + 0.6 }; // ficou longe: aparece do lado
+  }
+  for (let i = L.length - 1; i >= 0; i--) {
+    const l = L[i]; l.t += dt;
+    const byPet = p && dist2(l, R.petPos) < 0.7, byHero = dist2(l, R.pos) < 1.4, late = l.t > (p ? 12 : 20);
+    if (byPet || byHero || late) { L.splice(i, 1); collectLoot(l); Scene.lootPick && Scene.lootPick(l.id, byPet ? 'pet' : 'hero'); }
+  }
+}
+function tabPets() {
+  const P = petsState(), t = R.petTab || 'pets', f = S.lootF;
+  const tabs = `<div class="sub-tabs"><button class="btn small ${t === 'pets' ? 'primary' : ''}" data-ptab="pets">🐾 Pets</button><button class="btn small ${t === 'mount' ? 'primary' : ''}" data-ptab="mount">🐎 Montarias</button><button class="btn small ${t === 'filtro' ? 'primary' : ''}" data-ptab="filtro">🧺 Coleta</button></div>`;
+  if (t === 'filtro') {
+    const box = (k, label) => `<label class="check"><input type="checkbox" data-lootf="${k}" ${f[k] !== false ? 'checked' : ''}> ${label}</label>`;
+    return tabs + `<div class="ordem-box"><b>🧺 O que o pet (e você) pega do chão</b><small>Os prêmios dos monstros caem no chão. O pet busca dentro do alcance dele; sem pet, você pega ao passar perto e o resto chega sozinho depois de alguns segundos.</small>
+      <div class="loot-f">${RARITIES.map((r) => box(r.id, `<span style="color:${r.color}">Itens ${r.name.toLowerCase()}s</span>`)).join('')}${box('gema', '💠 Gemas')}${box('pedra', '💎 Pedras de refino')}${box('alma', '🔮 Pedras da Alma')}${box('mat', '✨ Materiais')}</div>
+      ${box('vender', 'Itens desmarcados viram ouro na hora (senão somem)')}</div>`;
+  }
+  if (t === 'mount') {
+    const owned = new Set(S.mounts.list.map((m) => m.sp));
+    return tabs + `<p class="muted">A montaria aparece quando você anda e deixa o herói mais rápido. Os bônus são iguais para todas as classes e crescem até o nível ${MOUNT_MAX}.</p>` + Object.entries(MOUNT_SP).map(([k, v]) => {
+      const m = S.mounts.list.find((x) => x.sp === k), act = m && m.uid === S.mounts.active, c = m && mountCost(m.lvl), shop = SHOP.find((x) => x.mountSp === k);
+      return `<div class="q-card ${act ? 'tt-eq' : ''} ${m ? 'ok' : ''}"><h4><span>${v.icon} ${v.name}${m ? ` · nível ${m.lvl}/${MOUNT_MAX}` : ''}</span><small class="q-rew">+${Math.round((v.speed + (m ? m.lvl : 1) * 0.03) * 100)}% velocidade · ${bText(v.b, m ? m.lvl : 1)}</small></h4>
+        ${m ? `<div class="item-actions">${act ? '<small class="good">✔ em uso</small>' : `<button class="btn small primary" data-mnt="use:${m.uid}">Usar</button>`}${m.lvl < MOUNT_MAX ? `<button class="btn small" data-mnt="up:${m.uid}" ${S.gold >= c.gold && (S.mats || {}).minerio >= c.minerio ? '' : 'disabled'}>Subir nível (${fmt(c.gold)} ouro · ${c.minerio} ⛏️)</button>` : ''}</div>`
+          : `<p class="muted">${shop ? `Na loja da Mercadora: ${fmt(shop.price)} ouro.` : esc(v.how || '')}</p>`}</div>`;
+    }).join('') + (owned.size ? `<button class="btn small" data-mnt="off">Andar sem montaria</button>` : '');
+  }
+  const p = activePet();
+  return tabs + `<p class="muted">O pet segue você, busca os prêmios no chão (alcance e velocidade crescem com o nível) e dá bônus iguais para todas as classes. Sobe de nível caçando com você e com petiscos. Ovos: Mercadora e chefes.</p>
+    ${p ? `<div class="ordem-box"><b>${PET_SP[p.sp].icon} ${PET_SP[p.sp].name} · nível ${p.lvl}/${PET_MAX}</b><div class="q-prog"><i style="width:${p.lvl >= PET_MAX ? 100 : p.xp / petNeed(p.lvl) * 100}%"></i></div>
+      <small>${bText(PET_SP[p.sp].b, p.lvl)} · alcance de coleta ${((3 + p.lvl * 0.15) * (PET_SP[p.sp].range || 1)).toFixed(1)} m</small><div class="row-btns"><button class="btn small" data-pet="feed" ${(S.mats || {}).erva >= 6 && (S.mats || {}).essencia >= 2 ? '' : 'disabled'}>🍖 Dar petisco (6 🌿 + 2 ✨ = +150 XP)</button><button class="btn small" data-pet="off">Guardar pet</button></div></div>` : '<p class="muted">Nenhum pet acompanhando você.</p>'}
+    ${Object.entries(PET_SP).map(([k, v]) => { const q = P.list.find((x) => x.sp === k); return `<div class="q-card ${q ? 'ok' : ''} ${q && q.uid === P.active ? 'tt-eq' : ''}"><h4><span>${q ? v.icon : '🥚'} ${v.name}${q ? ` · nível ${q.lvl}` : ''}</span><small class="q-rew">${bText(v.b, q ? q.lvl : PET_MAX)}${q ? '' : ' (no nível 30)'}${v.range ? ' · alcance +60%' : ''}</small></h4>${q ? (q.uid === P.active ? '<small class="good">✔ acompanhando</small>' : `<div class="item-actions"><button class="btn small primary" data-pet="use:${q.uid}">Levar este</button></div>`) : `<small class="muted">${v.rare ? 'Só em Ovo Ancestral (Chefe Mundial).' : 'Nasce de ovos.'}</small>`}</div>`; }).join('')}`;
+}
+
 // ---------- missões diárias e prêmio de login ----------
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const DAILY_TYPES = [
@@ -3039,7 +3187,7 @@ const ACH = [
   { id: 'd10', name: 'Senhor das Profundezas', desc: 'Conclua 10 masmorras', ok: () => (S.stats.dungeons || 0) >= 10, stones: 15, title: 'Senhor das Profundezas' },
   { id: 'rb1', name: 'Renascido', desc: 'Renasça pela primeira vez', ok: () => (S.rebirths || 0) >= 1, stones: 30, title: 'Renascido' },
   { id: 'rb5', name: 'Imortal', desc: 'Renasça 5 vezes', ok: () => (S.rebirths || 0) >= 5, stones: 80, title: 'Imortal' },
-  { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.owned && (S.owned.mount1 || S.owned.mount2), gold: 10000 },
+  { id: 'mnt', name: 'Cavaleiro', desc: 'Tenha uma montaria', ok: () => S.mounts && S.mounts.list.length > 0, gold: 10000 },
 ];
 
 // ============================================================
@@ -3300,6 +3448,7 @@ function renderNpc() {
 function cityName() { return CITIES[CLASSES[S.cls].faction].name; }
 
 function setTown(on) {
+  if (on && R.loot && R.loot.length) flushLoot();
   if (R.dungeon && on) exitDungeon(false);
   if (!!R.inTown === on) return;
   R.inTown = on;
@@ -3309,7 +3458,7 @@ function setTown(on) {
   R.dirty.all = true;
 }
 
-const WIN_TITLES = { capa: 'Capa de Guerra', ordem: 'Ordem e Rosário', conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
+const WIN_TITLES = { pets: 'Pets e Montarias', capa: 'Capa de Guerra', ordem: 'Ordem e Rosário', conquistas: 'Títulos e Conquistas', alma: 'Alma e Artefatos', troca: 'Troca', social: 'Grupo e Guilda', bestiario: 'Bestiário', stats: 'Estatísticas', ranking: 'Ranking', personagem: 'Personagem', inventario: 'Itens', habilidades: 'Habilidades', missoes: 'Missões', mapas: 'Mapas', config: 'Configurações', loja: 'Loja', refino: 'Refino' };
 function openWin(name) {
   if (R.win === name) return closeWin();
   if (winLocked(name)) { toast(`Libera no nível ${UNLOCK[name]}.`); return; }
@@ -3330,7 +3479,7 @@ function closeWin() {
 
 function renderTab() {
   const el = $('#tab-content');
-  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma, ordem: tabOrdem, capa: tabCape }[R.tab];
+  const fn = { mapas: tabMaps, inventario: tabInv, habilidades: tabSkills, loja: tabShop, refino: tabRefine, config: tabConfig, missoes: tabQuests, conquistas: tabAch, ranking: tabRanking, bestiario: tabBestiary, stats: tabStats, social: tabSocial, troca: tabTrade, alma: tabAlma, ordem: tabOrdem, capa: tabCape, pets: tabPets }[R.tab];
   if (fn) el.innerHTML = fn();
   if (R.npc) renderNpc();
   renderQuestTrack();
@@ -3426,9 +3575,10 @@ function tabSkills() {
 function tabShop() {
   S.owned = S.owned || {};
   const row = (p) => {
-    const unique = p.type === 'mount' || p.type === 'pet', own = unique && S.owned[p.id];
-    const active = (p.type === 'mount' && S.mount === p.id) || (p.type === 'pet' && S.companion === p.id);
-    const have = p.type === 'pet' && S.owned[p.id] ? `nível ${petLevel(p.id)}/10 (bônus ×${petMult(p.id).toFixed(2)})` : p.type === 'mat' ? S.stones : p.type === 'scroll' ? (xpBoostOn() ? `ativo (${Math.ceil((S.xpBoostUntil - Date.now()) / 60000)} min)` : '-') : p.type === 'gembag' ? Object.values(gemBag()).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0) + ' gemas' : unique ? (own ? (active ? 'em uso' : 'guardado') : 'não tem') : S.pots[p.id];
+    petsState(); const mo = p.type === 'mount' && S.mounts.list.find((x) => x.sp === p.mountSp);
+    const unique = p.type === 'mount', own = unique && !!mo;
+    const active = !!(mo && S.mounts.active === mo.uid);
+    const have = p.type === 'egg' ? `${petsState().list.length} pet(s)` : p.type === 'mat' ? S.stones : p.type === 'scroll' ? (xpBoostOn() ? `ativo (${Math.ceil((S.xpBoostUntil - Date.now()) / 60000)} min)` : '-') : p.type === 'gembag' ? Object.values(gemBag()).reduce((a, v) => a + v.reduce((x, y) => x + y, 0), 0) + ' gemas' : unique ? (own ? (active ? 'em uso' : 'guardado') : 'não tem') : S.pots[p.id];
     const desc = p.desc || (p.type === 'mat' ? 'Usada para refinar e forjar equipamentos' : `Restaura ${p.heal * 100}% de ${p.type === 'hp' ? 'vida' : 'mana'}`);
     return `<div class="shop-row"><span class="shop-ico">${p.icon}</span>
       <div><b>${p.name}</b><br><small class="muted">${desc} · Você tem: <b>${have}</b></small></div>
@@ -3616,7 +3766,7 @@ function toast(msg, cls = '') {
 
 // ---------- eventos ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
+  const t = e.target.closest('[data-play],[data-del],[data-new],[data-faction],[data-cls],[data-attr],[data-zone],[data-tab],[data-item],[data-eq],[data-act],[data-buy],[data-ref],[data-toggle-skill],[data-skill],[data-npc],[data-win],[data-cast],[data-pot],[data-chat],[data-qacc],[data-qturn],[data-qdrop],[data-skup],[data-spec],[data-dun],[data-tower],[data-craft],[data-goexit],[data-soc],[data-pinv],[data-ginv],[data-gkick],[data-codun],[data-tinv],[data-toff],[data-trem],[data-tact],[data-alab],[data-ptab],[data-pet],[data-mnt],[data-lootf],[data-cape],[data-capevis],[data-ord],[data-gw],[data-arena],[data-teq],[data-achtab],[data-story],[data-sreplay],[data-awk],[data-soul],[data-ssel],[data-scomb],[data-asel],[data-aspot],[data-wclaim],[data-dclaim],[data-ftab],[data-gcomb],[data-gin],[data-gout],[data-forge],[data-ach],[data-tutskip],#gwin-close,#chat-min,#create-btn,#create-full,#create-back,#boss-btn,#town-btn,#auto-btn,#mute-btn,#modal-close,#btn-exit');
   if (!t) return;
   const ds = t.dataset;
   if (ds.play !== undefined) return startGame(+ds.play);
@@ -3662,6 +3812,10 @@ document.addEventListener('click', (e) => {
   if (ds.soc) { socialAction(ds.soc); return; }
   if (ds.codun) { startCoop(ds.codun); return; }
   if (ds.alab) { R.almaTab = ds.alab; return renderTab(); }
+  if (ds.ptab) { R.petTab = ds.ptab; return renderTab(); }
+  if (ds.pet) { const [a, u] = ds.pet.split(':'); if (a === 'feed') feedPet(); else { petsState().active = a === 'off' ? null : u; R.petPos = null; R.dirty.all = true; renderTab(); } return; }
+  if (ds.mnt) { const [a, u] = ds.mnt.split(':'); if (a === 'up') mountUp(u); else { petsState(); S.mounts.active = a === 'off' ? null : u; R.dirty.all = true; renderTab(); } return; }
+  if (ds.lootf && e.target.tagName === 'INPUT') { petsState(); S.lootF[ds.lootf] = e.target.checked; return; }
   if (ds.cape) { ({ evo: capeEvolve, ref: capeRefine, fio: () => { if (S.insig >= FIO_COST) { S.insig -= FIO_COST; S.fios++; renderTab(); } } })[ds.cape](); return; }
   if (ds.capevis !== undefined && e.target.tagName === 'INPUT') { capeState().vis = e.target.checked; R.dirty.all = true; return; }
   if (ds.ord) { ({ equip: () => { const r = findRosary(); if (r && S.inv.includes(r)) { R.sel = r.uid; equipItem(r.uid); } renderTab(); renderNpc(); }, use: useSeals, buy: buyRosary, reform: reformRosary, evolve: evolveRosary, trade: () => { const m = S.mats; m.erva -= 8; m.minerio -= 6; m.essencia -= 2; addSeals(1, 'troca'); renderTab(); renderNpc(); } })[ds.ord](); return; }

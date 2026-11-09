@@ -172,6 +172,16 @@ Atalhos no `keydown` do fim de `game.js`.
   Conquistar = 40 🎗️ + 20 📜; evoluir `capeEvoCost`; refino com 🧵 `S.fios` (6 🎗️ cada, chance cai depois do +5, falha não perde).
   Visual: usa a capa do modelo da classe (`cfg.cape`), cor por faixa (`capeColor`: 1 couro, 4 azul, 7 carmesim, 10 dourada com brilho,
   13 roxa radiante com partículas); `vis` falso esconde até a capa padrão. Vai no `look._capa` para os outros jogadores verem. Janela `capa`.
+- **Pets, montarias e itens no chão:** `S.pets {list:[{uid, sp, lvl 1–30, xp}], active}` (`PET_SP`: gosma, fada, raposa, dragão, coruja,
+  espírito raro) e `S.mounts {list:[{uid, sp, lvl 1–10}], active}` (`MOUNT_SP`: cavalo, lobo, urso [Torre 30], grifo, tigre [Arena 20]).
+  `petsState()` migra os antigos `S.companion`/`S.mount`/`S.owned.pet*`. Bônus em % iguais para todas as classes (`companionBonus`,
+  moderados: ~8% no máximo). Ovos na loja (`ovo1`, `ovo2`) e de chefes (`maybeEgg`); pet ganha XP por abate (`petGainXp`) e com petisco
+  (`feedPet`); montaria sobe com ouro + minério (`mountUp`), velocidade em `mountSpeed()`.
+  **Itens no chão:** dentro do `killMonster` existe `R.lootCtx` (posição do monstro); `dropItem`/`dropGem`/`dropSoul`/`giveStones`/`giveMat`
+  viram `lootSpawn` em `R.loot`. `lootTick`: o pet (`R.petPos`) corre até o item mais perto dentro do alcance (3 m + 0,15/nível, coruja ×1,6) e
+  pega; o herói pega a 1,4 m; o resto chega sozinho em 12 s (com pet) ou 20 s. `flushLoot()` ao trocar de mapa/masmorra/cidade (nada se perde).
+  Filtro `S.lootF` por raridade e tipo (desmarcado vira ouro se `vender`). Cena: `updateLoot`/`lootPick`, pet e montaria com visual por espécie
+  (nomes `Pet ...`/`Montaria ...` em `MON`). Janela `pets` (abas Pets, Montarias, Coleta). Progresso offline continua indo direto para a mochila.
 - **Impacto:** `st.hitstop` (pausa curta: o `dt` das animações cai), `e.kbv` (recuo do monstro), `flashScreen()` (`#hit-flash`), arremesso ao morrer.
 - **PWA:** `manifest.webmanifest`, `sw.js` (rede primeiro, cache como reserva; **aumente `VERSAO` ao publicar no servidor próprio**),
   ícones em `assets/icons/`. O service worker só registra fora de iframe (no link do claude.ai a instalação não aparece; no domínio próprio, sim).
