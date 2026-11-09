@@ -2446,6 +2446,16 @@ function chatCommand(txt) {
   switch (cmd) {
     case 'sairgrupo': if (online()) Net.soc('pleave'); break;
     case 'capa': R.win = null; openWin('capa'); break;
+    case 'testepets': { // só no modo de teste (sem servidor): todos os pets no 30 e todas as montarias no 10
+      if (online()) { log('Esse comando só funciona no modo de teste (sem servidor).', 'chat'); break; }
+      petsState();
+      for (const k of Object.keys(PET_SP)) { const q = S.pets.list.find((x) => x.sp === k); if (q) { q.lvl = PET_MAX; q.xp = 0; } else S.pets.list.push({ uid: uid(), sp: k, lvl: PET_MAX, xp: 0 }); }
+      for (const k of Object.keys(MOUNT_SP)) { const q = S.mounts.list.find((x) => x.sp === k); if (q) q.lvl = MOUNT_MAX; else S.mounts.list.push({ uid: uid(), sp: k, lvl: MOUNT_MAX }); }
+      S.pets.active = S.pets.list.find((x) => x.sp === 'espirito').uid; S.mounts.active = S.mounts.list.find((x) => x.sp === 'tigre').uid;
+      R.petPos = null; R.dirty.all = true; save();
+      log('🐾 Modo de teste: todos os pets no nível 30 e todas as montarias no nível 10. Em uso: ✨ Espírito Ancestral e 🐅 Tigre de Fogo.', 'lvl'); toast('🐾 Pets e montarias no máximo!', 'good');
+      break;
+    }
     case 'pk': if (S.lvl < PK_MIN) { log(`O PK libera no nível ${PK_MIN}.`, 'chat'); break; } S.settings.pk = !S.settings.pk; log(`⚔️ Modo PK ${S.settings.pk ? 'ligado: cuidado nos mapas de PK!' : 'desligado.'}`, 'chat'); break;
     case 'ajuda': case 'help': log('Comandos: /z mensagem (chat do mapa), /p mensagem (grupo), /g mensagem (guilda), /convidar Nome, /convidarguilda Nome, /trocar Nome, /sairgrupo, /pk, /auto, /cidade, /cacar, /mapa [1-10], /chefe, /pos, /online, /limpar. Mensagem sem / vai para o chat geral.', 'chat'); break;
     case 'online': log(online() ? `🌐 ${Net.st.online} jogador(es) online · ${Net.st.others.size} neste mapa.` : 'Você está jogando offline.', 'chat'); break;

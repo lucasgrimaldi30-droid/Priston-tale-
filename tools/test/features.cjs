@@ -230,6 +230,7 @@ const startServer = require('./server.cjs');
     S.pets.active = null; R.lootCtx = { x: 20, z: 20 }; giveStones(1); R.lootCtx = null; const stP0 = S.stones; for (let i = 0; i < 210; i++) lootTick(0.1);
     ok('Sem pet, os prêmios chegam sozinhos depois', S.stones === stP0 + 1);
     S.gold = 1e7; S.mats = { minerio: 500 }; const mm = activeMount() || addMountSp('lobo'); const ml = mm.lvl; mountUp(mm.uid); ok('Subir nível da montaria', mm.lvl === ml + 1);
+    chatCommand('/testepets'); ok('Comando de teste dá os melhores pets e montarias', activePet().sp === 'espirito' && activePet().lvl === 30 && activeMount().sp === 'tigre' && activeMount().lvl === 10 && S.pets.list.length === 6);
     ok('Janela de pets abre', tabPets().includes('Pets') && (R.petTab = 'filtro', tabPets().includes('data-lootf')) && (R.petTab = 'mount', tabPets().includes('Montaria')));
     ok('Janela de mapas mostra torre e eventos', tabMaps().includes('Torre Infinita') && tabMaps().includes('ev-box'));
     return out;
